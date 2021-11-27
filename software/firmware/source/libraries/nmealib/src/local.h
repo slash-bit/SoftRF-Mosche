@@ -21,6 +21,14 @@
 #endif
 #endif
 
+#if !defined(_CONST)
+/* >>> added since these symbols were not found in compilation */
+#define	_AND		,
+#define	_CONST		const
+#define	_EXFUN(name, proto)		name proto
+#define	_DEFUN(name, arglist, args)	name(args)
+#endif
+
 #define SECSPERMIN	60L
 #define MINSPERHOUR	60L
 #define HOURSPERDAY	24L

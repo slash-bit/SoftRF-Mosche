@@ -18,7 +18,7 @@ extern "C"{
 /*
  * initialize hardware (IO, SPI, TIMER, IRQ).
  */
-void hal_init (void* bootarg);
+void hal_init_softrf (void* bootarg);
 
 /*
  * set watchdog counter (in 2s units)

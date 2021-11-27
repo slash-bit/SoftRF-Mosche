@@ -538,7 +538,7 @@ void hal_printf_init() {
 #endif // !defined(__AVR__)
 #endif // defined(LMIC_PRINTF_TO)
 
-void hal_init (void *bootarg) {
+void hal_init_softrf (void *bootarg) {
     // configure radio I/O and interrupt handler
     hal_io_init();
     // configure radio SPI
