@@ -113,8 +113,7 @@ static void EPD_Draw_Text()
     }
 
     int oclock = ((bearing + 15) % 360) / 30;
-    float RelativeVertical = traffic_by_dist[EPD_current - 1].fop->altitude -
-                                ThisAircraft.altitude;
+    float RelativeVertical = traffic_by_dist[EPD_current - 1].fop->alt_diff;
 
     switch (ui->units)
     {

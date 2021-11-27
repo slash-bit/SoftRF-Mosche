@@ -20,7 +20,7 @@
 
 #if defined(EXCLUDE_SOUND)
 void  Sound_setup()       {}
-bool  Sound_Notify()      {return true;}
+bool  Sound_Notify(int8_t level)      {return true;}
 void  Sound_loop()        {}
 void  Sound_fini()        {}
 #else
@@ -28,21 +28,53 @@ void  Sound_fini()        {}
 #include "Sound.h"
 #include "EEPROM.h"
 
+/* need this for the alarm levels enum: */
+#include "../protocol/radio/Legacy.h"
+/* - perhaps should move those to another location? */
+
 static unsigned long SoundTimeMarker = 0;
+static int SoundBeeps = 0;     /* how many beeps */
+static int SoundState = 0;     /* 1 = buzzing */
+static int SoundToneHz = 0;    /* variable tone */
+static int SoundBeepMS = 0;    /* how long each beep */
 
 void Sound_setup(void)
 {
   SoC->Sound_tone(0, settings->volume);
+  SoundToneHz = 0;
+  SoundBeepMS = 0;
+  SoundBeeps = 0;
+  SoundState = 0;
   SoundTimeMarker = 0;
 }
 
-bool Sound_Notify(void)
+bool Sound_Notify(int8_t level)
 {
   bool rval = false;
 
   if (SoundTimeMarker == 0) {
-    SoC->Sound_tone(ALARM_TONE_HZ, settings->volume);
+
+    if (level == ALARM_LEVEL_LOW) {
+      SoundToneHz = ALARM_TONE_HZ_LOW;
+      SoundBeepMS = ALARM_TONE_MS_LOW;
+      SoundBeeps  = ALARM_BEEPS_LOW;
+    } else if (level == ALARM_LEVEL_IMPORTANT) {
+      SoundToneHz = ALARM_TONE_HZ_IMPORTANT;
+      SoundBeepMS = ALARM_TONE_MS_IMPORTANT;
+      SoundBeeps  = ALARM_BEEPS_IMPORTANT;
+    } else if (level == ALARM_LEVEL_URGENT) {
+      SoundToneHz = ALARM_TONE_HZ_URGENT;
+      SoundBeepMS = ALARM_TONE_MS_URGENT;
+      SoundBeeps  = ALARM_BEEPS_URGENT;
+    } else {    /* whether NONE or CLOSE */
+      Sound_setup();
+      return false;
+    }
+
+    SoC->Sound_tone(SoundToneHz, settings->volume);
+    SoundState = 1;
     SoundTimeMarker = millis();
+    
     rval = true;
   }
 
@@ -51,9 +83,22 @@ bool Sound_Notify(void)
 
 void Sound_loop(void)
 {
-  if (SoundTimeMarker != 0 && millis() - SoundTimeMarker > ALARM_TONE_MS) {
-    SoC->Sound_tone(0, settings->volume);
-    SoundTimeMarker = 0;
+  if (SoundTimeMarker != 0 && millis() - SoundTimeMarker > SoundBeepMS) {
+  
+    if (SoundBeeps > 1) {
+      if (SoundState == 1) {   /* a beep is ending */
+         SoC->Sound_tone(0, settings->volume);
+         SoundState = 0;
+      } else {  /* sound is off, start another beep */
+         SoC->Sound_tone(SoundToneHz, settings->volume);
+         SoundState = 1;
+         --SoundBeeps;
+      }
+      SoundTimeMarker = millis();   /* reset timer for the next beep or gap */
+
+    } else {  /* done beeping, turn it all off */
+      Sound_setup();
+    }
   }
 }
 

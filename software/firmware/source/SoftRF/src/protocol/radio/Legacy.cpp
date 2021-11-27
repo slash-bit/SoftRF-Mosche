@@ -207,6 +207,12 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     uint8_t pkt_parity=0;
     uint32_t key[4];
 
+    /* static vars to keep track of 'airborne' status: */
+    static float initial_latitude = 0;
+    static float initial_longitude = 0;
+    static float initial_altitude = 0;
+    static int airborne = 0;
+
     uint32_t id = this_aircraft->addr;
     float lat = this_aircraft->latitude;
     float lon = this_aircraft->longitude;
@@ -262,7 +268,41 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     pkt->lon = (uint32_t ( lon * 1e7) >> 7) & 0xFFFFF;
     pkt->alt = alt;
 
-    pkt->airborne = speed > 0 ? 1 : 0;
+    if (initial_longitude == 0) {   /* no initial location yet */
+      if (GNSSTimeMarker > 0) {  /* 30 sec after first valid fix */
+        initial_latitude = lat;
+        initial_longitude = lon;
+        initial_altitude = this_aircraft->altitude;
+        airborne = 0;
+      }
+    }
+
+/*  pkt->airborne = (speed > 0) ? 1 : 0; */
+    pkt->airborne = 0;
+    if (airborne > 0) {
+      pkt->airborne = 1;
+      if (speed4 == 0) {
+        --airborne;
+        /* after 90 packets with 0 speed consider it a landing */
+        if (airborne <= 0) {
+          /* landed - set new initial location */
+          initial_latitude = lat;
+          initial_longitude = lon;
+          initial_altitude = this_aircraft->altitude;
+        }
+      }
+    } else if (speed4 > 2) {
+      if (GNSSTimeMarker > 0) {  /* had fix for a while */
+        if (speed4 > 20  /* 10 knots */
+          || fabs(lat - initial_latitude) > 0.0008f
+          || fabs(lon - initial_longitude) > 0.0012f
+          || fabs(this_aircraft->altitude - initial_altitude) > 60.0f) {
+            /* movement larger than GNSS noise */
+            airborne = 90;
+        }
+      }
+    }
+
     pkt->ns[0] = ns; pkt->ns[1] = ns; pkt->ns[2] = ns; pkt->ns[3] = ns;
     pkt->ew[0] = ew; pkt->ew[1] = ew; pkt->ew[2] = ew; pkt->ew[3] = ew;
 

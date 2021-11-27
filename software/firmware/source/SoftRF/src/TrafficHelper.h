@@ -21,13 +21,24 @@
 
 #include "system/SoC.h"
 
-#define ALARM_ZONE_NONE       10000 /* zone range is 1000m <-> 10000m */
+/* for DISTANCE method: traffic beyond ALARM_ZONE_NONE is invisible */
+#define ALARM_ZONE_NONE       15000 /* zone range is 2000m <-> 15000m */
+#define ALARM_ZONE_CLOSE      1500  /* zone range is 1000m <->  1500m */
 #define ALARM_ZONE_LOW        1000  /* zone range is  700m <->  1000m */
 #define ALARM_ZONE_IMPORTANT  700   /* zone range is  400m <->   700m */
 #define ALARM_ZONE_URGENT     400   /* zone range is    0m <->   400m */
 
-#define VERTICAL_SEPARATION         300 /* metres */
-#define VERTICAL_VISIBILITY_RANGE   500 /* value from FLARM data port specs */
+/* for VECTOR method: */
+#define ALARM_VECTOR_ANGLE    7.5
+#define ALARM_VECTOR_SPEED    0.3
+#define ALARM_TIME_CLOSE      30.1
+#define ALARM_TIME_LOW        19.1
+#define ALARM_TIME_IMPORTANT  13.1
+#define ALARM_TIME_URGENT     9.1
+
+#define VERTICAL_SLOPE                8  /* slope effect for alerts */
+#define VERTICAL_SEPARATION         300  /* meters  - for alerts */
+#define VERTICAL_VISIBILITY_RANGE   900  /* this value higher than FLARM specs */
 
 #define TRAFFIC_VECTOR_UPDATE_INTERVAL 2 /* seconds */
 #define TRAFFIC_UPDATE_INTERVAL_MS (TRAFFIC_VECTOR_UPDATE_INTERVAL * 1000)

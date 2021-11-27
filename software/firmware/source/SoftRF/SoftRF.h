@@ -31,7 +31,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "1.0"
+#define SOFTRF_FIRMWARE_VERSION "1.0MB1"
 #define SOFTRF_IDENT            "SoftRF-"
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */
@@ -138,7 +138,9 @@ typedef struct UFO {
     /* 'legacy' specific data */
     float     distance;
     float     bearing;
+    float     alt_diff;
     int8_t    alarm_level;
+    int8_t    alert_level;
 
     /* bitmap of issued voice/tone/ble/... alerts */
     uint8_t   alert;
@@ -255,6 +257,8 @@ static inline uint32_t DevID_Mapper(uint32_t id)
 extern ufo_t ThisAircraft;
 extern hardware_info_t hw_info;
 extern const float txrx_test_positions[90][2] PROGMEM;
+
+extern unsigned long GNSSTimeMarker;
 
 extern void shutdown(int);
 

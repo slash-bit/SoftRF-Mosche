@@ -20,6 +20,8 @@
 #ifndef PROTOCOL_LEGACY_H
 #define PROTOCOL_LEGACY_H
 
+#include <protocol.h>
+
 /*  IEEE Manchester(F531FAB6) = 55 99 A5 A9 55 66 65 96 */
 #define LEGACY_PREAMBLE_TYPE   RF_PREAMBLE_TYPE_55
 #define LEGACY_PREAMBLE_SIZE   1
@@ -70,9 +72,10 @@ enum
 	AIRCRAFT_TYPE_STATIC
 };
 
-enum
+enum alarm_levels
 {
 	ALARM_LEVEL_NONE,
+	ALARM_LEVEL_CLOSE,     /* no alarm yet, but getting close */
 	ALARM_LEVEL_LOW,       /* 13-18 seconds to impact */
 	ALARM_LEVEL_IMPORTANT, /*  9-12 seconds to impact */
 	ALARM_LEVEL_URGENT     /*   0-8 seconds to impact */

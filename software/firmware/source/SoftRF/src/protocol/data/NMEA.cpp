@@ -303,7 +303,10 @@ void NMEA_Export()
 
     if (has_Fix) {
       for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].addr && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
+
+        ufo_t *fop = &Container[i];
+
+        if (fop->addr && (this_moment - fop->timestamp) <= EXPORT_EXPIRATION_TIME) {
 
 #if 0
           Serial.println(fo.addr);
@@ -317,23 +320,28 @@ void NMEA_Export()
           Serial.println(fo.no_track);
 #endif
           if (settings->nmea_l) {
-            distance = Container[i].distance;
 
-            if (distance < ALARM_ZONE_NONE) {
+            distance = fop->distance;
+
+            alt_diff = (int) (fop->altitude - ThisAircraft.altitude);
+
+            if (distance < ALARM_ZONE_NONE
+                 && abs(alt_diff) < VERTICAL_VISIBILITY_RANGE) {
 
               total_objects++;
 
               char str_climb_rate[8] = "";
-              uint8_t addr_type = Container[i].addr_type > ADDR_TYPE_ANONYMOUS ?
-                                  ADDR_TYPE_ANONYMOUS : Container[i].addr_type;
+              uint8_t addr_type = fop->addr_type > ADDR_TYPE_ANONYMOUS ?
+                                  ADDR_TYPE_ANONYMOUS : fop->addr_type;
 
-              bearing = Container[i].bearing;
-              alarm_level = Container[i].alarm_level;
-              alt_diff = (int) (Container[i].altitude - ThisAircraft.altitude);
+              bearing = fop->bearing;
+              alarm_level = fop->alarm_level;
+              if (alarm_level > ALARM_LEVEL_NONE)  --alarm_level;
+                   /* treat CLOSE - added between NONE and LOW - same as NONE */
 
-              if (!Container[i].stealth && !ThisAircraft.stealth) {
+              if (!fop->stealth && !ThisAircraft.stealth) {
                 dtostrf(
-                  constrain(Container[i].vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
+                  constrain(fop->vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
                   5, 1, str_climb_rate);
               }
 
@@ -344,46 +352,47 @@ void NMEA_Export()
                */
               memset((void *) NMEA_Callsign, 0, sizeof(NMEA_Callsign));
 
-              if (strnlen((char *) Container[i].callsign, sizeof(Container[i].callsign)) > 0) {
-                memcpy(NMEA_Callsign, Container[i].callsign, sizeof(Container[i].callsign));
+              if (strnlen((char *) fop->callsign, sizeof(fop->callsign)) > 0) {
+                memcpy(NMEA_Callsign, fop->callsign, sizeof(fop->callsign));
               } else {
-                memcpy(NMEA_Callsign, NMEA_CallSign_Prefix[Container[i].protocol],
-                  strlen(NMEA_CallSign_Prefix[Container[i].protocol]));
+                memcpy(NMEA_Callsign, NMEA_CallSign_Prefix[fop->protocol],
+                  strlen(NMEA_CallSign_Prefix[fop->protocol]));
 
                 String str = "_";
 
-                ADDR_TO_HEX_STR(str, (Container[i].addr >> 16) & 0xFF);
-                ADDR_TO_HEX_STR(str, (Container[i].addr >>  8) & 0xFF);
-                ADDR_TO_HEX_STR(str, (Container[i].addr      ) & 0xFF);
+                ADDR_TO_HEX_STR(str, (fop->addr >> 16) & 0xFF);
+                ADDR_TO_HEX_STR(str, (fop->addr >>  8) & 0xFF);
+                ADDR_TO_HEX_STR(str, (fop->addr      ) & 0xFF);
 
                 str.toUpperCase();
-                memcpy(NMEA_Callsign + strlen(NMEA_CallSign_Prefix[Container[i].protocol]),
+                memcpy(NMEA_Callsign + strlen(NMEA_CallSign_Prefix[fop->protocol]),
                   str.c_str(), str.length());
               }
 
-              data_source = Container[i].protocol == RF_PROTOCOL_ADSB_UAT ?
+              data_source = fop->protocol == RF_PROTOCOL_ADSB_UAT ?
                             DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
 
               snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                       PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
                       alarm_level,
                       (int) (distance * cos(radians(bearing))), (int) (distance * sin(radians(bearing))),
-                      alt_diff, addr_type, Container[i].addr, NMEA_Callsign,
-                      (int) Container[i].course, (int) (Container[i].speed * _GPS_MPS_PER_KNOT),
-                      ltrim(str_climb_rate), Container[i].aircraft_type
+                      alt_diff, addr_type, fop->addr, NMEA_Callsign,
+                      (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
+                      ltrim(str_climb_rate), fop->aircraft_type
                       PFLAA_EXT1_ARGS );
 
               NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
               NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
-              /* Most close traffic is treated as highest priority target */
-              if (distance < HP_distance && abs(alt_diff) < VERTICAL_VISIBILITY_RANGE) {
+              /* Closest traffic is treated as highest priority target */
+              /* but prioritize traffic at similar altitudes           */
+              if (distance+8*abs(alt_diff) < HP_distance+8*abs(HP_alt_diff)) {
                 HP_bearing = bearing;
                 HP_alt_diff = alt_diff;
                 HP_alarm_level = alarm_level;
                 HP_distance = distance;
-                HP_addr = Container[i].addr;
+                HP_addr = fop->addr;
               }
 
             }

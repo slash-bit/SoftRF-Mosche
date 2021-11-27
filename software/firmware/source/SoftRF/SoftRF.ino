@@ -121,6 +121,7 @@ hardware_info_t hw_info = {
 
 unsigned long LEDTimeMarker = 0;
 unsigned long ExportTimeMarker = 0;
+unsigned long GNSSTimeMarker = 0;
 
 void setup()
 {
@@ -363,6 +364,8 @@ void normal()
 {
   bool success;
 
+static unsigned long initial_time = 0;
+
   Baro_loop();
 
 #if defined(ENABLE_AHRS)
@@ -380,6 +383,14 @@ void normal()
     ThisAircraft.speed = gnss.speed.knots();
     ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
     ThisAircraft.geoid_separation = gnss.separation.meters();
+    if (initial_time == 0) {
+      initial_time = millis();
+    } else if (GNSSTimeMarker == 0) {
+      if (millis() > initial_time + 30000) {
+        /* 30 sec after first fix */
+        GNSSTimeMarker = millis();
+      }
+    }
 
 #if !defined(EXCLUDE_EGM96)
     /*
@@ -396,6 +407,10 @@ void normal()
 #endif /* EXCLUDE_EGM96 */
 
     RF_Transmit(RF_Encode(&ThisAircraft), true);
+
+  } else {  /* not isValidFix() */
+      initial_time = 0;
+      GNSSTimeMarker = 0;
   }
 
   success = RF_Receive();
