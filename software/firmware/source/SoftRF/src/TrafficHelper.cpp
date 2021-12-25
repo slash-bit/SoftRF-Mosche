@@ -45,8 +45,9 @@ static int8_t Alarm_None(ufo_t *this_aircraft, ufo_t *fop)
  */
 static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
 {
-  int distance = (int) fop->distance;
   int8_t rval = ALARM_LEVEL_NONE;
+
+  int distance = (int) fop->distance;
   int abs_alt_diff = (int) fabs(fop->alt_diff);
 
   if (abs_alt_diff < VERTICAL_SEPARATION) { /* no warnings if too high or too low */
@@ -95,6 +96,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
                                                 450.0 - V_rel_direction);
 
     /* +- some degrees tolerance for collision course */
+
     if (V_rel_magnitude > ALARM_VECTOR_SPEED) {
 
       /* time is seconds prior to impact */
@@ -102,9 +104,9 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 
       float t = (fop->distance + VERTICAL_SLOPE*abs_alt_diff) / V_rel_magnitude;
 
-      float angle = fabs(V_rel_direction - fop->bearing);
+      float rel_angle = fabs(V_rel_direction - fop->bearing);
 
-      if (angle < ALARM_VECTOR_ANGLE) {
+      if (rel_angle < ALARM_VECTOR_ANGLE) {
 
         /* time limit values are compliant with FLARM data port specs */
 
@@ -117,7 +119,8 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
         } else if (t < ALARM_TIME_CLOSE) {
           rval = ALARM_LEVEL_CLOSE;
         }    
-      } else if (angle < ALARM_VECTOR_ANGLE * 2.0f) {
+
+      } else if (rel_angle < ALARM_VECTOR_ANGLE * 2.0f) {
 
         /* reduce alarm level since direction is less direct */
 
@@ -175,8 +178,8 @@ void Traffic_Update(ufo_t *fop)
     /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
     /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
-    if (fop->alarm_level < fop->alert_level)
-         fop->alert_level = fop->alarm_level + 1;
+    if (fop->alarm_level < fop->alert_level)       /* if just less by 1... */
+         fop->alert_level = fop->alarm_level + 1;  /*  then no change here */
   }
 }
 
@@ -208,11 +211,11 @@ void ParseData()
 
     if (protocol_decode && (*protocol_decode)((void *) RxBuffer, &ThisAircraft, &fo)) {
 
-      int i;
-
       fo.rssi = RF_last_rssi;
 
       Traffic_Update(&fo);
+
+      int i;
 
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
         if (Container[i].addr == fo.addr) {
@@ -289,41 +292,56 @@ void Traffic_loop()
 {
   if (isTimeToUpdateTraffic()) {
 
+    ufo_t *mfop = NULL;
+    int max_alarm_level = ALARM_LEVEL_NONE;
+        
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
       ufo_t *fop = &Container[i];
 
-      if (fop->addr &&
-          (ThisAircraft.timestamp - fop->timestamp) <= ENTRY_EXPIRATION_TIME) {
+      if (fop->addr) {  /* non-empty ufo */
+      
+        if (ThisAircraft.timestamp - fop->timestamp <= ENTRY_EXPIRATION_TIME) {
 
-        if ((ThisAircraft.timestamp - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL) {
-          Traffic_Update(fop);
+          if ((ThisAircraft.timestamp - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL)
+              Traffic_Update(fop);
+
+          /* figure out what is the highest alarm level needing a sound alert */
+          if (fop->alarm_level > fop->alert_level
+                  && fop->alarm_level > ALARM_LEVEL_CLOSE) {
+              if (fop->alarm_level > max_alarm_level) {
+                  max_alarm_level = fop->alarm_level;
+                  mfop = fop;
+              }
+          }
+
+        } else {   /* expired ufo */
+
+          *fop = EmptyFO;
+          /* implied by emptyFO:
+          fop->alert = 0;
+          fop->alarm_level = 0;
+          fop->alert_level = 0;
+          fop->addr = 0;
+          ... */
         }
+      }
+    }
 
-        /* sound an alarm if new alert, or got two levels closer than previous  */
-        /* alert, or hysteresis: got two levels farther, and then closer.       */
-        /* E.g., if alarm was for LOW, alert_level was set to IMPORTANT.        */
-        /* A new alarm alert will sound if close enough to now be URGENT.       */
-        /* Or, if now gone to CLOSE (farther than LOW), set alert_level to LOW, */
-        /* then next time reaches alarm_level IMPORTANT will give a new alert.  */
-        /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
-        /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
+    /* sound an alarm if new alert, or got two levels closer than previous  */
+    /* alert, or hysteresis: got two levels farther, and then closer.       */
+    /* E.g., if alarm was for LOW, alert_level was set to IMPORTANT.        */
+    /* A new alarm alert will sound if close enough to now be URGENT.       */
+    /* Or, if now gone to CLOSE (farther than LOW), set alert_level to LOW, */
+    /* then next time reaches alarm_level IMPORTANT will give a new alert.  */
+    /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
+    /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
-        if (fop->alarm_level > fop->alert_level
-                && fop->alarm_level > ALARM_LEVEL_CLOSE) {
-          Sound_Notify(fop->alarm_level);
-          fop->alert_level = fop->alarm_level + 1;
-          fop->alert |= TRAFFIC_ALERT_SOUND;  /* no longer actually used */
-        }
-
-      } else {
-        *fop = EmptyFO;
-        /* implied by emptyFO:
-        fop->alert = 0;
-        fop->alarm_level = 0;
-        fop->alert_level = 0;
-        fop->addr = 0;
-        ... */
+    if (max_alarm_level > ALARM_LEVEL_CLOSE) {
+      Sound_Notify(max_alarm_level);
+      if (mfop != NULL) {
+        mfop->alert_level = mfop->alarm_level + 1;
+        mfop->alert |= TRAFFIC_ALERT_SOUND;  /* no longer actually used */
       }
     }
 

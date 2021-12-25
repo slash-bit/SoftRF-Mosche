@@ -20,8 +20,6 @@
 #ifndef PROTOCOL_LEGACY_H
 #define PROTOCOL_LEGACY_H
 
-#include <protocol.h>
-
 /*  IEEE Manchester(F531FAB6) = 55 99 A5 A9 55 66 65 96 */
 #define LEGACY_PREAMBLE_TYPE   RF_PREAMBLE_TYPE_55
 #define LEGACY_PREAMBLE_SIZE   1
@@ -148,7 +146,5 @@ typedef struct {
 
 bool legacy_decode(void *, ufo_t *, ufo_t *);
 size_t legacy_encode(void *, ufo_t *);
-
-extern const rf_proto_desc_t legacy_proto_desc;
 
 #endif /* PROTOCOL_LEGACY_H */

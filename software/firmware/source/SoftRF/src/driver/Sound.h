@@ -23,15 +23,15 @@
 #define ALARM_TONE_MS     1000
 
 /* 3 different sounds for different alarm levels: */
-#define ALARM_TONE_HZ_LOW        1500
-#define ALARM_TONE_HZ_IMPORTANT  2000
-#define ALARM_TONE_HZ_URGENT     2500
+#define ALARM_TONE_HZ_LOW        2000
+#define ALARM_TONE_HZ_IMPORTANT  2400
+#define ALARM_TONE_HZ_URGENT     3000
 #define ALARM_BEEPS_LOW        1
 #define ALARM_BEEPS_IMPORTANT  2
-#define ALARM_BEEPS_URGENT     4
+#define ALARM_BEEPS_URGENT     5
 #define ALARM_TONE_MS_LOW       700
 #define ALARM_TONE_MS_IMPORTANT 250
-#define ALARM_TONE_MS_URGENT    150
+#define ALARM_TONE_MS_URGENT    140
 
 enum
 {

@@ -23,6 +23,7 @@
 
 #if !defined(_CONST)
 /* >>> added since these symbols were not found in compilation */
+/* >>> still got some warnings */
 #define	_AND		,
 #define	_CONST		const
 #define	_EXFUN(name, proto)		name proto

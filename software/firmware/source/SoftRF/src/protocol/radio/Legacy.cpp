@@ -293,8 +293,9 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
       }
     } else if (speed4 > 2) {
       if (GNSSTimeMarker > 0) {  /* had fix for a while */
-        if (speed4 > 20  /* 10 knots */
-          || fabs(lat - initial_latitude) > 0.0008f
+        if (speed4 > 20                                /* about 10 knots  */
+/*          || abs(vs10) > 15                             about 3 knots   */
+          || fabs(lat - initial_latitude) > 0.0008f    /* about 90 meters */
           || fabs(lon - initial_longitude) > 0.0012f
           || fabs(this_aircraft->altitude - initial_altitude) > 60.0f) {
             /* movement larger than GNSS noise */
