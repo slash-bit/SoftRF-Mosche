@@ -37,6 +37,7 @@
 #define ALARM_TIME_URGENT     9.1
 
 #define VERTICAL_SLOPE                5  /* slope effect for alerts */
+#define VERTICAL_SLACK               60  /* meters  - allow for GPS alt error */
 #define VERTICAL_SEPARATION         300  /* meters  - for alerts */
 #define VERTICAL_VISIBILITY_RANGE   900  /* this value higher than FLARM specs */
 

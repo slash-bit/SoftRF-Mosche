@@ -285,17 +285,21 @@ void NMEA_Export()
 {
     int bearing;
     int alt_diff;
+    int abs_alt_diff;
     float distance;
 
     int total_objects  = 0;
-    int alarm_level    = ALARM_LEVEL_NONE;
-    int data_source    = DATA_SOURCE_FLARM;
+    int alarm_level      = ALARM_LEVEL_NONE;
+    int alarm_level_nmea = ALARM_LEVEL_NONE;
+    int data_source = DATA_SOURCE_FLARM;
     time_t this_moment = now();
 
     /* High priority object (most relevant target) */
     int HP_bearing     = 0;
     int HP_alt_diff    = 0;
-    int HP_alarm_level = ALARM_LEVEL_NONE;
+    int HP_abs_alt_diff = 0;
+    int HP_alarm_level      = ALARM_LEVEL_NONE;
+    int HP_alarm_level_nmea = ALARM_LEVEL_NONE;
     float HP_distance  = 2147483647;
     uint32_t HP_addr   = 0;
 
@@ -324,9 +328,16 @@ void NMEA_Export()
             distance = fop->distance;
 
             alt_diff = (int) (fop->altitude - ThisAircraft.altitude);
+            abs_alt_diff = abs(alt_diff);
+            abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
 
-            if (distance < ALARM_ZONE_NONE
-                 && abs(alt_diff) < VERTICAL_VISIBILITY_RANGE) {
+            alarm_level = fop->alarm_level;
+            alarm_level_nmea = alarm_level;
+            if (alarm_level_nmea > ALARM_LEVEL_NONE)  --alarm_level_nmea;
+              /* for NMEA export bypass CLOSE added between NONE and LOW */
+
+            if ((alarm_level > ALARM_LEVEL_NONE || distance < ALARM_ZONE_NONE)
+                 && abs_alt_diff < VERTICAL_VISIBILITY_RANGE) {
 
               total_objects++;
 
@@ -335,9 +346,6 @@ void NMEA_Export()
                                   ADDR_TYPE_ANONYMOUS : fop->addr_type;
 
               bearing = fop->bearing;
-              alarm_level = fop->alarm_level;
-              if (alarm_level > ALARM_LEVEL_NONE)  --alarm_level;
-                   /* treat CLOSE - added between NONE and LOW - same as NONE */
 
               if (!fop->stealth && !ThisAircraft.stealth) {
                 dtostrf(
@@ -374,7 +382,7 @@ void NMEA_Export()
 
               snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                       PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
-                      alarm_level,
+                      alarm_level_nmea,
                       (int) (distance * cos(radians(bearing))), (int) (distance * sin(radians(bearing))),
                       alt_diff, addr_type, fop->addr, NMEA_Callsign,
                       (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
@@ -385,12 +393,17 @@ void NMEA_Export()
 
               NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
-              /* Closest traffic is treated as highest priority target */
+              /* Alarm or close traffic is treated as highest priority */
               /* but prioritize traffic at similar altitudes           */
-              if (distance+8*abs(alt_diff) < HP_distance+8*abs(HP_alt_diff)) {
+              if (alarm_level > HP_alarm_level ||
+                    (alarm_level == HP_alarm_level &&
+                     distance + VERTICAL_SLOPE*abs_alt_diff <
+                     HP_distance + VERTICAL_SLOPE*HP_abs_alt_diff)) {
                 HP_bearing = bearing;
                 HP_alt_diff = alt_diff;
+                HP_abs_alt_diff = abs_alt_diff;
                 HP_alarm_level = alarm_level;
+                HP_alarm_level_nmea = alarm_level_nmea;
                 HP_distance = distance;
                 HP_addr = fop->addr;
               }
@@ -417,7 +430,7 @@ void NMEA_Export()
                 total_objects,
                 settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON,
                 GNSS_STATUS_3D_MOVING,
-                power_status, HP_alarm_level, rel_bearing,
+                power_status, HP_alarm_level_nmea, rel_bearing,
                 ALARM_TYPE_AIRCRAFT, HP_alt_diff, (int) HP_distance, HP_addr
                 PFLAU_EXT1_ARGS );
       } else {
@@ -426,7 +439,7 @@ void NMEA_Export()
                 has_Fix && (settings->txpower != RF_TX_POWER_OFF) ?
                   TX_STATUS_ON : TX_STATUS_OFF,
                 has_Fix ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_NONE,
-                power_status, HP_alarm_level
+                power_status, HP_alarm_level_nmea
                 PFLAU_EXT1_ARGS );
       }
 

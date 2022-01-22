@@ -50,6 +50,8 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
   int distance = (int) fop->distance;
   int abs_alt_diff = (int) fabs(fop->alt_diff);
 
+  abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
+
   if (abs_alt_diff < VERTICAL_SEPARATION) { /* no warnings if too high or too low */
 
     /* take altitude difference into account */
@@ -79,6 +81,8 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   int8_t rval = ALARM_LEVEL_NONE;
 
   float abs_alt_diff = fabs(fop->alt_diff);
+
+  abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
 
   if (abs_alt_diff < VERTICAL_SEPARATION) { /* no warnings if too high or too low */
 
@@ -130,8 +134,8 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
           rval = ALARM_LEVEL_LOW;
         } else if (t < ALARM_TIME_LOW) {
           rval = ALARM_LEVEL_CLOSE;
-        } else if (t < ALARM_TIME_CLOSE) {
-          rval = ALARM_LEVEL_NONE;
+/*      } else if (t < ALARM_TIME_CLOSE) {
+          rval = ALARM_LEVEL_NONE;               */
         }    
       }
     }
