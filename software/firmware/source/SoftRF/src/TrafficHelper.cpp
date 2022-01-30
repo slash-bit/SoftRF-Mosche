@@ -41,21 +41,43 @@ static int8_t Alarm_None(ufo_t *this_aircraft, ufo_t *fop)
 }
 
 /*
+ * Adjust relative altitude for relative vertical speed.
+ */
+float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
+{
+  float alt_diff = fop->alt_diff;           /* positive means fop is higher than this_aircraft */
+  float vsr = fop->vs - this_aircraft->vs;  /* positive means fop is rising relative to this_aircraft */
+  float alt_change = vsr * 0.05;  /* expected change in 10 seconds, converted to meters */
+
+  /* only adjust towards higher alarm level: */
+  if (alt_diff > 0 && alt_change < 0) {
+    alt_diff += alt_change;   /* makes alt_diff smaller */
+    if (alt_diff < 0)  return 0;  /* minimum abs_alt_diff */
+  } else if (alt_diff < 0 && alt_change > 0) {
+    alt_diff += alt_change;   /* makes alt_diff less negative */
+    if (alt_diff > 0)  return 0;  /* minimum abs_alt_diff */
+  }
+
+  alt_diff = fabs(alt_diff);
+
+  /* GPS altitude is fuzzy so ignore the first 60m */
+  if (alt_diff < VERTICAL_SLACK)  return 0;
+  return (alt_diff - VERTICAL_SLACK);
+}
+
+/*
  * Simple, distance based alarm level assignment.
  */
 static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
 {
   int8_t rval = ALARM_LEVEL_NONE;
 
-  int distance = (int) fop->distance;
-  int abs_alt_diff = (int) fabs(fop->alt_diff);
+  int abs_alt_diff = (int) Adj_alt_diff(this_aircraft, fop);
 
-  abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
+  if (abs_alt_diff < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
 
-  if (abs_alt_diff < VERTICAL_SEPARATION) { /* no warnings if too high or too low */
-
-    /* take altitude difference into account */
-    distance += VERTICAL_SLOPE * abs_alt_diff;
+    /* take altitude (and vert speed) differences into account */
+    int distance = VERTICAL_SLOPE * abs_alt_diff + (int) fop->distance;
 
     if (distance < ALARM_ZONE_URGENT) {
       rval = ALARM_LEVEL_URGENT;
@@ -80,11 +102,9 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 {
   int8_t rval = ALARM_LEVEL_NONE;
 
-  float abs_alt_diff = fabs(fop->alt_diff);
+  float abs_alt_diff = Adj_alt_diff(this_aircraft, fop);
 
-  abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
-
-  if (abs_alt_diff < VERTICAL_SEPARATION) { /* no warnings if too high or too low */
+  if (abs_alt_diff < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
 
     /* Subtract 2D velocity vector of traffic from 2D velocity vector of this aircraft */ 
     float V_rel_x = this_aircraft->speed * cosf(radians(90.0 - this_aircraft->course)) -
@@ -122,9 +142,9 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
           rval = ALARM_LEVEL_LOW;
         } else if (t < ALARM_TIME_CLOSE) {
           rval = ALARM_LEVEL_CLOSE;
-        }    
+        }
 
-      } else if (rel_angle < ALARM_VECTOR_ANGLE * 2.0f) {
+      } else if (rel_angle < 2 * ALARM_VECTOR_ANGLE) {
 
         /* reduce alarm level since direction is less direct */
 
@@ -136,7 +156,19 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
           rval = ALARM_LEVEL_CLOSE;
 /*      } else if (t < ALARM_TIME_CLOSE) {
           rval = ALARM_LEVEL_NONE;               */
-        }    
+        }
+
+      } else if (rel_angle < 3 * ALARM_VECTOR_ANGLE) {
+
+        /* further reduce alarm level for larger angles */
+
+        if (t < ALARM_TIME_URGENT) {
+          rval = ALARM_LEVEL_LOW;
+        } else if (t < ALARM_TIME_IMPORTANT) {
+          rval = ALARM_LEVEL_CLOSE;
+/*      } else if (t < ALARM_TIME_LOW) {
+          rval = ALARM_LEVEL_NONE;               */
+        }
       }
     }
   }
@@ -182,8 +214,8 @@ void Traffic_Update(ufo_t *fop)
     /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
     /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
-    if (fop->alarm_level < fop->alert_level)       /* if just less by 1... */
-         fop->alert_level = fop->alarm_level + 1;  /*  then no change here */
+    if (fop->alarm_level < fop->alert_level)       /* if just less by 1...   */
+         fop->alert_level = fop->alarm_level + 1;  /* ...then no change here */
   }
 }
 
@@ -221,6 +253,7 @@ void ParseData()
 
       int i;
 
+      /* first check whether we are already tracking this object */
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
         if (Container[i].addr == fo.addr) {
           uint8_t alert_bak = Container[i].alert;
@@ -232,36 +265,53 @@ void ParseData()
         }
       }
 
-      int max_dist_ndx = 0;
-      int min_level_ndx = 0;
+      /* new object, try and find a slot for it */
 
+      /* replace an empty or expired object if found */
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+/*      if (Container[i].addr == 0) {   // then .timestamp is also 0
           Container[i] = fo;
           return;
         }
+*/      if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+          Container[i] = fo;
+          return;
+        }
+      }
+
+      /* may need to replace a non-expired object:   */
+      /* identify the least important current object */
+
 #if !defined(EXCLUDE_TRAFFIC_FILTER_EXTENSION)
-        if (Container[i].distance + VERTICAL_SLOPE*fabs(Container[i].alt_diff)
-              > Container[max_dist_ndx].distance + 
-                  VERTICAL_SLOPE*fabs(Container[max_dist_ndx].alt_diff))  {
+
+      /* replace an object of lower alarm level if found */
+      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        if (fo.alarm_level > Container[i].alarm_level) {
+          Container[i] = fo;
+          return;
+        }
+      }
+
+      /* identify the farthest-away object */
+      /* (distance adjusted for altitude difference) */
+
+      int max_dist_ndx = 0;
+      float adj_max_dist = 0;
+      float adj_distance = 0;
+
+      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        adj_distance = Container[i].distance
+               + VERTICAL_SLOPE * Adj_alt_diff(&ThisAircraft,&Container[i]);
+        if (adj_distance > adj_max_dist)  {
           max_dist_ndx = i;
+          adj_max_dist = adj_distance;
         }
-
-        if (Container[i].alarm_level < Container[min_level_ndx].alarm_level)  {
-          min_level_ndx = i;
-        }
-#endif /* EXCLUDE_TRAFFIC_FILTER_EXTENSION */
       }
 
-#if !defined(EXCLUDE_TRAFFIC_FILTER_EXTENSION)
-      if (fo.alarm_level > Container[min_level_ndx].alarm_level) {
-        Container[min_level_ndx] = fo;
-        return;
-      }
-
-      if ((fo.distance + VERTICAL_SLOPE*fabs(fo.alt_diff)
-              <  Container[max_dist_ndx].distance
-              + VERTICAL_SLOPE*fabs(Container[max_dist_ndx].alt_diff))
+      /* replace the farthest currently-tracked object, but only if  */
+      /* the new object is closer, and of same or higher alarm level */
+      if ((fo.distance + VERTICAL_SLOPE*Adj_alt_diff(&ThisAircraft,&fo)
+               < adj_max_dist)
         &&
           fo.alarm_level >= Container[max_dist_ndx].alarm_level) {
         Container[max_dist_ndx] = fo;
@@ -269,6 +319,7 @@ void ParseData()
       }
 #endif /* EXCLUDE_TRAFFIC_FILTER_EXTENSION */
 
+       /* otherwise, no slot found, ignore the new object */
     }
 }
 
