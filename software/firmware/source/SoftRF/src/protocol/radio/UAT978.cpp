@@ -82,14 +82,16 @@ bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
   fop->addr_type = ADDR_TYPE_ICAO;
   fop->timestamp = this_aircraft->timestamp;
+  fop->gnsstime_ms = millis();
 
   fop->stealth = false;
   fop->no_track = false;
+/*
   fop->ns[0] = 0; fop->ns[1] = 0;
   fop->ns[2] = 0; fop->ns[3] = 0;
   fop->ew[0] = 0; fop->ew[1] = 0;
   fop->ew[2] = 0; fop->ew[3] = 0;
-
+*/
   /* sizeof(mdb.callsign) = 9 ; sizeof(fop->callsign) = 8 */
   memcpy(fop->callsign, mdb.callsign, sizeof(fop->callsign));
 

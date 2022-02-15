@@ -24,6 +24,8 @@
 
 #include "../../../SoftRF.h"
 #include "../../driver/RF.h"
+#include "../../driver/EEPROM.h"
+
 
 const rf_proto_desc_t p3i_proto_desc = {
   "P3I",
@@ -78,6 +80,12 @@ bool p3i_decode(void *p3i_pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->protocol = RF_PROTOCOL_P3I;
 
   fop->addr = pkt->icao;
+
+  if (fop->addr == settings->ignore_id)
+         return true;                 /* ID told in settings to ignore */
+  if (fop->addr == ThisAircraft.addr)
+         return true;                 /* same ID as this aircraft - ignore */
+
   fop->latitude = pkt->latitude;
   fop->longitude = pkt->longitude;
   fop->altitude = (float) pkt->altitude;
@@ -87,15 +95,17 @@ bool p3i_decode(void *p3i_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
   fop->addr_type = ADDR_TYPE_P3I;
   fop->timestamp = timestamp;
+  fop->gnsstime_ms = millis();
 
   fop->vs = 0;
   fop->stealth = 0;
   fop->no_track = 0;
+/*
   fop->ns[0] = 0; fop->ns[1] = 0;
   fop->ns[2] = 0; fop->ns[3] = 0;
   fop->ew[0] = 0; fop->ew[1] = 0;
   fop->ew[2] = 0; fop->ew[3] = 0;
-
+*/
   return true;
 }
 
@@ -103,7 +113,7 @@ size_t p3i_encode(void *p3i_pkt, ufo_t *this_aircraft) {
 
   p3i_packet_t *pkt = (p3i_packet_t *) p3i_pkt;
 
-  uint32_t id = this_aircraft->addr;
+  uint32_t id = this_aircraft->addr; 
   float lat = this_aircraft->latitude;
   float lon = this_aircraft->longitude;
   int16_t alt = (int16_t) this_aircraft->altitude;

@@ -31,7 +31,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "1.0MB04"
+#define SOFTRF_FIRMWARE_VERSION "1.0MB05"
 #define SOFTRF_IDENT            "SoftRF-"
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */
@@ -128,8 +128,8 @@ typedef struct UFO {
     bool      stealth;
     bool      no_track;
 
-    int8_t    ns[4];
-    int8_t    ew[4];
+    int16_t   ns[4];   /* stored as m/s times 4 */
+    int16_t   ew[4];
 
     float     geoid_separation; /* metres */
     uint16_t  hdop; /* cm */
@@ -138,9 +138,16 @@ typedef struct UFO {
     /* 'legacy' specific data */
     float     distance;
     float     bearing;
+    float     turnrate;
     float     alt_diff;
     int8_t    alarm_level;
     int8_t    alert_level;
+
+    /* to be able to compute turn & climb rates */
+    float     prevcourse;     /* previous course */
+    uint32_t  gnsstime_ms;    /* hopefully a more precise timestamp */
+    uint32_t  prevtime_ms;
+    float     prevaltitude;   /* previous altitude */
 
     /* bitmap of issued voice/tone/ble/... alerts */
     uint8_t   alert;

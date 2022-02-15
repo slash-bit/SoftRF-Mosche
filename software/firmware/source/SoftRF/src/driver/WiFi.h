@@ -53,6 +53,7 @@ extern String host_name;
 extern WiFiUDP Uni_Udp;
 #endif
 
+extern bool udp_is_ready;
 extern char UDPpacketBuffer[UDP_PACKET_BUFSIZE];
 
 #endif /* WIFIHELPER_H */

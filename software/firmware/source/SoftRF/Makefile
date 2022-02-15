@@ -95,6 +95,8 @@ INCLUDE       = -I$(PRODAT_PATH) -I$(PRORAD_PATH)  -I$(PLATFORM_PATH) \
                 -I$(GFX_PATH)    -I$(U8G2_PATH)    -I$(EPD2_PATH)
 
 SRC_CPPS      := $(SRC_PATH)/TrafficHelper.cpp \
+                 $(SRC_PATH)/ApproxMath.cpp    \
+                 $(SRC_PATH)/Wind.cpp          \
                  $(SRC_PATH)/Library.cpp
 
 PRORAD_CPPS   := $(PRORAD_PATH)/Legacy.cpp \

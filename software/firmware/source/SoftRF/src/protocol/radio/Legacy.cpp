@@ -25,8 +25,11 @@
 #include <protocol.h>
 
 #include "../../../SoftRF.h"
+#include "../../TrafficHelper.h"
 #include "../../driver/RF.h"
 #include "../../driver/EEPROM.h"
+#include "../../ApproxMath.h"
+#include "../../driver/WiFi.h"
 
 const rf_proto_desc_t legacy_proto_desc = {
   "Legacy",
@@ -149,6 +152,14 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
         return false;
     }
 
+    fop->addr = pkt->addr;
+    
+    if (fop->addr == settings->ignore_id)
+         return true;                 /* ID told in settings to ignore */
+    if (fop->addr == ThisAircraft.addr)
+         return true;                 /* same ID as this aircraft - ignore */
+    /* return true so that the packet will reach ParseData() */
+
     int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
     int32_t lat = (pkt->lat - round_lat) % (uint32_t) 0x080000;
     if (lat >= 0x040000) lat -= 0x080000;
@@ -159,17 +170,16 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     if (lon >= 0x080000) lon -= 0x100000;
     lon = ((lon + round_lon) << 7) /* + 0x40 */;
 
-    int32_t ns = (pkt->ns[0] + pkt->ns[1] + pkt->ns[2] + pkt->ns[3]) / 4;
-    int32_t ew = (pkt->ew[0] + pkt->ew[1] + pkt->ew[2] + pkt->ew[3]) / 4;
+/*  int32_t ns = (pkt->ns[0] + pkt->ns[1] + pkt->ns[2] + pkt->ns[3]) / 4;
+    int32_t ew = (pkt->ew[0] + pkt->ew[1] + pkt->ew[2] + pkt->ew[3]) / 4; */
+
+    int32_t ns = pkt->ns[0];
+    int32_t ew = pkt->ew[0];
     float speed4 = sqrtf(ew * ew + ns * ns) * (1 << pkt->smult);
 
     float direction = 0;
-    if (speed4 > 0) {
-      direction = atan2f(ns,ew) * 180.0 / PI;  /* -180 ... 180 */
-      /* convert from math angle into course relative to north */
-      direction = (direction <= 90.0 ? 90.0 - direction :
-                                      450.0 - direction);
-    }
+    if (speed4 > 0)
+      direction = atan2_approx((float)ns, (float)ew);
 
     uint16_t vs_u16 = pkt->vs;
     int16_t vs_i16 = (int16_t) (vs_u16 | (vs_u16 & (1<<9) ? 0xFC00U : 0));
@@ -179,9 +189,9 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
     fop->protocol = RF_PROTOCOL_LEGACY;
 
-    fop->addr = pkt->addr;
     fop->addr_type = pkt->addr_type;
     fop->timestamp = timestamp;
+    fop->gnsstime_ms = millis();
     fop->latitude = (float)lat / 1e7;
     fop->longitude = (float)lon / 1e7;
     fop->altitude = (float) alt - geo_separ;
@@ -191,10 +201,28 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->aircraft_type = pkt->aircraft_type;
     fop->stealth = pkt->stealth;
     fop->no_track = pkt->no_track;
-    fop->ns[0] = pkt->ns[0]; fop->ns[1] = pkt->ns[1];
-    fop->ns[2] = pkt->ns[2]; fop->ns[3] = pkt->ns[3];
-    fop->ew[0] = pkt->ew[0]; fop->ew[1] = pkt->ew[1];
-    fop->ew[2] = pkt->ew[2]; fop->ew[3] = pkt->ew[3];
+    /* keep the given data for 4 time points */
+    int smult4 = pkt->smult + 2;
+    fop->ns[0] = (int16_t) pkt->ns[0] << smult4;  /* 4 * speed in mps */
+    fop->ns[1] = (int16_t) pkt->ns[1] << smult4;
+    fop->ns[2] = (int16_t) pkt->ns[2] << smult4;
+    fop->ns[3] = (int16_t) pkt->ns[3] << smult4;
+    fop->ew[0] = (int16_t) pkt->ew[0] << smult4;
+    fop->ew[1] = (int16_t) pkt->ew[1] << smult4;
+    fop->ew[2] = (int16_t) pkt->ew[2] << smult4;
+    fop->ew[3] = (int16_t) pkt->ew[3] << smult4;
+
+    /* send radio packet data out via UDP for debugging */
+    if ((settings->debug_flags & DEBUG_LEGACY) && udp_is_ready) {
+      snprintf_P(UDPpacketBuffer, UDP_PACKET_BUFSIZE,
+        PSTR("$PFLAS,R,%06X,%ld,%d,%.5f,%.5f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d\n"),
+        fop->addr, fop->gnsstime_ms, pkt->airborne,
+        fop->latitude, fop->longitude, fop->altitude, direction, vs10,
+        fop->ns[0], fop->ns[1], fop->ns[2], fop->ns[3],
+        fop->ew[0], fop->ew[1], fop->ew[2], fop->ew[3]);
+      SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
+                       strlen(UDPpacketBuffer));
+    }
 
     return true;
 }
@@ -213,7 +241,6 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     static float initial_altitude = 0;
     static int airborne = 0;
 
-    uint32_t id = this_aircraft->addr;
     float lat = this_aircraft->latitude;
     float lon = this_aircraft->longitude;
     int16_t alt = (int16_t) (this_aircraft->altitude + this_aircraft->geoid_separation);
@@ -240,20 +267,28 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     uint8_t speed = speed4 >> pkt->smult;
 
-    int8_t ns = (int8_t) (speed * cosf(radians(course)));
-    int8_t ew = (int8_t) (speed * sinf(radians(course)));
+    if (this_aircraft->prevtime_ms != 0) {
+      /* Compute NS & EW speed components for 4 future time points.  */
+      /*     in units of quarter-meters per second.                  */
+      project_course(this_aircraft, this_aircraft);
+      int smult4 = pkt->smult + 2;
+      int i;
+      for (i=0; i<4; i++) {  /* loop over the 4 time points stored in arrays */
+        pkt->ns[i] = (int8_t) (this_aircraft->ns[i] >> smult4);
+        pkt->ew[i] = (int8_t) (this_aircraft->ew[i] >> smult4);
+      }
+    }
 
     int16_t vs10 = (int16_t) roundf(vsf * 10.0f);
-    pkt->vs = this_aircraft->stealth ? 0 : vs10 >> pkt->smult;
+/*  pkt->vs = this_aircraft->stealth ? 0 : vs10 >> pkt->smult; */
+/*  - that degrades collision avoidance - should only mask vs in NMEA */
+    pkt->vs = vs10 >> pkt->smult;
+
+    uint32_t id = this_aircraft->addr;
+
+    pkt->addr_type = settings->id_method;
 
     pkt->addr = id & 0x00FFFFFF;
-
-#if !defined(SOFTRF_ADDRESS)
-    pkt->addr_type = ADDR_TYPE_FLARM; /* ADDR_TYPE_ANONYMOUS */
-#else
-    pkt->addr_type = (pkt->addr == SOFTRF_ADDRESS ?
-                      ADDR_TYPE_ICAO : ADDR_TYPE_FLARM); /* ADDR_TYPE_ANONYMOUS */
-#endif
 
     pkt->parity = 0;
 
@@ -303,9 +338,6 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
         }
       }
     }
-
-    pkt->ns[0] = ns; pkt->ns[1] = ns; pkt->ns[2] = ns; pkt->ns[3] = ns;
-    pkt->ew[0] = ew; pkt->ew[1] = ew; pkt->ew[2] = ew; pkt->ew[3] = ew;
 
     pkt->_unk0 = 0;
     pkt->_unk1 = 0;

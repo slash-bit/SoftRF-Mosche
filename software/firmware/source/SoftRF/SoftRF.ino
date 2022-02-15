@@ -89,6 +89,7 @@
 #include "src/driver/Baro.h"
 #include "src/TTNHelper.h"
 #include "src/TrafficHelper.h"
+#include "src/Wind.h"
 
 #if defined(ENABLE_AHRS)
 #include "src/driver/AHRS.h"
@@ -163,7 +164,17 @@ void setup()
 
   SoC->Button_setup();
 
+#if defined(ACCEPT_AIRCRAFT_ID)
+  if (settings->id_method == ADDR_TYPE_ICAO)
+    ThisAircraft.addr = settings->aircraft_id;
+  else if (settings->id_method == ADDR_TYPE_RANDOM
+        || settings->id_method == ADDR_TYPE_ANONYMOUS)
+    ThisAircraft.addr = 0;  /* will be filled in later */
+  else
+    ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
+#else
   ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
+#endif
 
   hw_info.rf = RF_setup();
 
@@ -364,8 +375,6 @@ void normal()
 {
   bool success;
 
-static unsigned long initial_time = 0;
-
   Baro_loop();
 
 #if defined(ENABLE_AHRS)
@@ -375,7 +384,12 @@ static unsigned long initial_time = 0;
   GNSS_loop();
 
   ThisAircraft.timestamp = now();
+
+  static uint32_t initial_time = 0;
+  static uint32_t next_ms = 0;
+
   if (isValidFix()) {
+
     ThisAircraft.latitude = gnss.location.lat();
     ThisAircraft.longitude = gnss.location.lng();
     ThisAircraft.altitude = gnss.altitude.meters();
@@ -383,6 +397,22 @@ static unsigned long initial_time = 0;
     ThisAircraft.speed = gnss.speed.knots();
     ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
     ThisAircraft.geoid_separation = gnss.separation.meters();
+
+    /* also store a more precise GPS time stamp (centisecond resolution): */
+    static uint32_t prevtime = 0;
+    static int prevmin = 0;
+    static int minutes = 0;
+    if (prevmin == 0)  prevmin = gnss.time.minute() + 60*gnss.time.hour();
+    uint32_t newtime = gnss.time.value() % 10000;   /* centiseconds */
+    if (newtime < prevtime) {    /* minute roll-over */
+      int newmin = gnss.time.minute() + 60*gnss.time.hour();
+      minutes += (newmin - prevmin);   /* can be >1 in case of GNSS outage */
+      prevmin = newmin;
+    }
+    prevtime = newtime;
+    ThisAircraft.gnsstime_ms = (newtime + 6000 * (uint32_t) minutes) * 10;   /* milliseconds */
+
+    /* allow knowing when there was a good fix for 30 sec */
     if (initial_time == 0) {
       initial_time = millis();
     } else if (GNSSTimeMarker == 0) {
@@ -390,6 +420,30 @@ static unsigned long initial_time = 0;
         /* 30 sec after first fix */
         GNSSTimeMarker = millis();
       }
+    }
+
+    /* if no baro sensor, fill in .vs with GPS data */
+    if (baro_chip == NULL) {
+      /* only do this once every 3 seconds */
+      static uint32_t time_to_estimate_climb = 0;
+      if (ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
+        time_to_estimate_climb = ThisAircraft.gnsstime_ms + 3000;
+        ThisAircraft.vs = Estimate_Climbrate();
+      }
+    } /* else it was filled above in Baro_loop() */
+
+    /* After some time has passed, store previous course & altitude
+       and timestamp so as to allow computation of turn and climb rates */
+    static float next_course;
+    static float next_alt;
+    uint32_t now_ms = ThisAircraft.gnsstime_ms;
+    if (now_ms - next_ms > 1500) {
+      ThisAircraft.prevtime_ms = next_ms;  /* always between 1500 and 3000 ms ago */
+      next_ms = now_ms;
+      ThisAircraft.prevcourse = next_course;
+      ThisAircraft.prevaltitude = next_alt;
+      next_course = ThisAircraft.course;
+      next_alt = ThisAircraft.altitude;
     }
 
 #if !defined(EXCLUDE_EGM96)
@@ -406,11 +460,27 @@ static unsigned long initial_time = 0;
     }
 #endif /* EXCLUDE_EGM96 */
 
+    /* estimate wind from present and past GNSS data */
+    /* only do this once every 666 milliseconds */
+    static uint32_t time_to_estimate_wind = 0;
+    if (ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
+      Estimate_Wind();
+      time_to_estimate_wind = ThisAircraft.gnsstime_ms + 666;
+    }
+
+    /* generate a random aircraft ID if necessary */
+    /* doing it here (after some delay) allows use of millis() as seed for random ID */
+    if (ThisAircraft.addr == 0)
+      generate_random_id();
+
     RF_Transmit(RF_Encode(&ThisAircraft), true);
 
-  } else {  /* not isValidFix() */
+  } else {    /* not isValidFix() */
+
       initial_time = 0;
       GNSSTimeMarker = 0;
+      ThisAircraft.prevtime_ms = 0;
+      next_ms = 0;
   }
 
   success = RF_Receive();

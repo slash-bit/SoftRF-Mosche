@@ -29,6 +29,7 @@ void EEPROM_store()    {}
 #include "Sound.h"
 #include "Bluetooth.h"
 #include "../TrafficHelper.h"
+#include "../protocol/radio/Legacy.h"
 #include "../protocol/data/NMEA.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
@@ -126,6 +127,12 @@ void EEPROM_defaults()
   eeprom_block.field.settings.igc_key[1] = 0;
   eeprom_block.field.settings.igc_key[2] = 0;
   eeprom_block.field.settings.igc_key[3] = 0;
+
+  /* added to allow setting aircraft ID and also an ID to ignore */
+  eeprom_block.field.settings.aircraft_id = 0;
+  eeprom_block.field.settings.ignore_id = 0;
+  eeprom_block.field.settings.id_method = ADDR_TYPE_FLARM;
+  eeprom_block.field.settings.debug_flags = 0;
 }
 
 void EEPROM_store()

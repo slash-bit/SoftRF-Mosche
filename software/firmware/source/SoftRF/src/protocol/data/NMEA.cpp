@@ -303,6 +303,7 @@ void NMEA_Export()
     float HP_distance  = 2147483647;
     uint32_t HP_addr   = 0;
 
+    bool show = true;
     bool has_Fix       = isValidFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST);
 
     if (has_Fix) {
@@ -323,13 +324,21 @@ void NMEA_Export()
           Serial.println(fo.stealth);
           Serial.println(fo.no_track);
 #endif
+
+          bool stealth = (fo.stealth || ThisAircraft.stealth);  /* reciprocal */
+
           if (settings->nmea_l) {
 
             distance = fop->distance;
 
-            alt_diff = (int) (fop->altitude - ThisAircraft.altitude);
-            abs_alt_diff = abs(alt_diff);
-            abs_alt_diff = (abs_alt_diff < VERTICAL_SLACK ? 0 : abs_alt_diff - VERTICAL_SLACK);
+            alt_diff = (int) (fop->altitude - ThisAircraft.altitude);  /* sent to NMEA */
+            abs_alt_diff = (int) Adj_alt_diff(&ThisAircraft, fop);     /* used to pick high-priority traffic */
+
+            /* mask some data following FLARM protocol: */
+            if (stealth && alarm_level_nmea == ALARM_LEVEL_NONE) {
+                if (distance > 2000 || fabs(alt_diff) > 300)
+                     show = false;
+            }
 
             alarm_level = fop->alarm_level;
             alarm_level_nmea = alarm_level;
@@ -337,7 +346,7 @@ void NMEA_Export()
               /* for NMEA export bypass CLOSE added between NONE and LOW */
 
             if ((alarm_level > ALARM_LEVEL_NONE || distance < ALARM_ZONE_NONE)
-                 && abs_alt_diff < VERTICAL_VISIBILITY_RANGE) {
+                 && abs_alt_diff < VERTICAL_VISIBILITY_RANGE && show) {
 
               total_objects++;
 
@@ -347,7 +356,7 @@ void NMEA_Export()
 
               bearing = fop->bearing;
 
-              if (!fop->stealth && !ThisAircraft.stealth) {
+              if (!stealth) {
                 dtostrf(
                   constrain(fop->vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
                   5, 1, str_climb_rate);
@@ -368,9 +377,12 @@ void NMEA_Export()
 
                 String str = "_";
 
-                ADDR_TO_HEX_STR(str, (fop->addr >> 16) & 0xFF);
-                ADDR_TO_HEX_STR(str, (fop->addr >>  8) & 0xFF);
-                ADDR_TO_HEX_STR(str, (fop->addr      ) & 0xFF);
+                uint32_t id = fop->addr;
+                if (stealth)  id = 0xFFFFF0 + i;   /* show as anonymous */
+
+                ADDR_TO_HEX_STR(str, (id >> 16) & 0xFF);
+                ADDR_TO_HEX_STR(str, (id >>  8) & 0xFF);
+                ADDR_TO_HEX_STR(str, (id      ) & 0xFF);
 
                 str.toUpperCase();
                 memcpy(NMEA_Callsign + strlen(NMEA_CallSign_Prefix[fop->protocol]),
@@ -383,7 +395,7 @@ void NMEA_Export()
               snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                       PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
                       alarm_level_nmea,
-                      (int) (distance * cos(radians(bearing))), (int) (distance * sin(radians(bearing))),
+                      (int) (distance * cos_approx(bearing)), (int) (distance * sin_approx(bearing)),
                       alt_diff, addr_type, fop->addr, NMEA_Callsign,
                       (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
                       ltrim(str_climb_rate), fop->aircraft_type
@@ -393,8 +405,8 @@ void NMEA_Export()
 
               NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
-              /* Alarm or close traffic is treated as highest priority */
-              /* but prioritize traffic at similar altitudes           */
+              /* Alarm or close traffic is treated as highest priority, */
+              /*   otherwise prioritize traffic at similar altitudes    */
               if (alarm_level > HP_alarm_level ||
                     (alarm_level == HP_alarm_level &&
                      distance + VERTICAL_SLOPE*abs_alt_diff <

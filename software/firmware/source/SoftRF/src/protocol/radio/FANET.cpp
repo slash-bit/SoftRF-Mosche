@@ -241,6 +241,7 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->altitude = (float) altitude;
 
     fop->aircraft_type = AT_FROM_FANET(pkt->aircraft_type);
+
     fop->course = (float) pkt->heading * 360.0 / 256.0;
 
     speed_byte = pkt->speed;
@@ -272,14 +273,15 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
     fop->addr_type = ADDR_TYPE_FANET;
     fop->timestamp = this_aircraft->timestamp;
-
+    fop->gnsstime_ms = millis();
     fop->stealth = 0;
     fop->no_track = !(pkt->track_online);
-
+/*
     fop->ns[0] = 0; fop->ns[1] = 0;
     fop->ns[2] = 0; fop->ns[3] = 0;
     fop->ew[0] = 0; fop->ew[1] = 0;
     fop->ew[2] = 0; fop->ew[3] = 0;
+*/
 #if 0
     Serial.print(fop->addr, HEX);
     Serial.print(',');

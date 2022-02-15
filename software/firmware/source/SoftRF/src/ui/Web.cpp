@@ -34,6 +34,7 @@ void Web_fini()     {}
 #include "../driver/Sound.h"
 #include "../driver/Bluetooth.h"
 #include "../TrafficHelper.h"
+#include "../protocol/radio/Legacy.h"
 #include "../protocol/data/NMEA.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
@@ -127,7 +128,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 5200;
+  size_t size = 6400;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -166,6 +167,69 @@ void handleSettings() {
   (settings->mode == SOFTRF_MODE_UAV ? "selected" : ""), SOFTRF_MODE_UAV
 /*  (settings->mode == SOFTRF_MODE_WATCHOUT ? "selected" : ""), SOFTRF_MODE_WATCHOUT, */
   );
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>Device ID</th>\
+<td align=right>%06x\
+</td>\
+</tr>"),SoC->getChipId() & 0x00FFFFFF);
+    
+  len = strlen(offset);
+  offset += len;
+  size -= len;    
+
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>ICAO ID (6 HEX digits)</th>\
+<td align=right>\
+<INPUT type='text' name='aircraft_id' maxlength='6' size='6' value='%06X'>\
+</td>\
+</tr>"),
+  settings->aircraft_id);
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>ID type to use:</th>\
+<td align=right>\
+<select name='id_method'>\
+<option %s value='%d'>Random</option>\
+<option %s value='%d'>ICAO</option>\
+<option %s value='%d'>Device</option>\
+<option %s value='%d'>Anonymous</option>\
+</select>\
+</td>\
+</tr>"),
+    (settings->id_method == ADDR_TYPE_RANDOM ? "selected" : ""),    ADDR_TYPE_RANDOM,
+    (settings->id_method == ADDR_TYPE_ICAO ? "selected" : ""),      ADDR_TYPE_ICAO,
+    (settings->id_method == ADDR_TYPE_FLARM ? "selected" : ""),     ADDR_TYPE_FLARM,
+    (settings->id_method == ADDR_TYPE_ANONYMOUS ? "selected" : ""), ADDR_TYPE_ANONYMOUS
+    );
+  
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>Aircraft ID to ignore</th>\
+<td align=right>\
+<INPUT type='text' name='ignore_id' maxlength='6' size='6' value='%06X'>\
+</td>\
+</tr>"),
+  settings->ignore_id);
 
   len = strlen(offset);
   offset += len;
@@ -541,6 +605,20 @@ void handleSettings() {
     size -= len;
   }
 
+  snprintf_P ( offset, size,
+    PSTR("\
+<tr>\
+<th align=left>UDP debug flags (2 HEX digits)</th>\
+<td align=right>\
+<INPUT type='text' name='debug_flags' maxlength='2' size='2' value='%02X'>\
+</td>\
+</tr>"),
+  settings->debug_flags);
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
 #if defined(USE_OGN_ENCRYPTION)
   snprintf_P ( offset, size,
     PSTR("\
@@ -685,12 +763,14 @@ void handleRoot() {
 
 void handleInput() {
 
-  size_t size = 1700;
+  size_t size = 2000;
 
   char *Input_temp = (char *) malloc(size);
   if (Input_temp == NULL) {
     return;
   }
+
+  char idbuf[6 + 1];
 
   for ( uint8_t i = 0; i < server.args(); i++ ) {
     if (server.argName(i).equals("mode")) {
@@ -733,6 +813,18 @@ void handleInput() {
       settings->power_save = server.arg(i).toInt();
     } else if (server.argName(i).equals("rfc")) {
       settings->freq_corr = server.arg(i).toInt();
+    } else if (server.argName(i).equals("id_method")) {
+      settings->id_method = server.arg(i).toInt();
+    } else if (server.argName(i).equals("aircraft_id")) {
+      server.arg(i).toCharArray(idbuf, sizeof(idbuf));
+      settings->aircraft_id = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("ignore_id")) {
+      server.arg(i).toCharArray(idbuf, sizeof(idbuf));
+      settings->ignore_id = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("debug_flags")) {
+      server.arg(i).toCharArray(idbuf, 3);
+      settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
+
 #if defined(USE_OGN_ENCRYPTION)
     } else if (server.argName(i).equals("igc_key")) {
       char buf[32 + 1];
@@ -758,6 +850,9 @@ PSTR("<html>\
 <h1 align=center>New settings:</h1>\
 <table width=100%%>\
 <tr><th align=left>Mode</th><td align=right>%d</td></tr>\
+<tr><th align=left>Aircraft ID</th><td align=right>%06X</td></tr>\
+<tr><th align=left>ID method</th><td align=right>%d</td></tr>\
+<tr><th align=left>Ignore ID</th><td align=right>%06X</td></tr>\
 <tr><th align=left>Protocol</th><td align=right>%d</td></tr>\
 <tr><th align=left>Band</th><td align=right>%d</td></tr>\
 <tr><th align=left>Aircraft type</th><td align=right>%d</td></tr>\
@@ -777,20 +872,22 @@ PSTR("<html>\
 <tr><th align=left>No track</th><td align=right>%s</td></tr>\
 <tr><th align=left>Power save</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
+<tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
 </table>\
 <hr>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->mode, settings->rf_protocol, settings->band,
+  settings->mode, settings->aircraft_id, settings->id_method, settings->ignore_id, 
+  settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->pointer, settings->bluetooth,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s),
   settings->nmea_out, settings->gdl90, settings->d1090,
   BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-  settings->power_save, settings->freq_corr,
+  settings->power_save, settings->freq_corr, settings->debug_flags,
   settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
   );
   SoC->swSer_enableRx(false);

@@ -17,12 +17,14 @@
  */
 
 #include "TrafficHelper.h"
+#include "Wind.h"
 #include "driver/EEPROM.h"
 #include "driver/RF.h"
 #include "driver/GNSS.h"
 #include "driver/Sound.h"
 #include "ui/Web.h"
 #include "protocol/radio/Legacy.h"
+#include "ApproxMath.h"
 
 unsigned long UpdateTrafficTimeMarker = 0;
 
@@ -47,6 +49,7 @@ float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
 {
   float alt_diff = fop->alt_diff;           /* positive means fop is higher than this_aircraft */
   float vsr = fop->vs - this_aircraft->vs;  /* positive means fop is rising relative to this_aircraft */
+  if (abs(vsr) > 1000)  vsr = 0;            /* ignore implausible data */
   float alt_change = vsr * 0.05;  /* expected change in 10 seconds, converted to meters */
 
   /* only adjust towards higher alarm level: */
@@ -58,11 +61,13 @@ float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
     if (alt_diff > 0)  return 0;  /* minimum abs_alt_diff */
   }
 
-  alt_diff = fabs(alt_diff);
-
-  /* GPS altitude is fuzzy so ignore the first 60m */
-  if (alt_diff < VERTICAL_SLACK)  return 0;
-  return (alt_diff - VERTICAL_SLACK);
+  /* GPS altitude is fuzzy so ignore the first 60m difference */
+  if (alt_diff > 0) {
+    if (alt_diff < VERTICAL_SLACK)  return 0;
+    return (alt_diff - VERTICAL_SLACK);
+  }
+  if (-alt_diff < VERTICAL_SLACK)  return 0;
+  return (alt_diff + VERTICAL_SLACK);
 }
 
 /*
@@ -72,12 +77,22 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
 {
   int8_t rval = ALARM_LEVEL_NONE;
 
-  int abs_alt_diff = (int) Adj_alt_diff(this_aircraft, fop);
+  if (this_aircraft->prevtime_ms == 0)
+    return ALARM_LEVEL_NONE;
+
+  int distance = (int) fop->distance;
+  if (distance > 2.0*ALARM_ZONE_CLOSE
+      || fabs(fop->alt_diff) > 2*VERTICAL_SEPARATION) {
+    return ALARM_LEVEL_NONE;
+    /* save CPU cycles */
+  }
+  
+  int abs_alt_diff = abs((int) Adj_alt_diff(this_aircraft, fop));
 
   if (abs_alt_diff < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
 
     /* take altitude (and vert speed) differences into account */
-    int distance = VERTICAL_SLOPE * abs_alt_diff + (int) fop->distance;
+    distance = VERTICAL_SLOPE * abs_alt_diff + distance;
 
     if (distance < ALARM_ZONE_URGENT) {
       rval = ALARM_LEVEL_URGENT;
@@ -102,22 +117,37 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 {
   int8_t rval = ALARM_LEVEL_NONE;
 
-  float abs_alt_diff = Adj_alt_diff(this_aircraft, fop);
+  if (this_aircraft->prevtime_ms == 0 || (fop->gnsstime_ms - fop->prevtime_ms > 3000))
+    return ALARM_LEVEL_NONE;
+
+  float distance = fop->distance;
+  if (distance > 2*ALARM_ZONE_CLOSE
+      || fabs(fop->alt_diff) > 2*VERTICAL_SEPARATION) {
+    return ALARM_LEVEL_NONE;
+    /* save CPU cycles */
+  }
+
+  if (distance / (fop->speed + this_aircraft->speed)
+         > ALARM_TIME_CLOSE * _GPS_MPS_PER_KNOT) {
+    return ALARM_LEVEL_NONE;
+    /* save CPU cycles */
+  }
+
+  if (circling || fabs(this_aircraft->turnrate) > 3.0 || fabs(fop->turnrate) > 3.0)
+    return Alarm_Distance(this_aircraft, fop);
+
+  float abs_alt_diff = fabs(Adj_alt_diff(this_aircraft, fop));
 
   if (abs_alt_diff < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
 
     /* Subtract 2D velocity vector of traffic from 2D velocity vector of this aircraft */ 
-    float V_rel_x = this_aircraft->speed * cosf(radians(90.0 - this_aircraft->course)) -
-                    fop->speed * cosf(radians(90.0 - fop->course)) ;
-    float V_rel_y = this_aircraft->speed * sinf(radians(90.0 - this_aircraft->course)) -
-                    fop->speed * sinf(radians(90.0 - fop->course)) ;
+    float V_rel_y = this_aircraft->speed * cos_approx(this_aircraft->course) -
+                    fop->speed * cos_approx(fop->course);                      /* N-S */
+    float V_rel_x = this_aircraft->speed * sin_approx(this_aircraft->course) -
+                    fop->speed * sin_approx(fop->course);                      /* E-W */
 
     float V_rel_magnitude = sqrtf(V_rel_x * V_rel_x + V_rel_y * V_rel_y) * _GPS_MPS_PER_KNOT;
-    float V_rel_direction = atan2f(V_rel_y, V_rel_x) * 180.0 / PI;  /* -180 ... 180 */
-
-    /* convert from math angle into course relative to north */
-    V_rel_direction = (V_rel_direction <= 90.0 ? 90.0 - V_rel_direction :
-                                                450.0 - V_rel_direction);
+    float V_rel_direction = atan2_approx(V_rel_y, V_rel_x);     /* direction fop is coming from */
 
     /* +- some degrees tolerance for collision course */
 
@@ -126,7 +156,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
       /* time is seconds prior to impact */
       /* take altitude difference into account */
 
-      float t = (fop->distance + VERTICAL_SLOPE*abs_alt_diff) / V_rel_magnitude;
+      float t = (distance + VERTICAL_SLOPE*abs_alt_diff) / V_rel_magnitude;
 
       float rel_angle = fabs(V_rel_direction - fop->bearing);
 
@@ -175,12 +205,17 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   return rval;
 }
 
+
 /*
- * "Legacy" method is based on short history of 2D velocity vectors (NS/EW)
+ * VERY EXPERIMENTAL
+ *
+ * "Legacy" method is based on short history of (future?) 2D velocity vectors (NS/EW).
+ * The approach here tries to use the velocity components from 4 time points
+ * that FLARM sends out, in the way it probably intended by sending the data
+ * out in that format, and given the weak computing power of early hardware.
  */
 static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 {
-
   int8_t rval = ALARM_LEVEL_NONE;
 
   /* TBD */
@@ -190,15 +225,12 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 
 void Traffic_Update(ufo_t *fop)
 {
-  fop->distance = gnss.distanceBetween( ThisAircraft.latitude,
-                                        ThisAircraft.longitude,
-                                        fop->latitude,
-                                        fop->longitude);
-
-  fop->bearing  = gnss.courseTo( ThisAircraft.latitude,
-                                 ThisAircraft.longitude,
-                                 fop->latitude,
-                                 fop->longitude);
+  /* use an approximation for distance & bearing between 2 points */
+  float x, y;
+  y = fop->latitude - ThisAircraft.latitude;         /* degrees */
+  x = (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
+  fop->distance = 111300.0 * sqrtf(x*x + y*y);       /* meters  */
+  fop->bearing = atan2_approx(y, x);           /* degrees from ThisAircraft to fop */
 
   fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
@@ -245,7 +277,19 @@ void ParseData()
       return;
     }
 
+    fo = EmptyFO;  /* to ensure no data from past packets remains in any field */
+
     if (protocol_decode && (*protocol_decode)((void *) RxBuffer, &ThisAircraft, &fo)) {
+
+      if (fo.addr == settings->ignore_id) {        /* ID told in settings to ignore */
+             return;
+      } else if (fo.addr == ThisAircraft.addr) {
+             /* received same ID as this aircraft, and not told to ignore it */
+             /* then replace ID with a random one */
+             settings->id_method = ADDR_TYPE_ANONYMOUS;
+             generate_random_id();
+             return;
+      }
 
       fo.rssi = RF_last_rssi;
 
@@ -254,11 +298,16 @@ void ParseData()
       int i;
 
       /* first check whether we are already tracking this object */
+      /* overwrite old data, but preserve fields that store history */
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
         if (Container[i].addr == fo.addr) {
           uint8_t alert_bak = Container[i].alert;
           uint8_t level_bak = Container[i].alert_level;
-          Container[i] = fo;
+          float prevcourse = Container[i].course;
+          uint32_t prevtime_ms = Container[i].gnsstime_ms;
+          Container[i] = fo;   /* copies the whole object/structure */
+          Container[i].prevcourse = prevcourse;
+          Container[i].prevtime_ms = prevtime_ms;
           Container[i].alert = alert_bak;
           Container[i].alert_level = level_bak;
           return;
@@ -301,7 +350,7 @@ void ParseData()
 
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
         adj_distance = Container[i].distance
-               + VERTICAL_SLOPE * Adj_alt_diff(&ThisAircraft,&Container[i]);
+               + VERTICAL_SLOPE * fabs(Adj_alt_diff(&ThisAircraft,&Container[i]));
         if (adj_distance > adj_max_dist)  {
           max_dist_ndx = i;
           adj_max_dist = adj_distance;
@@ -310,7 +359,7 @@ void ParseData()
 
       /* replace the farthest currently-tracked object, but only if  */
       /* the new object is closer, and of same or higher alarm level */
-      if ((fo.distance + VERTICAL_SLOPE*Adj_alt_diff(&ThisAircraft,&fo)
+      if ((fo.distance + VERTICAL_SLOPE*fabs(Adj_alt_diff(&ThisAircraft,&fo))
                < adj_max_dist)
         &&
           fo.alarm_level >= Container[max_dist_ndx].alarm_level) {
@@ -374,11 +423,12 @@ void Traffic_loop()
 
           *fop = EmptyFO;
           /* implied by emptyFO:
+          fop->addr = 0;
           fop->alert = 0;
           fop->alarm_level = 0;
           fop->alert_level = 0;
-          fop->addr = 0;
-          ... */
+          fop->prevtime_ms = 0;
+          etc... */
         }
       }
     }
@@ -439,4 +489,18 @@ int traffic_cmp_by_distance(const void *a, const void *b)
 /*  if (ta->distance == tb->distance) return  0; */
   if (ta->distance <  tb->distance) return -1;
   return  0;
+}
+
+/* called (as needed) from softRF.ino normal(), */
+/*   or from ParseData() above,                 */
+/*   or every few minutes from Estimate_Wind()  */
+void generate_random_id()
+{
+    uint32_t id = millis();
+    id = (id ^ (id<<5) ^ (id>>5)) & 0x000FFFFF;
+    if (settings->id_method == ADDR_TYPE_RANDOM)
+      id |= 0x00E00000;
+    else
+      id |= 0x00F00000;
+    ThisAircraft.addr = id;
 }

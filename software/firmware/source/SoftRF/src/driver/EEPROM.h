@@ -30,7 +30,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000060
+#define SOFTRF_EEPROM_VERSION 0x00000B05
 
 enum
 {
@@ -75,6 +75,13 @@ typedef struct Settings {
     /* Use a key provided by (local) gliding contest organizer */
     uint32_t igc_key[4];
 
+    /* added to allow setting aircraft ID and also an ID to ignore */
+    uint32_t aircraft_id:24;
+    uint8_t  id_method:2;     /* whether to use device ID, ICAO ID, or random */
+    uint8_t  debug_flags:6;   /* each bit activates UDP output of some debug info */
+    uint32_t ignore_id:24;
+    uint8_t  resvd5:8;
+
 } __attribute__((packed)) settings_t;
 
 typedef struct EEPROM_S {
@@ -88,6 +95,13 @@ typedef union EEPROM_U {
    uint8_t raw[sizeof(eeprom_struct_t)];
 } eeprom_t;
 
+#define DEBUG_WIND 0x01
+#define DEBUG_PROJECTION 0x02
+#define DEBUG_ALARM 0x04
+#define DEBUG_LEGACY 0x08
+#define DEBUG_RESVD1 0x10
+#define DEBUG_RESVD2 0x20
+	
 void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);

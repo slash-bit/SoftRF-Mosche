@@ -18,6 +18,8 @@
 
 #include "../system/SoC.h"
 
+bool udp_is_ready = 0;
+
 #if defined(EXCLUDE_WIFI)
 void WiFi_setup()    {}
 void WiFi_loop()    {}
@@ -305,6 +307,8 @@ void WiFi_setup()
   Serial.print(F("UDP server has started at port: "));
   Serial.println(RFlocalPort);
 
+  udp_is_ready = 1;
+
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
   WiFi_No_Clients_Time_ms = millis();
 #endif
@@ -339,6 +343,7 @@ void WiFi_loop()
 
 void WiFi_fini()
 {
+  udp_is_ready = 0;
   Uni_Udp.stop();
 
   WiFi.mode(WIFI_OFF);

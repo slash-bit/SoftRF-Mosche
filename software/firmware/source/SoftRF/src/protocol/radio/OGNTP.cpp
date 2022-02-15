@@ -121,6 +121,12 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->protocol  = RF_PROTOCOL_OGNTP;
 
   fop->addr      = ogn_rx_pkt.Packet.Header.Address;
+
+  if (fop->addr == settings->ignore_id)
+         return true;                  /* ID told in settings to ignore */
+  if (fop->addr == ThisAircraft.addr)
+         return true;                  /* same ID as this aircraft - ignore */
+
   fop->latitude  = ogn_rx_pkt.Packet.DecodeLatitude() * 0.0001/60;
   fop->longitude = ogn_rx_pkt.Packet.DecodeLongitude() * 0.0001/60;
   fop->altitude  = (float) ogn_rx_pkt.Packet.DecodeAltitude();
@@ -133,14 +139,16 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
   fop->addr_type = ogn_rx_pkt.Packet.Header.AddrType;
   fop->timestamp = this_aircraft->timestamp;
+  fop->gnsstime_ms = millis();
 
   fop->stealth   = ogn_rx_pkt.Packet.Position.Stealth;
   fop->no_track  = 0;
+/*
   fop->ns[0] = 0; fop->ns[1] = 0;
   fop->ns[2] = 0; fop->ns[3] = 0;
   fop->ew[0] = 0; fop->ew[1] = 0;
   fop->ew[2] = 0; fop->ew[3] = 0;
-
+*/
   return true;
 }
 
@@ -163,14 +171,9 @@ size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
   pos.Encode(ogn_tx_pkt.Packet);
 
   ogn_tx_pkt.Packet.HeaderWord      = 0;
-  ogn_tx_pkt.Packet.Header.Address  = this_aircraft->addr;
 
-#if !defined(SOFTRF_ADDRESS)
-  ogn_tx_pkt.Packet.Header.AddrType = ADDR_TYPE_ANONYMOUS;
-#else
-  ogn_tx_pkt.Packet.Header.AddrType = (this_aircraft->addr == SOFTRF_ADDRESS ?
-                                      ADDR_TYPE_ICAO : ADDR_TYPE_ANONYMOUS);
-#endif
+  ogn_tx_pkt.Packet.Header.Address  = this_aircraft->addr;
+  ogn_tx_pkt.Packet.Header.AddrType = settings->id_method;
 
 #if defined(USE_OGN_ENCRYPTION)
   if (key[0] || key[1] || key[2] || key[3])
