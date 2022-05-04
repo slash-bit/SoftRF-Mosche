@@ -235,6 +235,20 @@ void handleSettings() {
   offset += len;
   size -= len;
 
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>Aircraft ID to follow</th>\
+<td align=right>\
+<INPUT type='text' name='follow_id' maxlength='6' size='6' value='%06X'>\
+</td>\
+</tr>"),
+  settings->follow_id);
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
   /* Radio specific part 1 */
   if (hw_info.rf == RF_IC_SX1276 || hw_info.rf == RF_IC_SX1262) {
     snprintf_P ( offset, size,
@@ -321,6 +335,7 @@ void handleSettings() {
 <option %s value='%d'>None</option>\
 <option %s value='%d'>Distance</option>\
 <option %s value='%d'>Vector</option>\
+<option %s value='%d'>Legacy</option>\
 </select>\
 </td>\
 </tr>\
@@ -377,6 +392,7 @@ void handleSettings() {
   (settings->alarm == TRAFFIC_ALARM_NONE ? "selected" : ""),  TRAFFIC_ALARM_NONE,
   (settings->alarm == TRAFFIC_ALARM_DISTANCE ? "selected" : ""),  TRAFFIC_ALARM_DISTANCE,
   (settings->alarm == TRAFFIC_ALARM_VECTOR ? "selected" : ""),  TRAFFIC_ALARM_VECTOR,
+  (settings->alarm == TRAFFIC_ALARM_LEGACY ? "selected" : ""),  TRAFFIC_ALARM_LEGACY,
   (settings->txpower == RF_TX_POWER_FULL ? "selected" : ""),  RF_TX_POWER_FULL,
   (settings->txpower == RF_TX_POWER_LOW ? "selected" : ""),  RF_TX_POWER_LOW,
   (settings->txpower == RF_TX_POWER_OFF ? "selected" : ""),  RF_TX_POWER_OFF,
@@ -451,6 +467,13 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debug</th>\
+<td align=right>\
+<input type='radio' name='nmea_d' value='0' %s>Off\
+<input type='radio' name='nmea_d' value='1' %s>On\
+</td>\
+</tr>\
+<tr>\
 <th align=left>NMEA output</th>\
 <td align=right>\
 <select name='nmea_out'>\
@@ -461,6 +484,7 @@ void handleSettings() {
   (!settings->nmea_p ? "checked" : "") , (settings->nmea_p ? "checked" : ""),
   (!settings->nmea_l ? "checked" : "") , (settings->nmea_l ? "checked" : ""),
   (!settings->nmea_s ? "checked" : "") , (settings->nmea_s ? "checked" : ""),
+  (!settings->nmea_d ? "checked" : "") , (settings->nmea_d ? "checked" : ""),
   (settings->nmea_out == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
   (settings->nmea_out == NMEA_UART ? "selected" : ""), NMEA_UART,
   (settings->nmea_out == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
@@ -608,7 +632,7 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
-<th align=left>UDP debug flags (2 HEX digits)</th>\
+<th align=left>Debug flags (2 HEX digits)</th>\
 <td align=right>\
 <INPUT type='text' name='debug_flags' maxlength='2' size='2' value='%02X'>\
 </td>\
@@ -799,6 +823,8 @@ void handleInput() {
       settings->nmea_l = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_s")) {
       settings->nmea_s = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea_d")) {
+      settings->nmea_d = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_out")) {
       settings->nmea_out = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
@@ -821,6 +847,9 @@ void handleInput() {
     } else if (server.argName(i).equals("ignore_id")) {
       server.arg(i).toCharArray(idbuf, sizeof(idbuf));
       settings->ignore_id = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("follow_id")) {
+      server.arg(i).toCharArray(idbuf, sizeof(idbuf));
+      settings->follow_id = strtoul(idbuf, NULL, 16);
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -853,6 +882,7 @@ PSTR("<html>\
 <tr><th align=left>Aircraft ID</th><td align=right>%06X</td></tr>\
 <tr><th align=left>ID method</th><td align=right>%d</td></tr>\
 <tr><th align=left>Ignore ID</th><td align=right>%06X</td></tr>\
+<tr><th align=left>Follow ID</th><td align=right>%06X</td></tr>\
 <tr><th align=left>Protocol</th><td align=right>%d</td></tr>\
 <tr><th align=left>Band</th><td align=right>%d</td></tr>\
 <tr><th align=left>Aircraft type</th><td align=right>%d</td></tr>\
@@ -879,7 +909,8 @@ PSTR("<html>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->mode, settings->aircraft_id, settings->id_method, settings->ignore_id, 
+  settings->mode, settings->aircraft_id, settings->id_method,
+  settings->ignore_id, settings->follow_id,
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->pointer, settings->bluetooth,

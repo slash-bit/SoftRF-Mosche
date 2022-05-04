@@ -187,7 +187,7 @@ FatFileSystem fatfs;
 
 #define NRF52_JSON_BUFFER_SIZE  1024
 
-StaticJsonBuffer<NRF52_JSON_BUFFER_SIZE> nRF52_jsonBuffer;
+StaticJsonDocument<NRF52_JSON_BUFFER_SIZE> nRF52_jsonDoc;
 
 #if defined(USE_WEBUSB_SERIAL) || defined(USE_WEBUSB_SETTINGS)
 // USB WebUSB object
@@ -717,7 +717,8 @@ static void nRF52_loop()
 
   if (USBDevice.mounted() && usb_web.connected() && usb_web.available()) {
 
-    JsonObject &root = nRF52_jsonBuffer.parseObject(usb_web);
+    deserializeJson(nRF52_jsonDoc, usb_web);
+    JsonObject root = nRF52_jsonDoc.as<JsonObject>();
 
     if (root.success()) {
       JsonVariant msg_class = root["class"];
@@ -1106,9 +1107,9 @@ static void nRF52_EEPROM_extension(int cmd)
         File file = fatfs.open("/settings.json", FILE_READ);
 
         if (file) {
-          // StaticJsonBuffer<NRF52_JSON_BUFFER_SIZE> nRF52_jsonBuffer;
 
-          JsonObject &root = nRF52_jsonBuffer.parseObject(file);
+          deserializeJson(nRF52_jsonDoc, file);
+          JsonObject root = nRF52_jsonDoc.as<JsonObject>();
 
           if (root.success()) {
             JsonVariant msg_class = root["class"];

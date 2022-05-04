@@ -164,26 +164,24 @@ void setup()
 
   SoC->Button_setup();
 
-#if defined(ACCEPT_AIRCRAFT_ID)
-  if (settings->id_method == ADDR_TYPE_ICAO)
+  if (settings->id_method == ADDR_TYPE_ICAO && settings->aircraft_id != 0)
     ThisAircraft.addr = settings->aircraft_id;
   else if (settings->id_method == ADDR_TYPE_RANDOM
         || settings->id_method == ADDR_TYPE_ANONYMOUS)
     ThisAircraft.addr = 0;  /* will be filled in later */
   else
     ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
-#else
-  ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
-#endif
 
   hw_info.rf = RF_setup();
 
   delay(100);
 
   hw_info.baro = Baro_setup();
+
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();
 #endif /* ENABLE_AHRS */
+
   hw_info.display = SoC->Display_setup();
 
 #if !defined(EXCLUDE_MAVLINK)
@@ -207,7 +205,6 @@ void setup()
   SoC->swSer_enableRx(false);
 
   LED_setup();
-
   WiFi_setup();
 
   if (SoC->USB_ops) {
@@ -254,6 +251,8 @@ void setup()
   SoC->post_init();
 
   SoC->WDT_setup();
+
+Serial.println("... setup() done");
 }
 
 void loop()
@@ -371,6 +370,11 @@ void shutdown(int reason)
   SoC_fini(reason);
 }
 
+
+#ifdef TIMETEST
+static uint32_t lastsuccess = 0;
+#endif
+
 void normal()
 {
   bool success;
@@ -383,34 +387,36 @@ void normal()
 
   GNSS_loop();
 
-  ThisAircraft.timestamp = now();
-
   static uint32_t initial_time = 0;
-  static uint32_t next_ms = 0;
+  static uint32_t nextprev_ms = 0;
 
-  if (isValidFix()) {
+  bool validfix = isValidFix();
+  
+  if (validfix) {
 
+    ThisAircraft.timestamp = now();
+
+    /* also store a more precise GPS time stamp (millisecond resolution):  */
+    /* - alas gnss.time returns whole seconds not centiseconds as promised */
+    uint32_t lasttime_ms = ThisAircraft.gnsstime_ms;
+    ThisAircraft.gnsstime_ms = millis() - gnss.location.age();      /* = lastCommitTime */
+    bool newfix = (ThisAircraft.gnsstime_ms - lasttime_ms > 150);   /* new data arrived from GNSS */
+
+//if (newfix)
+//Serial.printf("new GNSS fix at %d\r\n", ThisAircraft.gnsstime_ms);
+// - on T-Beam seems to be early in each second, often with one additional fix about 100 ms later.
+// - that additional fix is discarded above.
+
+/*  float lat = ThisAircraft.latitude;   */
+/*  float lon = ThisAircraft.longitude;  */
     ThisAircraft.latitude = gnss.location.lat();
     ThisAircraft.longitude = gnss.location.lng();
+/*  newfix = newfix && (ThisAircraft.latitude != lat || ThisAircraft.longitude != lon); */
     ThisAircraft.altitude = gnss.altitude.meters();
     ThisAircraft.course = gnss.course.deg();
     ThisAircraft.speed = gnss.speed.knots();
     ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
     ThisAircraft.geoid_separation = gnss.separation.meters();
-
-    /* also store a more precise GPS time stamp (centisecond resolution): */
-    static uint32_t prevtime = 0;
-    static int prevmin = 0;
-    static int minutes = 0;
-    if (prevmin == 0)  prevmin = gnss.time.minute() + 60*gnss.time.hour();
-    uint32_t newtime = gnss.time.value() % 10000;   /* centiseconds */
-    if (newtime < prevtime) {    /* minute roll-over */
-      int newmin = gnss.time.minute() + 60*gnss.time.hour();
-      minutes += (newmin - prevmin);   /* can be >1 in case of GNSS outage */
-      prevmin = newmin;
-    }
-    prevtime = newtime;
-    ThisAircraft.gnsstime_ms = (newtime + 6000 * (uint32_t) minutes) * 10;   /* milliseconds */
 
     /* allow knowing when there was a good fix for 30 sec */
     if (initial_time == 0) {
@@ -422,29 +428,50 @@ void normal()
       }
     }
 
-    /* if no baro sensor, fill in .vs with GPS data */
+    /* if no baro sensor, fill in ThisAircraft.vs with GPS data */
     if (baro_chip == NULL) {
-      /* only do this once every 3 seconds */
+      /* only do this once every 4 seconds */
       static uint32_t time_to_estimate_climb = 0;
-      if (ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
-        time_to_estimate_climb = ThisAircraft.gnsstime_ms + 3000;
+      if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
+        time_to_estimate_climb = ThisAircraft.gnsstime_ms + 4100;
         ThisAircraft.vs = Estimate_Climbrate();
       }
     } /* else it was filled above in Baro_loop() */
 
     /* After some time has passed, store previous course & altitude
        and timestamp so as to allow computation of turn and climb rates */
-    static float next_course;
-    static float next_alt;
+    static float next_prevcourse=0;
+    static float next_prevheading=0;
+    static float next_prevalt=0;
     uint32_t now_ms = ThisAircraft.gnsstime_ms;
-    if (now_ms - next_ms > 1500) {
-      ThisAircraft.prevtime_ms = next_ms;  /* always between 1500 and 3000 ms ago */
-      next_ms = now_ms;
-      ThisAircraft.prevcourse = next_course;
-      ThisAircraft.prevaltitude = next_alt;
-      next_course = ThisAircraft.course;
-      next_alt = ThisAircraft.altitude;
+    if (newfix && now_ms > ((nextprev_ms + 1400) ^ ((nextprev_ms >> 4) & 0x0FF))) {
+      /* about 1400 ms with some pseudo-random jitter */
+      ThisAircraft.prevtime_ms = nextprev_ms;  /* usually 3-4 sec apart */
+      ThisAircraft.prevcourse = next_prevcourse;
+      ThisAircraft.prevheading = next_prevheading;
+      ThisAircraft.prevaltitude = next_prevalt;
+      nextprev_ms = now_ms;
+      next_prevcourse = ThisAircraft.course;   /* frozen snapshot to be used later */
+      next_prevheading = ThisAircraft.heading;
+      next_prevalt = ThisAircraft.altitude;
     }
+
+#if 0
+/* check timing */
+#include "WiFi.h"
+    static uint32_t msthen = 0;
+    if ((settings->debug_flags & DEBUG_RESVD2) && udp_is_ready) {
+      uint32_t msnow = millis();
+      if (msnow > msthen+10000) {
+        msthen = msnow;
+        snprintf_P(UDPpacketBuffer, UDP_PACKET_BUFSIZE,
+          PSTR("$PSTCT,%ld,%ld,%ld,%ld\r\n"),
+             msnow, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms, ThisAircraft.timestamp);
+        SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
+                       strlen(UDPpacketBuffer));
+      }
+    }
+#endif
 
 #if !defined(EXCLUDE_EGM96)
     /*
@@ -463,7 +490,7 @@ void normal()
     /* estimate wind from present and past GNSS data */
     /* only do this once every 666 milliseconds */
     static uint32_t time_to_estimate_wind = 0;
-    if (ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
+    if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
       Estimate_Wind();
       time_to_estimate_wind = ThisAircraft.gnsstime_ms + 666;
     }
@@ -474,33 +501,50 @@ void normal()
       generate_random_id();
 
     RF_Transmit(RF_Encode(&ThisAircraft), true);
+    /* this only actually transmits when some preset time intervals are reached */
 
   } else {    /* not isValidFix() */
 
       initial_time = 0;
       GNSSTimeMarker = 0;
       ThisAircraft.prevtime_ms = 0;
-      next_ms = 0;
+      nextprev_ms = 0;
   }
 
   success = RF_Receive();
+  /* this checks for newly received data, usually returns false */
+
+#ifdef TIMETEST
+  if (success) {
+    lastsuccess = millis();
+  } else if (GNSSTimeMarker > 0 && lastsuccess > GNSSTimeMarker + 30000) {
+    uint32_t interval = (millis() - lastsuccess);
+    if (interval < 10 * 60 * 1000 && interval > 20000) {
+      /* should have received more - try and increment the slow fake time */
+      increment_fake_time();  /* actually only increments once in xxx seconds */
+    }
+    if (interval > 10 * 60 * 1000) {    /* give up after 10 minutes */
+      reset_fake_time();
+    }
+  }
+#endif
 
 #if DEBUG
   success = true;
 #endif
 
-  if (success && isValidFix()) ParseData();
+  if (success && validfix)  ParseData();
 
 #if defined(ENABLE_TTN)
   TTN_loop();
 #endif
 
-  if (isValidFix()) {
+  if (validfix) {
     Traffic_loop();
   }
 
   if (isTimeToDisplay()) {
-    if (isValidFix()) {
+    if (validfix) {
       LED_DisplayTraffic();
     } else {
       LED_Clear();
@@ -514,7 +558,7 @@ void normal()
     NMEA_Export();
     GDL90_Export();
 
-    if (isValidFix()) {
+    if (validfix) {
       D1090_Export();
     }
     ExportTimeMarker = millis();
@@ -579,15 +623,15 @@ void bridge()
   if(success)
   {
     size_t rx_size = RF_Payload_Size(settings->rf_protocol);
-    rx_size = rx_size > sizeof(fo.raw) ? sizeof(fo.raw) : rx_size;
+    rx_size = rx_size > sizeof(fo_raw) ? sizeof(fo_raw) : rx_size;
 
-    memset(fo.raw, 0, sizeof(fo.raw));
-    memcpy(fo.raw, RxBuffer, rx_size);
+    memset(fo_raw, 0, sizeof(fo_raw));
+    memcpy(fo_raw, RxBuffer, rx_size);
 
     if (settings->nmea_p) {
       StdOut.print(F("$PSRFI,"));
       StdOut.print((unsigned long) now());    StdOut.print(F(","));
-      StdOut.print(Bin2Hex(fo.raw, rx_size)); StdOut.print(F(","));
+      StdOut.print(Bin2Hex(fo_raw, rx_size)); StdOut.print(F(","));
       StdOut.println(RF_last_rssi);
     }
 
@@ -610,15 +654,15 @@ void watchout()
 
   if (success) {
     size_t rx_size = RF_Payload_Size(settings->rf_protocol);
-    rx_size = rx_size > sizeof(fo.raw) ? sizeof(fo.raw) : rx_size;
+    rx_size = rx_size > sizeof(fo_raw) ? sizeof(fo_raw) : rx_size;
 
-    memset(fo.raw, 0, sizeof(fo.raw));
-    memcpy(fo.raw, RxBuffer, rx_size);
+    memset(fo_raw, 0, sizeof(fo_raw));
+    memcpy(fo_raw, RxBuffer, rx_size);
 
     if (settings->nmea_p) {
       StdOut.print(F("$PSRFI,"));
       StdOut.print((unsigned long) now());    StdOut.print(F(","));
-      StdOut.print(Bin2Hex(fo.raw, rx_size)); StdOut.print(F(","));
+      StdOut.print(Bin2Hex(fo_raw, rx_size)); StdOut.print(F(","));
       StdOut.println(RF_last_rssi);
     }
   }

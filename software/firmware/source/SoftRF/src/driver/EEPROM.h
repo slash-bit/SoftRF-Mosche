@@ -30,7 +30,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B05
+#define SOFTRF_EEPROM_VERSION 0x00000B07
 
 enum
 {
@@ -53,7 +53,7 @@ typedef struct Settings {
     bool     nmea_p:1;
     bool     nmea_l:1;
     bool     nmea_s:1;
-    bool     resvd1:1;
+    bool     nmea_d:1;
     uint8_t  nmea_out:3;
 
     uint8_t  bluetooth:3; /* ESP32 built-in Bluetooth */
@@ -78,9 +78,11 @@ typedef struct Settings {
     /* added to allow setting aircraft ID and also an ID to ignore */
     uint32_t aircraft_id:24;
     uint8_t  id_method:2;     /* whether to use device ID, ICAO ID, or random */
-    uint8_t  debug_flags:6;   /* each bit activates UDP output of some debug info */
+    uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
     uint8_t  resvd5:8;
+    uint32_t follow_id:24;
+    uint8_t  resvd6:8;
 
 } __attribute__((packed)) settings_t;
 

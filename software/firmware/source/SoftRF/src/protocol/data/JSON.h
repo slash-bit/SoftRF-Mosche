@@ -75,16 +75,16 @@ struct ping_aircraft_struct {
 typedef  struct dump1090_aircraft_struct dump1090_aircraft_t;
 typedef  struct ping_aircraft_struct ping_aircraft_t;
 
-extern StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+extern StaticJsonDocument<JSON_BUFFER_SIZE> jsonDoc;
 extern bool hasValidGPSDFix;
 
 extern void JSON_Export();
-extern void parseTPV(JsonObject&);
-extern void parseSettings(JsonObject&);
-extern void parseUISettings(JsonObject&);
-extern void parseD1090(JsonObject&);
-extern void parsePING(JsonObject&);
-extern void parseRAW(JsonObject&);
+extern void parseTPV(JsonObject);
+extern void parseSettings(JsonObject);
+extern void parseUISettings(JsonObject);
+extern void parseD1090(JsonObject);
+extern void parsePING(JsonObject);
+extern void parseRAW(JsonObject);
 extern byte getVal(char);
 
 #endif /* JSONHELPER_H */

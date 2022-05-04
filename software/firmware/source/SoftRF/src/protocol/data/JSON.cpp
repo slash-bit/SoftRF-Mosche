@@ -47,7 +47,7 @@ extern settings_t *settings;
 #include <locale>
 #include <iomanip>
 
-StaticJsonBuffer<JSON_BUFFER_SIZE> jsonBuffer;
+StaticJsonDocument<JSON_BUFFER_SIZE> jsonDoc;
 
 bool hasValidGPSDFix = false;
 
@@ -70,8 +70,8 @@ void JSON_Export()
   char buffer[3 * 80 * MAX_TRACKING_OBJECTS];
   bool has_aircraft = false;
 
-  JsonObject& root = jsonBuffer.createObject();
-  JsonArray& aircraft_array = root.createNestedArray("aircraft");
+  JsonObject root = jsonDoc.to<JsonObject>();
+  JsonArray aircraft_array = root.createNestedArray("aircraft");
 
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].addr && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
@@ -87,7 +87,7 @@ void JSON_Export()
 
         snprintf(hexbuf, sizeof(hexbuf), "%06X", Container[i].addr);
 
-        JsonObject& aircraft = aircraft_array.createNestedObject();
+        JsonObject aircraft = aircraft_array.createNestedObject();
 
         aircraft["icaoAddress"] = hexbuf; // ICAO of the aircraft
         aircraft["trafficSource"] = 2; // 0 = 1090ES , 1 = UAT
@@ -124,14 +124,14 @@ void JSON_Export()
     Serial.println(buffer);
   }
 
-  jsonBuffer.clear();
+  jsonDoc.clear();
 }
 
-void parsePING(JsonObject& root)
+void parsePING(JsonObject root)
 {
   ping_aircraft_t *aircraft_array;
 
-  JsonArray& aircraft = root["aircraft"];
+  JsonArray aircraft = root["aircraft"];
 
   int size = aircraft.size();
   time_t timestamp = now();
@@ -145,7 +145,7 @@ void parsePING(JsonObject& root)
     }
 
     for (int i=0; i < size; i++) {
-      JsonObject& aircraft_obj = aircraft[i];
+      JsonObject aircraft_obj = aircraft[i];
 
       aircraft_array[i].icaoAddress = aircraft_obj["icaoAddress"];
       aircraft_array[i].trafficSource = aircraft_obj["trafficSource"];
@@ -277,7 +277,7 @@ void parsePING(JsonObject& root)
   }
 }
 
-void parseTPV(JsonObject& root)
+void parseTPV(JsonObject root)
 {
   int mode = 0;
 
@@ -334,14 +334,14 @@ void parseTPV(JsonObject& root)
   }
 }
 
-void parseD1090(JsonObject& root)
+void parseD1090(JsonObject root)
 {
   dump1090_aircraft_t *aircraft_array;
 
   float var_now = root["now"];
   int var_messages = root["messages"];
 
-  JsonArray& aircraft = root["aircraft"];
+  JsonArray aircraft = root["aircraft"];
 
   int size = aircraft.size();
   time_t timestamp = now();
@@ -474,10 +474,10 @@ void parseD1090(JsonObject& root)
   }
 }
 
-void parseRAW(JsonObject& root)
+void parseRAW(JsonObject root)
 {
 
-  JsonArray& rawdata = root["rawdata"];
+  JsonArray rawdata = root["rawdata"];
 
   int size = rawdata.size();
   time_t timestamp = now();
@@ -549,7 +549,7 @@ void parseRAW(JsonObject& root)
 
 #if defined(RASPBERRY_PI) || defined(ARDUINO_ARCH_NRF52)
 
-void parseUISettings(JsonObject& root)
+void parseUISettings(JsonObject root)
 {
   JsonVariant units = root["units"];
   if (units.success()) {
@@ -667,7 +667,7 @@ void parseUISettings(JsonObject& root)
   }
 }
 
-void parseSettings(JsonObject& root)
+void parseSettings(JsonObject root)
 {
   JsonVariant mode = root["mode"];
   if (mode.success()) {

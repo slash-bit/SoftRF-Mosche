@@ -31,7 +31,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "1.0MB05"
+#define SOFTRF_FIRMWARE_VERSION "MB07a"
 #define SOFTRF_IDENT            "SoftRF-"
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */
@@ -108,52 +108,67 @@
 #endif /* PREMIUM_PACKAGE */
 
 typedef struct UFO {
+
+#if defined(RASPBERRY_PI) || defined(ARDUINO_ARCH_NRF52)
     uint8_t   raw[34];
-    time_t    timestamp;
+#endif
 
     uint8_t   protocol;
-
-    uint32_t  addr;
     uint8_t   addr_type;
+    int8_t    alarm_level;
+    int8_t    alert_level;
+
+    time_t    timestamp;
+    uint32_t  addr;
     float     latitude;
     float     longitude;
     float     altitude;
+    float     geoid_separation; /* metres */
     float     pressure_altitude;
     float     course;     /* CoG */
+    float     heading;    /* where the nose points = course - wind drift */
     float     speed;      /* ground speed in knots */
-    uint8_t   aircraft_type;
+    float     vs;         /* feet per minute vertical speed */
 
-    float     vs; /* feet per minute */
-
-    bool      stealth;
-    bool      no_track;
-
-    int16_t   ns[4];   /* stored as m/s times 4 */
-    int16_t   ew[4];
-
-    float     geoid_separation; /* metres */
-    uint16_t  hdop; /* cm */
-    int8_t    rssi; /* SX1276 only */
-
-    /* 'legacy' specific data */
+    /* to be able to compute turn & climb rates */
+    uint32_t  gnsstime_ms;    /* hopefully a more precise timestamp */
+    uint32_t  prevtime_ms;    /* preceding timestamp */
+    uint32_t  projtime_ms;    /* timestamp of last course projection */
+    float     prevcourse;     /* previous course */
+    float     prevheading;    /* previous heading */
+/*  float     prevspeed;  */  /* previous speed */
+    float     prevaltitude;   /* previous altitude */
     float     distance;
     float     bearing;
     float     turnrate;
     float     alt_diff;
-    int8_t    alarm_level;
-    int8_t    alert_level;
+    float     adj_alt_diff;
+    float     adj_distance;
 
-    /* to be able to compute turn & climb rates */
-    float     prevcourse;     /* previous course */
-    uint32_t  gnsstime_ms;    /* hopefully a more precise timestamp */
-    uint32_t  prevtime_ms;
-    float     prevaltitude;   /* previous altitude */
+    /* 'legacy' specific data */
+    int16_t   fla_ns[4];     /* quarter-meters per second */
+    int16_t   fla_ew[4];
+    int16_t   air_ns[6];     /* corrected to air reference frame */
+    int16_t   air_ew[6];
+    int32_t   dx;        /* EW distance to this other aircraft, in meters */
+    int32_t   dy;        /* NS distance */
+    bool      stealth;
+    bool      no_track;
+    uint8_t   aircraft_type;
+    uint8_t   airborne;
+
+    /* for linking into a list */
+    uint8_t   next;
+
+    int8_t    rssi; /* SX1276 only */
+    uint16_t  hdop; /* cm */
+
+    /* ADS-B (ES, UAT, GDL90) specific data */
+    uint8_t   callsign[10];    /* size of mdb.callsign + 1 */
 
     /* bitmap of issued voice/tone/ble/... alerts */
     uint8_t   alert;
 
-    /* ADS-B (ES, UAT, GDL90) specific data */
-    uint8_t   callsign[8];
 } ufo_t;
 
 typedef struct hardware_info {

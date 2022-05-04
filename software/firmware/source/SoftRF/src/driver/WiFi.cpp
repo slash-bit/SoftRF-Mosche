@@ -189,8 +189,8 @@ size_t Raw_Receive_UDP(uint8_t *buf)
 void Raw_Transmit_UDP()
 {
     size_t rx_size = RF_Payload_Size(settings->rf_protocol);
-    rx_size = rx_size > sizeof(fo.raw) ? sizeof(fo.raw) : rx_size;
-    String str = Bin2Hex(fo.raw, rx_size);
+    rx_size = rx_size > sizeof(fo_raw) ? sizeof(fo_raw) : rx_size;
+    String str = Bin2Hex(fo_raw, rx_size);
     size_t len = str.length();
     // ASSERT(sizeof(UDPpacketBuffer) > 2 * PKT_SIZE + 1)
     str.toCharArray(UDPpacketBuffer, sizeof(UDPpacketBuffer));

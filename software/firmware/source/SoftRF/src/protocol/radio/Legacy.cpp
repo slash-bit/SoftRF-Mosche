@@ -26,10 +26,11 @@
 
 #include "../../../SoftRF.h"
 #include "../../TrafficHelper.h"
+#include "../../Wind.h"
+#include "../../ApproxMath.h"
 #include "../../driver/RF.h"
 #include "../../driver/EEPROM.h"
-#include "../../ApproxMath.h"
-#include "../../driver/WiFi.h"
+#include "../data/NMEA.h"
 
 const rf_proto_desc_t legacy_proto_desc = {
   "Legacy",
@@ -160,6 +161,11 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
          return true;                 /* same ID as this aircraft - ignore */
     /* return true so that the packet will reach ParseData() */
 
+    fop->protocol = RF_PROTOCOL_LEGACY;
+    fop->addr_type = pkt->addr_type;
+    fop->timestamp = timestamp;
+    fop->gnsstime_ms = millis();
+
     int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
     int32_t lat = (pkt->lat - round_lat) % (uint32_t) 0x080000;
     if (lat >= 0x040000) lat -= 0x080000;
@@ -170,58 +176,76 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     if (lon >= 0x080000) lon -= 0x100000;
     lon = ((lon + round_lon) << 7) /* + 0x40 */;
 
-/*  int32_t ns = (pkt->ns[0] + pkt->ns[1] + pkt->ns[2] + pkt->ns[3]) / 4;
-    int32_t ew = (pkt->ew[0] + pkt->ew[1] + pkt->ew[2] + pkt->ew[3]) / 4; */
-
-    int32_t ns = pkt->ns[0];
-    int32_t ew = pkt->ew[0];
-    float speed4 = sqrtf(ew * ew + ns * ns) * (1 << pkt->smult);
-
-    float direction = 0;
-    if (speed4 > 0)
-      direction = atan2_approx((float)ns, (float)ew);
+    uint8_t smult = pkt->smult;
+    float nsf = (float) (pkt->ns[0] << smult);      /* quarter-meters per sec */
+    float ewf = (float) (pkt->ew[0] << smult);
+//    float heading = atan2_approx(nsf, ewf);
+//    /* if those are airspeeds, adjust for wind */   // they are not airspeeds.
+//    nsf += 4.0 * wind_best_ns;
+//    ewf += 4.0 * wind_best_ew;
+    float course = atan2_approx(nsf, ewf);
+    float speed4 = approxHypotenuse(nsf, ewf);
+    float turnrate = 0;
+    if (speed4 > 0) {
+      float nextcourse = atan2_approx((float) pkt->ns[1], (float) pkt->ew[1]);
+      float turnangle = (nextcourse - course);
+      if (turnangle >  270.0) turnangle -= 360.0;
+      if (turnangle < -270.0) turnangle += 360.0;
+      turnrate = 0.333 * turnangle;  /* assuming 3 seconds interval */
+//      /* adjust direction for turning during time between origin and [0] */
+//      course -= 0.5 * turnangle;
+//      if (course >  360.0) course -= 360.0;
+//      if (course < -360.0) course += 360.0;
+//      heading -= 0.5 * turnangle;
+//      if (heading >  360.0) heading -= 360.0;
+//      if (heading < -360.0) heading += 360.0;
+    }
 
     uint16_t vs_u16 = pkt->vs;
     int16_t vs_i16 = (int16_t) (vs_u16 | (vs_u16 & (1<<9) ? 0xFC00U : 0));
-    int16_t vs10 = vs_i16 << pkt->smult;
+    int16_t vs10 = vs_i16 << smult;
 
     int16_t alt = pkt->alt ; /* relative to WGS84 ellipsoid */
 
-    fop->protocol = RF_PROTOCOL_LEGACY;
-
-    fop->addr_type = pkt->addr_type;
-    fop->timestamp = timestamp;
-    fop->gnsstime_ms = millis();
+    fop->airborne = pkt->airborne;
     fop->latitude = (float)lat / 1e7;
     fop->longitude = (float)lon / 1e7;
     fop->altitude = (float) alt - geo_separ;
-    fop->speed = speed4 / (4 * _GPS_MPS_PER_KNOT);
-    fop->course = direction;
+    fop->speed = (1.0 / (4.0 * _GPS_MPS_PER_KNOT)) * speed4;
+    fop->course = course;
+//    fop->heading = heading;
+    fop->turnrate = turnrate;
+         /* this is as reported by FLARM, which is ground-reference at time [0]-1.5s */
     fop->vs = ((float) vs10) * (_GPS_FEET_PER_METER * 6.0);
     fop->aircraft_type = pkt->aircraft_type;
     fop->stealth = pkt->stealth;
     fop->no_track = pkt->no_track;
-    /* keep the given data for 4 time points */
-    int smult4 = pkt->smult + 2;
-    fop->ns[0] = (int16_t) pkt->ns[0] << smult4;  /* 4 * speed in mps */
-    fop->ns[1] = (int16_t) pkt->ns[1] << smult4;
-    fop->ns[2] = (int16_t) pkt->ns[2] << smult4;
-    fop->ns[3] = (int16_t) pkt->ns[3] << smult4;
-    fop->ew[0] = (int16_t) pkt->ew[0] << smult4;
-    fop->ew[1] = (int16_t) pkt->ew[1] << smult4;
-    fop->ew[2] = (int16_t) pkt->ew[2] << smult4;
-    fop->ew[3] = (int16_t) pkt->ew[3] << smult4;
+    /* Keep the data given for the first 2 time points  */
+    /* The other 2 time points are not useful in wind   */
+    /* due to the data being in neither reference frame */
+    for (int i=0; i<2; i++) {
+       fop->fla_ns[i] = (int16_t) (pkt->ns[i] << smult);
+       fop->fla_ew[i] = (int16_t) (pkt->ew[i] << smult);
+    }
+    fop->projtime_ms = fop->gnsstime_ms;
 
-    /* send radio packet data out via UDP for debugging */
-    if ((settings->debug_flags & DEBUG_LEGACY) && udp_is_ready) {
-      snprintf_P(UDPpacketBuffer, UDP_PACKET_BUFSIZE,
-        PSTR("$PFLAS,R,%06X,%ld,%d,%.5f,%.5f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d\n"),
-        fop->addr, fop->gnsstime_ms, pkt->airborne,
-        fop->latitude, fop->longitude, fop->altitude, direction, vs10,
-        fop->ns[0], fop->ns[1], fop->ns[2], fop->ns[3],
-        fop->ew[0], fop->ew[1], fop->ew[2], fop->ew[3]);
-      SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
-                       strlen(UDPpacketBuffer));
+    /* send radio packet data out via NMEA for debugging */
+    if (settings->nmea_d && settings->debug_flags & DEBUG_LEGACY) {
+#if 0
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+        PSTR("$PSRFL,%06X,%ld,%d,%.5f,%.5f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
+        fop->addr, fop->gnsstime_ms, fop->airborne,
+        fop->latitude, fop->longitude, fop->altitude,
+        heading, turnrate, vs10, smult,
+        fop->fla_ns[0], fop->fla_ns[1], fop->fla_ns[2], fop->fla_ns[3],
+        fop->fla_ew[0], fop->fla_ew[1], fop->fla_ew[2], fop->fla_ew[3]);
+      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+#endif
+      /* also output the raw (but decrypted) packet as a whole, in hex */
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
+        fop->addr, fop->gnsstime_ms,
+        bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
+      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 
     return true;
@@ -234,12 +258,6 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     int ndx;
     uint8_t pkt_parity=0;
     uint32_t key[4];
-
-    /* static vars to keep track of 'airborne' status: */
-    static float initial_latitude = 0;
-    static float initial_longitude = 0;
-    static float initial_altitude = 0;
-    static int airborne = 0;
 
     float lat = this_aircraft->latitude;
     float lon = this_aircraft->longitude;
@@ -255,34 +273,43 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
       speed4 = 0x3FF;
     }
 
+    uint8_t smult;
     if        (speed4 & 0x200) {
-      pkt->smult = 3;
+      smult = 3;
     } else if (speed4 & 0x100) {
-      pkt->smult = 2;
+      smult = 2;
     } else if (speed4 & 0x080) {
-      pkt->smult = 1;
+      smult = 1;
     } else {
-      pkt->smult = 0;
+      smult = 0;
     }
+    pkt->smult = smult;
 
-    uint8_t speed = speed4 >> pkt->smult;
-
-    if (this_aircraft->prevtime_ms != 0) {
-      /* Compute NS & EW speed components for 4 future time points.  */
-      /*     in units of quarter-meters per second.                  */
-      project_course(this_aircraft, this_aircraft);
-      int smult4 = pkt->smult + 2;
-      int i;
-      for (i=0; i<4; i++) {  /* loop over the 4 time points stored in arrays */
-        pkt->ns[i] = (int8_t) (this_aircraft->ns[i] >> smult4);
-        pkt->ew[i] = (int8_t) (this_aircraft->ew[i] >> smult4);
+//    if (this_aircraft->prevtime_ms != 0) {
+      /* Compute NS & EW speed components for future time points. */
+      project_this(this_aircraft);       /* which also calls airborne() */
+      pkt->airborne = this_aircraft->airborne;
+      for (int i=0; i<4; i++) {
+         pkt->ns[i] = (int8_t) (this_aircraft->fla_ns[i] >> smult);
+         pkt->ew[i] = (int8_t) (this_aircraft->fla_ew[i] >> smult);
       }
-    }
+      /* quarter-meters per sec if smult==0 */
+//    } else {
+//      // pkt->airborne = speed > 0 ? 1 : 0;
+//      pkt->airborne = this_aircraft->airborne;
+//      uint16_t speed = speed4 >> smult;
+//      int8_t ns = (int8_t) ((float) speed * cos_approx(course));
+//     int8_t ew = (int8_t) ((float) speed * sin_approx(course));
+//      for (int i=0; i<4; i++) {
+//        pkt->ns[i] = ns;
+//        pkt->ew[i] = ew;
+//      }
+//    }
 
     int16_t vs10 = (int16_t) roundf(vsf * 10.0f);
 /*  pkt->vs = this_aircraft->stealth ? 0 : vs10 >> pkt->smult; */
 /*  - that degrades collision avoidance - should only mask vs in NMEA */
-    pkt->vs = vs10 >> pkt->smult;
+    pkt->vs = vs10 >> smult;
 
     uint32_t id = this_aircraft->addr;
 
@@ -302,42 +329,6 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     pkt->lat = (uint32_t ( lat * 1e7) >> 7) & 0x7FFFF;
     pkt->lon = (uint32_t ( lon * 1e7) >> 7) & 0xFFFFF;
     pkt->alt = alt;
-
-    if (initial_longitude == 0) {   /* no initial location yet */
-      if (GNSSTimeMarker > 0) {  /* 30 sec after first valid fix */
-        initial_latitude = lat;
-        initial_longitude = lon;
-        initial_altitude = this_aircraft->altitude;
-        airborne = 0;
-      }
-    }
-
-/*  pkt->airborne = (speed > 0) ? 1 : 0; */
-    pkt->airborne = 0;
-    if (airborne > 0) {
-      pkt->airborne = 1;
-      if (speed4 == 0) {
-        --airborne;
-        /* after 90 packets with 0 speed consider it a landing */
-        if (airborne <= 0) {
-          /* landed - set new initial location */
-          initial_latitude = lat;
-          initial_longitude = lon;
-          initial_altitude = this_aircraft->altitude;
-        }
-      }
-    } else if (speed4 > 2) {
-      if (GNSSTimeMarker > 0) {  /* had fix for a while */
-        if (speed4 > 20                                /* about 10 knots  */
-/*          || abs(vs10) > 15                             about 3 knots   */
-          || fabs(lat - initial_latitude) > 0.0008f    /* about 90 meters */
-          || fabs(lon - initial_longitude) > 0.0012f
-          || fabs(this_aircraft->altitude - initial_altitude) > 60.0f) {
-            /* movement larger than GNSS noise */
-            airborne = 90;
-        }
-      }
-    }
 
     pkt->_unk0 = 0;
     pkt->_unk1 = 0;

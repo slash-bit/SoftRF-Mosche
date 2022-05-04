@@ -84,13 +84,44 @@ float cos_approx(float degs)
   return sin_approx(degs+90.0);
 }
 
+/*
+ * Approximate sqrt(x^2+y^2):
+ * 
+ * Based on: https://www.flipcode.com/archives/Fast_Approximate_Distance_Functions.shtml
+ * with one added "iteration".
+ * 
+ * Maximum error < 0.07%, average error about 0.03%.
+ */
+float approxHypotenuse(float x, float y)
+{
+   x = fabs(x);
+   y = fabs(y);
+   if (x == 0.0) {
+     return y;
+   } else if (y == 0.0) {
+     return x;
+   } else {
+     float h;
+     if (x < y)  { h=x;  x=y;  y=h; }
+     if ( x < 16.0 * y ) {
+         h = ( x * (0.983398 - 0.0390625)) + ( y * 0.430664 );
+     } else {
+         h = ( x * 0.983398 ) + ( y * 0.430664 );
+     }
+     return (0.5 * ((x*x + y*y) / h + h));
+   }
+}
+
 /* cos(latitude) is used to convert longitude difference into linear distance. */
-/* Only compute once, that is accurate enough for use through the whole flight */
+/* Compute once, accurate enough through a significant range of latitude. */
 
 float CosLat(float latitude)
 {
   static float cos_lat = 0.0;
-  if (cos_lat == 0.0)
+  static float oldlat = 0.0;
+  if (cos_lat == 0.0 || fabs(latitude-oldlat) > 0.3) {
     cos_lat = cos_approx(latitude);
+    oldlat = latitude;
+  }
   return cos_lat;
 }

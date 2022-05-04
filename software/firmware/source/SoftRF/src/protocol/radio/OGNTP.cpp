@@ -127,6 +127,13 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   if (fop->addr == ThisAircraft.addr)
          return true;                  /* same ID as this aircraft - ignore */
 
+  fop->addr_type = ogn_rx_pkt.Packet.Header.AddrType;
+  fop->timestamp = this_aircraft->timestamp;
+  fop->gnsstime_ms = millis();
+
+  fop->stealth   = ogn_rx_pkt.Packet.Position.Stealth;
+  fop->no_track  = 0;
+
   fop->latitude  = ogn_rx_pkt.Packet.DecodeLatitude() * 0.0001/60;
   fop->longitude = ogn_rx_pkt.Packet.DecodeLongitude() * 0.0001/60;
   fop->altitude  = (float) ogn_rx_pkt.Packet.DecodeAltitude();
@@ -136,13 +143,6 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->speed     = (ogn_rx_pkt.Packet.DecodeSpeed() * 0.1) / _GPS_MPS_PER_KNOT;
   fop->vs        = (ogn_rx_pkt.Packet.DecodeClimbRate() * 0.1) * (_GPS_FEET_PER_METER * 60.0);
   fop->hdop      = (ogn_rx_pkt.Packet.DecodeDOP() + 10) * 10;
-
-  fop->addr_type = ogn_rx_pkt.Packet.Header.AddrType;
-  fop->timestamp = this_aircraft->timestamp;
-  fop->gnsstime_ms = millis();
-
-  fop->stealth   = ogn_rx_pkt.Packet.Position.Stealth;
-  fop->no_track  = 0;
 /*
   fop->ns[0] = 0; fop->ns[1] = 0;
   fop->ns[2] = 0; fop->ns[3] = 0;

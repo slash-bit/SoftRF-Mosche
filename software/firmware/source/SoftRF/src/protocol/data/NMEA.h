@@ -52,6 +52,8 @@ void NMEA_Out(uint8_t, byte *, size_t, bool);
 void NMEA_GGA(void);
 void NMEA_add_checksum(char *, size_t);
 
+char *bytes2Hex(byte *, size_t);
+
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
 
 #if defined(NMEA_TCP_SERVICE)

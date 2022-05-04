@@ -62,8 +62,11 @@ bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   uat_decode_adsb_mdb((uint8_t *) pkt, &mdb);
 
   fop->protocol = RF_PROTOCOL_ADSB_UAT;
-
+  fop->addr_type = ADDR_TYPE_ICAO;
   fop->addr = mdb.address;
+  fop->timestamp = this_aircraft->timestamp;
+  fop->gnsstime_ms = millis();
+
   fop->latitude = mdb.lat;
   fop->longitude = mdb.lon;
 
@@ -80,10 +83,6 @@ bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->vs = mdb.vert_rate;
   fop->hdop = 0;                                                 /* TBD */
 
-  fop->addr_type = ADDR_TYPE_ICAO;
-  fop->timestamp = this_aircraft->timestamp;
-  fop->gnsstime_ms = millis();
-
   fop->stealth = false;
   fop->no_track = false;
 /*
@@ -92,8 +91,8 @@ bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->ew[0] = 0; fop->ew[1] = 0;
   fop->ew[2] = 0; fop->ew[3] = 0;
 */
-  /* sizeof(mdb.callsign) = 9 ; sizeof(fop->callsign) = 8 */
-  memcpy(fop->callsign, mdb.callsign, sizeof(fop->callsign));
+  /* sizeof(mdb.callsign) = 9 ; sizeof(fop->callsign) = 10 */
+  memcpy(fop->callsign, mdb.callsign, sizeof(mdb.callsign));
 
   return true;
 }

@@ -20,12 +20,18 @@
 
 #include "Baro.h"
 
+#define EXCLUDE_BMP180
+#define EXCLUDE_BMP280
+#define EXCLUDE_MPL3115A2
 #if defined(EXCLUDE_BMP180) && defined(EXCLUDE_BMP280) && defined(EXCLUDE_MPL3115A2)
 byte  Baro_setup()        {return BARO_MODULE_NONE;}
+bool  Baro_probe()        {return false;}
 void  Baro_loop()         {}
 float Baro_altitude()     {return 0;}
 float Baro_pressure()     {return 0;}
 float Baro_temperature()  {return 0;}
+barochip_ops_t *baro_chip = NULL;
+
 #else
 
 #if !defined(EXCLUDE_BMP180)
@@ -244,6 +250,8 @@ bool Baro_probe()
 
 byte Baro_setup()
 {
+Serial.println("baro setting up");
+
   if ( SoC->Baro_setup() && Baro_probe() ) {
 
     Serial.print(baro_chip->name);

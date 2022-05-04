@@ -22,6 +22,7 @@
 float atan2_approx(float, float);
 float sin_approx(float);
 float cos_approx(float);
+float approxHypotenuse(float, float);
 float CosLat(float);
 
 #endif /* APPROXMATH_H */

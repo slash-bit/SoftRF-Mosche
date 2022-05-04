@@ -27,6 +27,7 @@
 #define ALARM_ZONE_LOW        1000  /* zone range is  700m <->  1000m */
 #define ALARM_ZONE_IMPORTANT  700   /* zone range is  400m <->   700m */
 #define ALARM_ZONE_URGENT     400   /* zone range is    0m <->   400m */
+#define ALARM_ZONE_EXTREME    250
 
 /* for VECTOR method: */
 #define ALARM_VECTOR_ANGLE    10
@@ -35,6 +36,7 @@
 #define ALARM_TIME_LOW        19
 #define ALARM_TIME_IMPORTANT  13
 #define ALARM_TIME_URGENT     9
+#define ALARM_TIME_EXTREME    6
 
 #define VERTICAL_SLOPE                5  /* slope effect for alerts */
 #define VERTICAL_SLACK               60  /* meters  - allow for GPS alt error */
@@ -69,16 +71,11 @@ void Traffic_Update(ufo_t *);
 int  Traffic_Count(void);
 
 int  traffic_cmp_by_distance(const void *, const void *);
-
 float Adj_alt_diff(ufo_t *, ufo_t *);
-float atan2_approx(float, float);
-float sin_approx(float);
-float cos_approx(float);
-void project_course(ufo_t *, ufo_t *);
-void Estimate_Wind(void);
 void generate_random_id(void);
 
 extern ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
+extern uint8_t fo_raw[34];
 extern traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 
 #endif /* TRAFFICHELPER_H */

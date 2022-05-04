@@ -1,0 +1,50 @@
+
+The order of the main ops in normal() loop:
+
+  Baro_loop() - computes vertical speed if sensor available
+
+  GNSS_loop() - gets a new GPS fix if available
+
+  if (valid GPS fix) {  - note these will not happen without a fix!
+
+    compute timestamps
+
+    discretize GPS fixes into about 2-second intervals
+        - for computation of turn rate, climb rate, etc
+
+    Estimate_Climbrate() computes vertical speed using GPS data (if no baro)
+
+    Estimate_Wind()  (once every 666 ms)
+        - calls project(ThisAircraft)
+
+    RF_Transmit() - only actually transmits at some preset time intervals
+        - calls protocol_encode()
+             - but only if and when it is time to transmit
+             - Legacy_encode() calls project(ThisAircraft)
+                 - project(ThisAircraft) only recomputes if 400 ms since last time
+  }
+
+  RF_Receive() - check for new received data, usually there is none
+        - without a GPS fix (and thus GPS time) receive() usually fails
+             - due to time slots or frequency hopping algorithms
+
+  if (valid GPS fix) {  - note these will not happen without a fix!
+
+    if received new data, calls ParseData()
+          - calls protocol_decode() on the received data packet
+          - calls Traffic_Update() for the new or refreshed traffic
+                 - which calls one of the collision alarm algorithms
+
+    Traffic_loop() - check for collision dangers, at 2-sec intervals:
+          - calls Traffic_Update() for each known traffic
+                   - unless already updated in last 2 seconds
+               - which calls one of the collision alarm algorithms
+                   - Alarm_Legacy() calls project(other_Aircraft)
+          - calls Sound_Notify(max_alarm_level)
+
+  }
+
+  Sound_loop()
+
+  NMEA_Export() - $PFLAA
+

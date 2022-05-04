@@ -120,6 +120,8 @@ static uint8_t page_count        = OLED_PAGE_COUNT;
 
 byte OLED_setup() {
 
+//Serial.println("OLED setting up");
+
   byte rval = DISPLAY_NONE;
 
 /*

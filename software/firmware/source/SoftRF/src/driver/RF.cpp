@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 #if defined(ARDUINO)
 #include <SPI.h>
 #endif /* ARDUINO */
@@ -35,7 +36,7 @@
 
 byte RxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
 
-unsigned long TxTimeMarker = 0;
+uint32_t TxTimeMarker = 0;
 byte TxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
 
 uint32_t tx_packets_counter = 0;
@@ -310,12 +311,38 @@ byte RF_setup(void)
   }
 }
 
+#ifdef TIMETEST
+
+static bool usegnsstime = true;
+static uint32_t base_time;
+static uint32_t base_marker;
+static uint32_t end_fake;
+
+void set_fake_time(time_t Time, uint32_t ref_time_ms)
+{
+    base_time = (uint32_t) Time;  /* seconds */
+    base_marker = ref_time_ms;    /* millis() when second started */
+    end_fake = millis() + 10 * 60 * 1000;  /* 10 minutes from now */;
+}
+
+void update_fake_time(void)
+{
+    if (millis() >= base_marker + 1000) {
+      base_time += 1;
+      base_marker += 1000;
+    }
+    if (millis() > end_fake)
+      usegnsstime = true;
+}
+
+#endif
+
 void RF_SetChannel(void)
 {
   tmElements_t  tm;
   time_t        Time;
   uint8_t       Slot;
-  unsigned long pps_btime_ms, ref_time_ms;
+  uint32_t now_ms, pps_btime_ms, time_corr_neg, ref_time_ms;
 
   switch (settings->mode)
   {
@@ -333,11 +360,16 @@ void RF_SetChannel(void)
 #endif /* EXCLUDE_MAVLINK */
   case SOFTRF_MODE_NORMAL:
   default:
+#ifdef TIMETEST
+  if (usegnsstime) {
+#endif
+    now_ms = millis();
     pps_btime_ms = SoC->get_PPS_TimeMarker();
-    unsigned long time_corr_neg;
+    if (now_ms > pps_btime_ms + 1010)
+      pps_btime_ms += 1000;
 
     if (pps_btime_ms) {
-      unsigned long last_Commit_Time = millis() - gnss.time.age();
+      uint32_t last_Commit_Time = now_ms - gnss.time.age();
       if (pps_btime_ms <= last_Commit_Time) {
         time_corr_neg = (last_Commit_Time - pps_btime_ms) % 1000;
       } else {
@@ -345,7 +377,7 @@ void RF_SetChannel(void)
       }
       ref_time_ms = pps_btime_ms;
     } else {
-      unsigned long last_RMC_Commit = millis() - gnss.date.age();
+      uint32_t last_RMC_Commit = now_ms - gnss.date.age();
       time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
       ref_time_ms = last_RMC_Commit - time_corr_neg;
     }
@@ -362,18 +394,34 @@ void RF_SetChannel(void)
     tm.Minute = gnss.time.minute();
     tm.Second = gnss.time.second();
 
-    Time = makeTime(tm) + (gnss.time.age() - time_corr_neg) / 1000;
+//  Time = makeTime(tm) + (gnss.time.age() - time_corr_neg) / 1000;
+    Time = makeTime(tm) + (gnss.time.age() + time_corr_neg) / 1000;
+
+#ifdef TIMETEST
+    if (settings->debug_flags & 0x10) { 
+      if (GNSSTimeMarker > 0) {  /* have stable GNSS fix */
+        set_fake_time(Time,ref_time_ms);
+        usegnsstime = false;    /* do not use GNSS time from here on */
+      }
+    }
+
+  } else {  /* not using GNSS time */
+    update_fake_time();
+    Time = base_time;
+    ref_time_ms = base_marker;
+  }
+#endif
     break;
   }
 
   switch (RF_timing)
   {
   case RF_TIMING_2SLOTS_PPS_SYNC:
-    if ((millis() - ts->s0.tmarker) >= ts->interval_mid) {
+    if ((now_ms - ts->s0.tmarker) >= ts->interval_mid) {
       ts->s0.tmarker = ref_time_ms + ts->s0.begin - ts->adj;
       ts->current = 0;
     }
-    if ((millis() - ts->s1.tmarker) >= ts->interval_mid) {
+    if ((now_ms - ts->s1.tmarker) >= ts->interval_mid) {
       ts->s1.tmarker = ref_time_ms + ts->s1.begin;
       ts->current = 1;
     }
@@ -453,7 +501,7 @@ bool RF_Transmit(size_t size, bool wait)
 
       if (settings->nmea_p) {
         StdOut.print(F("$PSRFO,"));
-        StdOut.print((unsigned long) timestamp);
+        StdOut.print((uint32_t) timestamp);
         StdOut.print(F(","));
         StdOut.println(Bin2Hex((byte *) &TxBuffer[0],
                                RF_Payload_Size(settings->rf_protocol)));
@@ -462,7 +510,7 @@ bool RF_Transmit(size_t size, bool wait)
       RF_tx_size = 0;
 
       Slot_descr_t *next;
-      unsigned long adj;
+      uint32_t adj;
 
       switch (RF_timing)
       {
@@ -1339,7 +1387,7 @@ const char UAT_ident[] PROGMEM = SOFTRF_IDENT;
 static bool uatm_probe()
 {
   bool success = false;
-  unsigned long startTime;
+  uint32_t startTime;
   unsigned int uatbuf_tail;
   u1_t keylen = strlen_P(UAT_ident);
   u1_t i=0;

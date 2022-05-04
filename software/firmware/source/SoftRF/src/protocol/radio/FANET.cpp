@@ -225,6 +225,9 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
     fop->protocol = RF_PROTOCOL_FANET;
     fop->addr     = (pkt->vendor << 16) | pkt->address;
+    fop->addr_type = ADDR_TYPE_FANET;
+    fop->timestamp = this_aircraft->timestamp;
+    fop->gnsstime_ms = millis();
 
 #if defined(FANET_DEPRECATED)
     fop->latitude  = payload_compressed2coord(pkt->latitude, this_aircraft->latitude);
@@ -271,9 +274,6 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->pressure_altitude = fop->altitude + (float) offset_int;
 #endif
 
-    fop->addr_type = ADDR_TYPE_FANET;
-    fop->timestamp = this_aircraft->timestamp;
-    fop->gnsstime_ms = millis();
     fop->stealth = 0;
     fop->no_track = !(pkt->track_online);
 /*

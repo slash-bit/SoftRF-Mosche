@@ -631,7 +631,8 @@ static void RPi_PickGNSSFix()
     } else if (str[0] == '{') {
       // JSON input
 
-      JsonObject& root = jsonBuffer.parseObject(str);
+      deserializeJson(jsonDoc, str);
+      JsonObject root = jsonDoc.as<JsonObject>();
 
       JsonVariant msg_class = root["class"];
 
@@ -658,7 +659,7 @@ static void RPi_PickGNSSFix()
         parsePING(root);
       }
 
-      jsonBuffer.clear();
+      jsonDoc.clear();
 
       if ((time(NULL) - now()) > 3) {
         hasValidGPSDFix = false;
@@ -679,7 +680,8 @@ static void RPi_ReadTraffic()
 
 //    cout << "Traffic message:" << traffic_input << endl;
 
-      JsonObject& root = jsonBuffer.parseObject(str);
+      deserializeJson(jsonDoc, str);
+      JsonObject root = jsonDoc.as<JsonObject>();
 
       JsonVariant msg_class = root["class"];
 
@@ -713,7 +715,8 @@ static void RPi_ReadTraffic()
         parseRAW(root);
       }
 
-      jsonBuffer.clear();
+      jsonDoc.clear();
+
     } else if (str[0] == 'q') {
       if (len >= 4 && str[1] == 'u' && str[2] == 'i' && str[3] == 't') {
         Traffic_TCP_Server.detach();

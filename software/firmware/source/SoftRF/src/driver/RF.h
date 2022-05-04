@@ -113,7 +113,7 @@ void    RF_Shutdown(void);
 uint8_t RF_Payload_Size(uint8_t);
 
 extern byte TxBuffer[MAX_PKT_SIZE], RxBuffer[MAX_PKT_SIZE];
-extern unsigned long TxTimeMarker;
+extern uint32_t TxTimeMarker;
 
 extern const rfchip_ops_t *rf_chip;
 extern bool RF_SX12XX_RST_is_connected;
@@ -124,5 +124,11 @@ extern int8_t RF_last_rssi;
 extern const char *Protocol_ID[];
 
 extern const rf_proto_desc_t legacy_proto_desc;
+
+/* #define TIMETEST */
+#ifdef TIMETEST
+void increment_fake_time(void);
+void reset_fake_time(void);
+#endif
 
 #endif /* RFHELPER_H */

@@ -290,22 +290,20 @@ static void *msgType10and20(ufo_t *aircraft)
    * If it is not - generate a callsign substitute,
    * based upon a protocol ID and the ICAO address
    */
-  if (strnlen((char *) aircraft->callsign, sizeof(aircraft->callsign)) > 0) {
-    memcpy(Traffic.callsign, aircraft->callsign, sizeof(Traffic.callsign));
-  } else {
-    memcpy((char *)Traffic.callsign, GDL90_CallSign_Prefix[aircraft->protocol],
-      strlen(GDL90_CallSign_Prefix[aircraft->protocol]));
-
+  if (aircraft->callsign[0] == '\0') {
+    memcpy(aircraft->callsign, GDL90_CallSign_Prefix[aircraft->protocol],
+             strlen(GDL90_CallSign_Prefix[aircraft->protocol]));
     String str = "";
-
     ADDR_TO_HEX_STR(str, (aircraft->addr >> 16) & 0xFF);
     ADDR_TO_HEX_STR(str, (aircraft->addr >>  8) & 0xFF);
     ADDR_TO_HEX_STR(str, (aircraft->addr      ) & 0xFF);
-
     str.toUpperCase();
-    memcpy((char *)Traffic.callsign + strlen(GDL90_CallSign_Prefix[aircraft->protocol]),
-      str.c_str(), str.length());
+    memcpy(aircraft->callsign + strlen(GDL90_CallSign_Prefix[aircraft->protocol]),
+            str.c_str(), str.length());
+    /* this callsign stays with aircraft until it expires */
   }
+
+  memcpy(Traffic.callsign, aircraft->callsign, sizeof(Traffic.callsign));
 
   Traffic.emerg_code    = 0 /* 0x5 */;
 //Traffic.reserved      = 0;

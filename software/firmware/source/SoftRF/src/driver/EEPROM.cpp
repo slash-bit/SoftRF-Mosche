@@ -85,7 +85,7 @@ void EEPROM_defaults()
   eeprom_block.field.version                = SOFTRF_EEPROM_VERSION;
   eeprom_block.field.settings.mode          = SOFTRF_MODE_NORMAL;
   eeprom_block.field.settings.rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
-                                              RF_PROTOCOL_FANET : RF_PROTOCOL_OGNTP;
+                                              RF_PROTOCOL_FANET : RF_PROTOCOL_LEGACY;
   eeprom_block.field.settings.band          = RF_BAND_EU;
   eeprom_block.field.settings.aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                               AIRCRAFT_TYPE_STATIC :
@@ -95,9 +95,13 @@ void EEPROM_defaults()
   eeprom_block.field.settings.alarm         = TRAFFIC_ALARM_DISTANCE;
 
   /* This will speed up 'factory' boot sequence on Editions other than Standalone */
-  if (hw_info.model == SOFTRF_MODEL_STANDALONE) {
+  if (hw_info.model == SOFTRF_MODEL_STANDALONE
+   || hw_info.model == SOFTRF_MODEL_PRIME) {
     eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
     eeprom_block.field.settings.pointer     = DIRECTION_NORTH_UP;
+  } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
+    eeprom_block.field.settings.pointer     = LED_OFF;
   } else {
     eeprom_block.field.settings.volume      = BUZZER_OFF;
     eeprom_block.field.settings.pointer     = LED_OFF;
@@ -107,12 +111,18 @@ void EEPROM_defaults()
   eeprom_block.field.settings.nmea_p     = false;
   eeprom_block.field.settings.nmea_l     = true;
   eeprom_block.field.settings.nmea_s     = true;
+  eeprom_block.field.settings.nmea_d     = false;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   eeprom_block.field.settings.nmea_out   = NMEA_USB;
 #else
   eeprom_block.field.settings.nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
-                                           NMEA_BLUETOOTH : NMEA_UART;
+                                             NMEA_BLUETOOTH :
+                                          (hw_info.model == SOFTRF_MODEL_PRIME ?
+                                             NMEA_UDP :
+                                          (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
+                                             NMEA_UDP :
+                                           NMEA_UART));
 #endif
 
   eeprom_block.field.settings.gdl90      = GDL90_OFF;
@@ -131,6 +141,7 @@ void EEPROM_defaults()
   /* added to allow setting aircraft ID and also an ID to ignore */
   eeprom_block.field.settings.aircraft_id = 0;
   eeprom_block.field.settings.ignore_id = 0;
+  eeprom_block.field.settings.follow_id = 0;
   eeprom_block.field.settings.id_method = ADDR_TYPE_FLARM;
   eeprom_block.field.settings.debug_flags = 0;
 }

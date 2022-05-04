@@ -21,12 +21,16 @@
 
 extern float wind_best_ns;    /* mps */
 extern float wind_best_ew;
+extern float wind_speed;
+extern float wind_direction;
+
 extern int circling;          /* 1 = clockwise, -1 = counterclockwise */
 extern float avg_turnrate;
 extern float avg_speed;       /* average around the circle */
 extern float avg_climbrate;
 
-void project_course(ufo_t *, ufo_t *);
+void project_this(ufo_t *);
+void project_that(ufo_t *);
 void Estimate_Wind(void);
 float Estimate_Climbrate(void);
 
