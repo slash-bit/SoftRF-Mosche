@@ -39,6 +39,17 @@ enum
 	EEPROM_EXT_STORE
 };
 
+enum
+{
+	BAUD_DEFAULT,
+	BAUD_4800,
+	BAUD_9600,
+	BAUD_19200,
+	BAUD_38400,
+	BAUD_57600,
+	BAUD_115200
+};
+
 typedef struct Settings {
     uint8_t  mode;
     uint8_t  rf_protocol;
@@ -70,7 +81,7 @@ typedef struct Settings {
     int8_t   freq_corr; /* +/-, kHz */
     uint8_t  resvd2;
     uint8_t  resvd3;
-    uint8_t  resvd4;
+    uint8_t  baud_rate;   /* for serial UART output */
 
     /* Use a key provided by (local) gliding contest organizer */
     uint32_t igc_key[4];

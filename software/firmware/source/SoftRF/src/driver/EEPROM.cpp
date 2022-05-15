@@ -133,6 +133,7 @@ void EEPROM_defaults()
   eeprom_block.field.settings.power_save = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                            POWER_SAVE_NORECEIVE : POWER_SAVE_NONE;
   eeprom_block.field.settings.freq_corr  = 0;
+  eeprom_block.field.settings.baud_rate  = BAUD_DEFAULT;
   eeprom_block.field.settings.igc_key[0] = 0;
   eeprom_block.field.settings.igc_key[1] = 0;
   eeprom_block.field.settings.igc_key[2] = 0;

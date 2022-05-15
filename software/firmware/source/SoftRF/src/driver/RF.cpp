@@ -21,6 +21,7 @@
 #endif /* ARDUINO */
 
 #include "RF.h"
+#include "../system/Time.h"
 #include "../system/SoC.h"
 #include "EEPROM.h"
 #include "Battery.h"
@@ -37,6 +38,7 @@
 byte RxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
 
 uint32_t TxTimeMarker = 0;
+uint32_t TxEndMarker  = 0;
 byte TxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
 
 uint32_t tx_packets_counter = 0;
@@ -318,7 +320,7 @@ static uint32_t base_time;
 static uint32_t base_marker;
 static uint32_t end_fake;
 
-void set_fake_time(time_t Time, uint32_t ref_time_ms)
+void set_fake_time(time_t Time)
 {
     base_time = (uint32_t) Time;  /* seconds */
     base_marker = ref_time_ms;    /* millis() when second started */
@@ -337,12 +339,13 @@ void update_fake_time(void)
 
 #endif
 
+/* original code, now only called for protocols other than Legacy: */
 void RF_SetChannel(void)
 {
   tmElements_t  tm;
   time_t        Time;
   uint8_t       Slot;
-  uint32_t now_ms, pps_btime_ms, time_corr_neg, ref_time_ms;
+  uint32_t now_ms, pps_btime_ms, time_corr_neg;
 
   switch (settings->mode)
   {
@@ -396,6 +399,7 @@ void RF_SetChannel(void)
 
 //  Time = makeTime(tm) + (gnss.time.age() - time_corr_neg) / 1000;
     Time = makeTime(tm) + (gnss.time.age() + time_corr_neg) / 1000;
+    OurTime = Time;
 
 #ifdef TIMETEST
     if (settings->debug_flags & 0x10) { 
@@ -463,9 +467,89 @@ void RF_loop()
     }
   }
 
-  if (RF_ready) {
-    RF_SetChannel();
+  /* Experimental code by Moshe Braner, specific to Legacy Protocol */
+  /* More correct on frequency hopping & time slots, and uses less CPU time */
+  /* - requires OurTime to be set to UTC time in seconds - can do in Time_loop() */
+  /* - also needs time since PPS, it is stored in ref_time_ms */
+
+  if (settings->rf_protocol != RF_PROTOCOL_LEGACY && settings->rf_protocol != RF_PROTOCOL_OGNTP) {
+    RF_SetChannel();    /* use original code */
+    return;
   }
+
+  if (ref_time_ms == 0)   /* no GNSS time yet */
+    return;
+
+  /* internal state variables to save CPU cycles */
+  static uint32_t RF_OK_until = 0;
+  static uint8_t current_slot = 0;
+  static uint8_t current_chan = 0;
+
+  uint32_t now_ms = millis();
+  if (now_ms < RF_OK_until) {   /* channel already computed */
+    if (rf_chip)
+      rf_chip->channel(current_chan);
+    return;
+  }
+
+  time_t RF_time = OurTime;    // can use now()?
+
+  int ms_since_pps = now_ms - ref_time_ms;
+  if (ms_since_pps < 0) {   /* should not happen */
+Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
+    --OurTime;
+    ref_time_ms -= 1000;
+    return;
+  }
+  if (ms_since_pps >= 1300) {   /* should not happen */
+Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
+    ++OurTime;
+    ref_time_ms += 1000;
+    return;
+  }
+
+  uint32_t slot_base_ms = ref_time_ms;
+  if (ms_since_pps < 300) {  /* does not happen often, since normally RF_OK_until 300 */
+    /* channel does _NOT_ change at PPS rollover in middle of slot 1 */
+    /* - therefore change reference second to the previous one: */
+    --RF_time;
+    slot_base_ms -= 1000;
+    ms_since_pps += 1000;
+  }
+
+  if (ms_since_pps >= 300 && ms_since_pps < 800) {
+
+    current_slot = 0;
+    RF_OK_until = slot_base_ms + 800;
+    TxTimeMarker = slot_base_ms + 400 + SoC->random(0, 395);
+    TxEndMarker  = slot_base_ms + 795;
+
+  } else if (ms_since_pps >= 800 && ms_since_pps < 1300) {
+
+    current_slot = 1;
+    /* channel does _NOT_ change at PPS rollover in middle of slot 1 */
+    RF_OK_until = slot_base_ms + 1300;
+    TxTimeMarker = slot_base_ms + 800 + SoC->random(0, 395);
+    TxEndMarker  = slot_base_ms + 1195;
+
+  } else { /* shouldn't happen */
+
+    current_slot = 0;
+    RF_OK_until = ref_time_ms + 1400;
+    TxTimeMarker = RF_OK_until;  /* do not transmit for now */
+    TxEndMarker  = RF_OK_until;
+
+  }
+
+  uint8_t OGN = (settings->rf_protocol == RF_PROTOCOL_OGNTP ? 1 : 0);
+
+  current_chan = RF_FreqPlan.getChannel(RF_time, current_slot, OGN);
+
+  if (rf_chip)
+    rf_chip->channel(current_chan);
+
+//Serial.printf("Channel %d, Slot %d at %d ms since PPS, tx ok %d - %d, good until %d\r\n",
+//current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
 }
 
 size_t RF_Encode(ufo_t *fop)
@@ -477,8 +561,16 @@ size_t RF_Encode(ufo_t *fop)
       return size;
     }
 
-    if (millis() > TxTimeMarker) {
-      size = (*protocol_encode)((void *) &TxBuffer[0], fop);
+    /* Experimental code by Moshe Braner, specific to Legacy Protocol */
+    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+      uint32_t now_ms = millis();
+      if (now_ms >= TxTimeMarker && now_ms < TxEndMarker) {
+        size = (*protocol_encode)((void *) &TxBuffer[0], fop); 
+      }
+    } else {
+      if (millis() > TxTimeMarker) {
+        size = (*protocol_encode)((void *) &TxBuffer[0], fop);
+      }
     }
   }
   return size;
@@ -487,11 +579,34 @@ size_t RF_Encode(ufo_t *fop)
 bool RF_Transmit(size_t size, bool wait)
 {
   if (RF_ready && rf_chip && (size > 0)) {
+
+    if (settings->txpower == RF_TX_POWER_OFF)
+      return true;
+
     RF_tx_size = size;
 
-    if (settings->txpower == RF_TX_POWER_OFF ) {
-      return true;
+    /* Experimental code by Moshe Braner, specific to Legacy Protocol */
+    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+      uint32_t now_ms = millis();
+      if (!wait || (now_ms >= TxTimeMarker && now_ms < TxEndMarker)) {
+        rf_chip->transmit();
+        tx_packets_counter++;
+        RF_tx_size = 0;
+        TxTimeMarker = TxEndMarker;  /* do not transmit again until next slot */
+        /* do not set next transmit time here - it is done in RF_loop() */
+Serial.println(">");
+        return true;
+      }
+
+//static int i = 0;
+//if (++i > 9) {
+//i = 0;
+Serial.print("-");
+//}
+      return false;
     }
+
+    /* original code for other protocols: */
 
     if (!wait || millis() > TxTimeMarker) {
 

@@ -64,6 +64,7 @@ void GNSSTimeSync    (void);
 void PickGNSSFix     (void);
 int LookupSeparation (float, float);
 
+extern const gnss_chip_ops_t *gnss_chip;
 extern TinyGPSPlus gnss;
 extern volatile unsigned long PPS_TimeMarker;
 extern const char *GNSS_name[];

@@ -125,6 +125,9 @@ static uint32_t ESP32_getFlashId()
   return g_rom_flashchip.device_id;
 }
 
+int Wire_Trans_rval;
+int axp_begin_rval;
+
 static void ESP32_setup()
 {
 #if !defined(SOFTRF_ADDRESS)
@@ -235,10 +238,11 @@ static void ESP32_setup()
 
     Wire1.begin(TTGO_V2_OLED_PIN_SDA , TTGO_V2_OLED_PIN_SCL);
     Wire1.beginTransmission(AXP192_SLAVE_ADDRESS);
-    if (Wire1.endTransmission() == 0) {
+    Wire_Trans_rval = Wire1.endTransmission();
+    if (Wire_Trans_rval == 0) {
       hw_info.revision = 8;
 
-      axp.begin(Wire1, AXP192_SLAVE_ADDRESS);
+      axp_begin_rval = axp.begin(Wire1, AXP192_SLAVE_ADDRESS);
 
       axp.setChgLEDMode(AXP20X_LED_LOW_LEVEL);
 
@@ -252,7 +256,7 @@ static void ESP32_setup()
       axp.setLDO2Voltage (3300); // LoRa, AXP192 power-on value: 3300
       axp.setLDO3Voltage (3000); // GPS,  AXP192 power-on value: 2800
 
-      pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT /* INPUT_PULLUP */);
+      pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT /* INPUT_PULLUP */);     // GPIO pin 35
 
       attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ),
                       ESP32_PMU_Interrupt_handler, FALLING);
@@ -269,6 +273,9 @@ static void ESP32_setup()
 
 static void ESP32_post_init()
 {
+Serial.printf("...Wire1.endTrans returned %d\r\n", Wire_Trans_rval);
+Serial.printf("...axp.begin returned %d\r\n", axp_begin_rval);
+
   Serial.println();
   Serial.println(F("Data output device(s):"));
 
@@ -334,33 +341,55 @@ static void ESP32_loop()
 
     if (is_irq) {
 
-      if (axp.readIRQ() == AXP_PASS) {
+Serial.println("ESP32_loop() handling PMU IRQ...");
+Serial.flush();
+
+//#define SKIPREADIRQ
+#ifdef SKIPREADIRQ
+          down = true;
+#else
+      int axpreadIRQ_rval = axp.readIRQ();   // seems to not return!
+      
+      if (axpreadIRQ_rval == AXP_PASS) {
 
         if (axp.isPEKLongtPressIRQ()) {
           down = true;
-#if 0
+#if 1
           Serial.println(F("Long press IRQ"));
           Serial.flush();
 #endif
         }
         if (axp.isPEKShortPressIRQ()) {
-#if 0
+#if 1
           Serial.println(F("Short press IRQ"));
           Serial.flush();
 #endif
 #if defined(USE_OLED)
+          Serial.println("calling OLED_Next_Page()...");
           OLED_Next_Page();
 #endif
         }
 
         axp.clearIRQ();
+
+      } else {
+Serial.printf("axpreadIRQ_rval = %d\r\n", axpreadIRQ_rval);
+Serial.flush();
+Serial.printf("axp.isPEKLongtPressIRQ() = %d\r\n", axp.isPEKLongtPressIRQ());
+Serial.flush();
+Serial.printf("axp.isPEKShortPressIRQ() = %d\r\n", axp.isPEKShortPressIRQ());
+Serial.flush();
+        axp.clearIRQ();
       }
+#endif
 
       portENTER_CRITICAL_ISR(&PMU_mutex);
       PMU_Irq = false;
       portEXIT_CRITICAL_ISR(&PMU_mutex);
 
       if (down) {
+        Serial.println("shutdown()...");
+        Serial.flush();
         shutdown(SOFTRF_SHUTDOWN_BUTTON);
       }
     }
@@ -377,6 +406,8 @@ static void ESP32_loop()
 
 static void ESP32_fini(int reason)
 {
+Serial.println("ESP32_fini()...");
+
   SPI.end();
 
   esp_wifi_stop();
@@ -398,6 +429,7 @@ static void ESP32_fini(int reason)
   } else if (hw_info.model    == SOFTRF_MODEL_PRIME_MK2 &&
              hw_info.revision == 8) {
 
+Serial.println("turning LED off...");
     axp.setChgLEDMode(AXP20X_LED_OFF);
 
 #if PMK2_SLEEP_MODE == 2
@@ -570,16 +602,24 @@ static long ESP32_random(long howsmall, long howBig)
 
 static void ESP32_Sound_test(int var)
 {
+Serial.println("Sound_test()...");
+
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && settings->volume != BUZZER_OFF) {
 
     ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
+    ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
+    ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(50);
 
     if (var == REASON_DEFAULT_RST ||
         var == REASON_EXT_SYS_RST ||
         var == REASON_SOFT_RESTART) {
+Serial.println("... tone 1:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
+Serial.println("... tone 2:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 640);delay(500);
+Serial.println("... tone 3:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 840);delay(500);
+Serial.println("... tone 4:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);
     } else if (var == REASON_WDT_RST) {
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
@@ -595,6 +635,7 @@ static void ESP32_Sound_test(int var)
     delay(600);
 
     ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
+Serial.println("... done tones");
 
     ledcDetachPin(SOC_GPIO_PIN_BUZZER);
     pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
@@ -1067,6 +1108,7 @@ static void ESP32_Display_fini(int reason)
 {
 #if defined(USE_OLED)
 
+Serial.println("calling OLED_fini()...");
   OLED_fini(reason);
 
   if (u8x8) {

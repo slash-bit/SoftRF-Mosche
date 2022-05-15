@@ -17,6 +17,14 @@
  */
 
 #include "SoC.h"
+#include "../driver/GNSS.h"
+#include "../driver/RF.h"
+#include "../driver/EEPROM.h"
+
+time_t  OurTime = 0;           /* UTC time in seconds since start of 1970 */
+uint32_t base_time_ms = 0;     /* this device millis() at last verified PPS */
+uint32_t ref_time_ms = 0;      /* assumed local millis() at last PPS */
+
 
 #if defined(EXCLUDE_WIFI)
 void Time_setup()     {}
@@ -158,3 +166,73 @@ void Time_setup()
 }
 
 #endif /* EXCLUDE_WIFI */
+
+
+/* Experimental code by Moshe Braner, specific to Legacy Protocol */
+void Time_loop()
+{
+    if (settings->rf_protocol != RF_PROTOCOL_LEGACY && settings->rf_protocol != RF_PROTOCOL_OGNTP)
+        return;       /* time still handled in RF.cpp RF_SetChannel() */
+
+    uint32_t now_ms = millis();
+    uint32_t gnss_age;
+    uint32_t last_Commit_Time;
+    static uint32_t lasttime_ms = 0;
+
+    bool newfix = false;
+    if (isValidFix()) {
+        gnss_age = gnss.time.age();
+        if (gnss_age < 3000) {
+          last_Commit_Time = now_ms - gnss_age;              /* = lastCommitTime */
+          newfix = (last_Commit_Time - lasttime_ms > 150);   /* new data arrived from GNSS */
+        }
+    }
+
+    /* between fixes (but not before first fix): free-running clock */
+    if (! newfix) {
+        if (ref_time_ms > 0 && now_ms >= ref_time_ms + 1000) {
+          OurTime += 1;
+          ref_time_ms += 1000;
+        }
+        return;
+    }
+
+    lasttime_ms = last_Commit_Time;
+
+    uint32_t pps_btime_ms = SoC->get_PPS_TimeMarker();
+    if (now_ms > pps_btime_ms + 1010)
+      pps_btime_ms += 1000;
+
+    uint32_t time_corr_neg;
+
+    if (pps_btime_ms) {
+      if (pps_btime_ms <= last_Commit_Time) {
+        time_corr_neg = (last_Commit_Time - pps_btime_ms) % 1000;
+      } else {
+        time_corr_neg = 1000 - ((pps_btime_ms - last_Commit_Time) % 1000);
+      }
+      ref_time_ms = base_time_ms = pps_btime_ms;
+    } else {
+      uint32_t last_RMC_Commit = now_ms - gnss.date.age();
+      time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
+      ref_time_ms = base_time_ms = last_RMC_Commit - time_corr_neg;
+    }
+
+    int yr = gnss.date.year();
+    if( yr > 99)
+        yr = yr - 1970;
+    else
+        yr += 30;
+    tmElements_t tm;
+    tm.Year   = yr;
+    tm.Month  = gnss.date.month();
+    tm.Day    = gnss.date.day();
+    tm.Hour   = gnss.time.hour();
+    tm.Minute = gnss.time.minute();
+    tm.Second = gnss.time.second();
+
+    OurTime = makeTime(tm) + (gnss.time.age() + time_corr_neg) / 1000;
+    /* updated ref_time_ms is the other side effect */
+
+    /* system clock also gets updated, by GNSSTimeSync() called from GNSS_loop() */
+}

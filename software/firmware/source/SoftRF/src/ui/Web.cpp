@@ -128,7 +128,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 6400;
+  size_t size = 7200;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -507,6 +507,35 @@ void handleSettings() {
     size -= len;
   }
 
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>Serial Output Baud Rate:</th>\
+<td align=right>\
+<select name='baud_rate'>\
+<option %s value='%d'>Default</option>\
+<option %s value='%d'>4800</option>\
+<option %s value='%d'>9600</option>\
+<option %s value='%d'>19200</option>\
+<option %s value='%d'>38400</option>\
+<option %s value='%d'>57600</option>\
+<option %s value='%d'>115200</option>\
+</select>\
+</td>\
+</tr>"),
+    (settings->baud_rate == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
+    (settings->baud_rate == BAUD_4800    ? "selected" : ""), BAUD_4800,
+    (settings->baud_rate == BAUD_9600    ? "selected" : ""), BAUD_9600,
+    (settings->baud_rate == BAUD_19200   ? "selected" : ""), BAUD_19200,
+    (settings->baud_rate == BAUD_38400   ? "selected" : ""), BAUD_38400,
+    (settings->baud_rate == BAUD_57600   ? "selected" : ""), BAUD_57600,
+    (settings->baud_rate == BAUD_115200  ? "selected" : ""), BAUD_115200
+    );
+  
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
   /* Common part 4 */
   snprintf_P ( offset, size,
     PSTR("\
@@ -827,6 +856,8 @@ void handleInput() {
       settings->nmea_d = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_out")) {
       settings->nmea_out = server.arg(i).toInt();
+    } else if (server.argName(i).equals("baud_rate")) {
+      settings->baud_rate = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
       settings->gdl90 = server.arg(i).toInt();
     } else if (server.argName(i).equals("d1090")) {

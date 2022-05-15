@@ -171,6 +171,9 @@ void setup()
     ThisAircraft.addr = 0;  /* will be filled in later */
   else
     ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
+Serial.printf("ID_method: %d, settings_ID: %06X, used_ID: %06X\r\n",
+settings->id_method, settings->aircraft_id, ThisAircraft.addr);
+
 
   hw_info.rf = RF_setup();
 
@@ -231,6 +234,7 @@ void setup()
   }
 
   Sound_setup();
+Serial.println("calling Sound_test()");
   SoC->Sound_test(resetInfo->reason);
 
   switch (settings->mode)
@@ -252,7 +256,10 @@ void setup()
 
   SoC->WDT_setup();
 
-Serial.println("... setup() done");
+Serial.print("... setup() done, hw_info.model=");
+Serial.print(hw_info.model);
+Serial.print(", revision=");
+Serial.println(hw_info.revision);
 }
 
 void loop()
@@ -337,6 +344,8 @@ void loop()
 
 void shutdown(int reason)
 {
+Serial.println("shutdown()...");
+
   SoC->WDT_fini();
 
   SoC->swSer_enableRx(false);
@@ -361,6 +370,7 @@ void shutdown(int reason)
     GNSS_fini();
   }
 
+Serial.println("calling Display_fini()");
   SoC->Display_fini(reason);
 
   RF_Shutdown();
@@ -387,6 +397,8 @@ void normal()
 
   GNSS_loop();
 
+  Time_loop();   /* this is where GNSS time data is processed for Legacy protocol */
+
   static uint32_t initial_time = 0;
   static uint32_t nextprev_ms = 0;
 
@@ -394,127 +406,146 @@ void normal()
   
   if (validfix) {
 
-    ThisAircraft.timestamp = now();
-
     /* also store a more precise GPS time stamp (millisecond resolution):  */
     /* - alas gnss.time returns whole seconds not centiseconds as promised */
-    uint32_t lasttime_ms = ThisAircraft.gnsstime_ms;
-    ThisAircraft.gnsstime_ms = millis() - gnss.location.age();      /* = lastCommitTime */
-    bool newfix = (ThisAircraft.gnsstime_ms - lasttime_ms > 150);   /* new data arrived from GNSS */
+    uint32_t gnss_age = gnss.location.age();
+    uint32_t thistime_ms = millis() - gnss_age;                   /* = lastCommitTime */
+    bool newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 150   /* new data arrived from GNSS */
+                   && gnss_age < 3000);
 
-//if (newfix)
-//Serial.printf("new GNSS fix at %d\r\n", ThisAircraft.gnsstime_ms);
-// - on T-Beam seems to be early in each second, often with one additional fix about 100 ms later.
-// - that additional fix is discarded above.
+    if (newfix) {
 
-/*  float lat = ThisAircraft.latitude;   */
-/*  float lon = ThisAircraft.longitude;  */
-    ThisAircraft.latitude = gnss.location.lat();
-    ThisAircraft.longitude = gnss.location.lng();
-/*  newfix = newfix && (ThisAircraft.latitude != lat || ThisAircraft.longitude != lon); */
-    ThisAircraft.altitude = gnss.altitude.meters();
-    ThisAircraft.course = gnss.course.deg();
-    ThisAircraft.speed = gnss.speed.knots();
-    ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
-    ThisAircraft.geoid_separation = gnss.separation.meters();
+      ThisAircraft.timestamp = now();
+      ThisAircraft.gnsstime_ms = thistime_ms;
 
-    /* allow knowing when there was a good fix for 30 sec */
-    if (initial_time == 0) {
-      initial_time = millis();
-    } else if (GNSSTimeMarker == 0) {
-      if (millis() > initial_time + 30000) {
-        /* 30 sec after first fix */
-        GNSSTimeMarker = millis();
+//Serial.printf("new GNSS fix from %d at %d, PPS was %d\r\n", thistime_ms, millis(), ref_time_ms);
+/*
+ - On T-Beam get two fixes each second, from about 190 & 280 ms after PPS.
+ - And only those two time, each second - why?
+ - The additional fix from 280ms is discarded above.
+*/
+
+//    float lat = ThisAircraft.latitude;
+//    float lon = ThisAircraft.longitude;
+      ThisAircraft.latitude = gnss.location.lat();
+      ThisAircraft.longitude = gnss.location.lng();
+//    newfix = newfix && (ThisAircraft.latitude != lat || ThisAircraft.longitude != lon);
+      ThisAircraft.altitude = gnss.altitude.meters();
+      ThisAircraft.course = gnss.course.deg();
+      ThisAircraft.speed = gnss.speed.knots();
+      ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
+      ThisAircraft.geoid_separation = gnss.separation.meters();
+
+      /* allow knowing when there was a good fix for 30 sec */
+      if (initial_time == 0) {
+        initial_time = millis();
+      } else if (GNSSTimeMarker == 0) {
+        if (millis() > initial_time + 30000) {
+          /* 30 sec after first fix */
+          GNSSTimeMarker = millis();
+        }
       }
-    }
 
-    /* if no baro sensor, fill in ThisAircraft.vs with GPS data */
-    if (baro_chip == NULL) {
-      /* only do this once every 4 seconds */
-      static uint32_t time_to_estimate_climb = 0;
-      if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
-        time_to_estimate_climb = ThisAircraft.gnsstime_ms + 4100;
-        ThisAircraft.vs = Estimate_Climbrate();
+      /* if no baro sensor, fill in ThisAircraft.vs with GPS data */
+      if (baro_chip == NULL) {
+        /* only do this once every 4 seconds */
+        static uint32_t time_to_estimate_climb = 0;
+        if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
+          time_to_estimate_climb = ThisAircraft.gnsstime_ms + 4100;
+          ThisAircraft.vs = Estimate_Climbrate();
+        }
+      } /* else it was filled above in Baro_loop() */
+
+      /* After some time has passed, store previous course & altitude
+         and timestamp so as to allow computation of turn and climb rates */
+      static float next_prevcourse=0;
+      static float next_prevheading=0;
+      static float next_prevalt=0;
+      uint32_t now_ms = ThisAircraft.gnsstime_ms;
+      if (newfix && now_ms > ((nextprev_ms + 1400) ^ ((nextprev_ms >> 4) & 0x0FF))) {
+        /* about 1400 ms with some pseudo-random jitter */
+        ThisAircraft.prevtime_ms = nextprev_ms;  /* usually 3-4 sec apart */
+        ThisAircraft.prevcourse = next_prevcourse;
+        ThisAircraft.prevheading = next_prevheading;
+        ThisAircraft.prevaltitude = next_prevalt;
+        nextprev_ms = now_ms;
+        next_prevcourse = ThisAircraft.course;   /* frozen snapshot to be used later */
+        next_prevheading = ThisAircraft.heading;
+        next_prevalt = ThisAircraft.altitude;
       }
-    } /* else it was filled above in Baro_loop() */
-
-    /* After some time has passed, store previous course & altitude
-       and timestamp so as to allow computation of turn and climb rates */
-    static float next_prevcourse=0;
-    static float next_prevheading=0;
-    static float next_prevalt=0;
-    uint32_t now_ms = ThisAircraft.gnsstime_ms;
-    if (newfix && now_ms > ((nextprev_ms + 1400) ^ ((nextprev_ms >> 4) & 0x0FF))) {
-      /* about 1400 ms with some pseudo-random jitter */
-      ThisAircraft.prevtime_ms = nextprev_ms;  /* usually 3-4 sec apart */
-      ThisAircraft.prevcourse = next_prevcourse;
-      ThisAircraft.prevheading = next_prevheading;
-      ThisAircraft.prevaltitude = next_prevalt;
-      nextprev_ms = now_ms;
-      next_prevcourse = ThisAircraft.course;   /* frozen snapshot to be used later */
-      next_prevheading = ThisAircraft.heading;
-      next_prevalt = ThisAircraft.altitude;
-    }
 
 #if 0
 /* check timing */
 #include "WiFi.h"
-    static uint32_t msthen = 0;
-    if ((settings->debug_flags & DEBUG_RESVD2) && udp_is_ready) {
-      uint32_t msnow = millis();
-      if (msnow > msthen+10000) {
-        msthen = msnow;
-        snprintf_P(UDPpacketBuffer, UDP_PACKET_BUFSIZE,
-          PSTR("$PSTCT,%ld,%ld,%ld,%ld\r\n"),
-             msnow, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms, ThisAircraft.timestamp);
-        SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
-                       strlen(UDPpacketBuffer));
+      static uint32_t msthen = 0;
+      if ((settings->debug_flags & DEBUG_RESVD2) && udp_is_ready) {
+        uint32_t msnow = millis();
+        if (msnow > msthen+10000) {
+          msthen = msnow;
+          snprintf_P(UDPpacketBuffer, UDP_PACKET_BUFSIZE,
+            PSTR("$PSTCT,%ld,%ld,%ld,%ld\r\n"),
+               msnow, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms, ThisAircraft.timestamp);
+          SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
+                         strlen(UDPpacketBuffer));
+        }
       }
-    }
 #endif
 
 #if !defined(EXCLUDE_EGM96)
-    /*
-     * When geoidal separation is zero or not available - use approx. EGM96 value
-     */
-    if (ThisAircraft.geoid_separation == 0.0) {
-      ThisAircraft.geoid_separation = (float) LookupSeparation(
-                                                ThisAircraft.latitude,
-                                                ThisAircraft.longitude
-                                              );
-      /* we can assume the GPS unit is giving ellipsoid height */
-      ThisAircraft.altitude -= ThisAircraft.geoid_separation;
-    }
+      /*
+       * When geoidal separation is zero or not available - use approx. EGM96 value
+       */
+      if (ThisAircraft.geoid_separation == 0.0) {
+        ThisAircraft.geoid_separation = (float) LookupSeparation(
+                                                  ThisAircraft.latitude,
+                                                  ThisAircraft.longitude
+                                                );
+        /* we can assume the GPS unit is giving ellipsoid height */
+        ThisAircraft.altitude -= ThisAircraft.geoid_separation;
+      }
 #endif /* EXCLUDE_EGM96 */
 
-    /* estimate wind from present and past GNSS data */
-    /* only do this once every 666 milliseconds */
-    static uint32_t time_to_estimate_wind = 0;
-    if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
-      Estimate_Wind();
-      time_to_estimate_wind = ThisAircraft.gnsstime_ms + 666;
-    }
+      /* estimate wind from present and past GNSS data */
+      /* only do this once every 666 milliseconds */
+      static uint32_t time_to_estimate_wind = 0;
+      if (ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
+        Estimate_Wind();
+        time_to_estimate_wind = ThisAircraft.gnsstime_ms + 666;
+      }
 
-    /* generate a random aircraft ID if necessary */
-    /* doing it here (after some delay) allows use of millis() as seed for random ID */
-    if (ThisAircraft.addr == 0)
-      generate_random_id();
+      /* generate a random aircraft ID if necessary */
+      /* doing it here (after some delay) allows use of millis() as seed for random ID */
+      if (ThisAircraft.addr == 0)
+        generate_random_id();
+
+    }  /* end of if(newfix) */
+
+    /* try and transmit, between "newfix" times, */
+    /*    since it is waiting for the time slot, */
+    /*  and also repeat to help ensure reception */
 
     RF_Transmit(RF_Encode(&ThisAircraft), true);
-    /* this only actually transmits when some preset time intervals are reached */
+    /* - this only actually transmits when some preset time intervals are reached */
 
-  } else {    /* not isValidFix() */
+  } else if (GNSSTimeMarker) {      /* not validfix but had fix before */
 
+    static uint32_t badgps=0;
+    if (badgps==0) badgps = millis();
+    if (badgps && millis() - badgps > 30000) {
+      /* 30 seconds without GPS fix - wipe history */
+      badgps = 0;
       initial_time = 0;
       GNSSTimeMarker = 0;
       ThisAircraft.prevtime_ms = 0;
       nextprev_ms = 0;
+    }
   }
 
   success = RF_Receive();
   /* this checks for newly received data, usually returns false */
 
-#ifdef TIMETEST
+#if 0
+/* free-running time test */
   if (success) {
     lastsuccess = millis();
   } else if (GNSSTimeMarker > 0 && lastsuccess > GNSSTimeMarker + 30000) {
@@ -533,12 +564,14 @@ void normal()
   success = true;
 #endif
 
+  /* process received data - only if we know where we are */
   if (success && validfix)  ParseData();
 
 #if defined(ENABLE_TTN)
   TTN_loop();
 #endif
 
+  /* handle the known traffic - only if we know where we are */
   if (validfix) {
     Traffic_loop();
   }
@@ -552,7 +585,7 @@ void normal()
     LEDTimeMarker = millis();
   }
 
-  Sound_loop();
+  Sound_loop();   /* may sound collision alarms */
 
   if (isTimeToExport()) {
     NMEA_Export();

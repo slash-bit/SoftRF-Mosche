@@ -114,6 +114,7 @@ uint8_t RF_Payload_Size(uint8_t);
 
 extern byte TxBuffer[MAX_PKT_SIZE], RxBuffer[MAX_PKT_SIZE];
 extern uint32_t TxTimeMarker;
+extern uint32_t TxEndMarker;
 
 extern const rfchip_ops_t *rf_chip;
 extern bool RF_SX12XX_RST_is_connected;
