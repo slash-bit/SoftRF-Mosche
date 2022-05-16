@@ -20,6 +20,7 @@
 
 #include "Baro.h"
 
+// even with core 2.0.3 Baro_setup() does not return.
 #define EXCLUDE_BMP180
 #define EXCLUDE_BMP280
 #define EXCLUDE_MPL3115A2
