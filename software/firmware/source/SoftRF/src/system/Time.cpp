@@ -25,6 +25,7 @@ time_t  OurTime = 0;           /* UTC time in seconds since start of 1970 */
 uint32_t base_time_ms = 0;     /* this device millis() at last verified PPS */
 uint32_t ref_time_ms = 0;      /* assumed local millis() at last PPS */
 
+#define ADJ_FOR_FLARM_RECEPTION 50     /* ms offset from PPS, as reported by ESP32 */
 
 #if defined(EXCLUDE_WIFI)
 void Time_setup()     {}
@@ -175,16 +176,30 @@ void Time_loop()
         return;       /* time still handled in RF.cpp RF_SetChannel() */
 
     uint32_t now_ms = millis();
-    uint32_t gnss_age;
-    uint32_t last_Commit_Time;
-    static uint32_t lasttime_ms = 0;
-
+    uint32_t gnss_age = gnss.time.age();
+    uint32_t last_Commit_Time = now_ms - gnss_age;
     bool newfix = false;
+    
+    uint32_t pps_btime_ms;
+    uint32_t newtime;
+    uint32_t time_corr_neg;
+
     if (isValidFix()) {
-        gnss_age = gnss.time.age();
-        if (gnss_age < 3000) {
-          last_Commit_Time = now_ms - gnss_age;              /* = lastCommitTime */
-          newfix = (last_Commit_Time - lasttime_ms > 150);   /* new data arrived from GNSS */
+
+        pps_btime_ms = SoC->get_PPS_TimeMarker();
+        if (pps_btime_ms > 0) {
+          newtime = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION;   /* seems to receive FLARM better */
+        } else {   /* PPS not available */
+          time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
+          newtime = last_Commit_Time - time_corr_neg;
+        }
+    
+        if (gnss_age < 2500 && newtime > base_time_ms) {
+            static uint32_t lasttime_ms = 0;
+            if (last_Commit_Time - lasttime_ms > 150) {     /* new data arrived from GNSS */
+                newfix = true;
+                lasttime_ms = last_Commit_Time;
+            }
         }
     }
 
@@ -197,25 +212,22 @@ void Time_loop()
         return;
     }
 
-    lasttime_ms = last_Commit_Time;
-
-    uint32_t pps_btime_ms = SoC->get_PPS_TimeMarker();
-    if (now_ms > pps_btime_ms + 1010)
-      pps_btime_ms += 1000;
-
-    uint32_t time_corr_neg;
-
-    if (pps_btime_ms) {
+    if (pps_btime_ms > 0) {
+      if (now_ms > pps_btime_ms + 1010) {
+        pps_btime_ms += 1000;
+        newtime += 1000;
+      }
       if (pps_btime_ms <= last_Commit_Time) {
         time_corr_neg = (last_Commit_Time - pps_btime_ms) % 1000;
       } else {
         time_corr_neg = 1000 - ((pps_btime_ms - last_Commit_Time) % 1000);
       }
-      ref_time_ms = base_time_ms = pps_btime_ms;
+      ref_time_ms = base_time_ms = newtime;  // = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION
+      /* the adjusted time seems to better fit actual FLARM time slots */
     } else {
-      uint32_t last_RMC_Commit = now_ms - gnss.date.age();
-      time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
-      ref_time_ms = base_time_ms = last_RMC_Commit - time_corr_neg;
+      //uint32_t last_RMC_Commit = now_ms - gnss.date.age();
+      //time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
+      ref_time_ms = base_time_ms = newtime;
     }
 
     int yr = gnss.date.year();

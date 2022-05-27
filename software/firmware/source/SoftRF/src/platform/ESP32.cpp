@@ -1247,8 +1247,10 @@ static bool ESP32_Baro_setup()
       hw_info.revision = 5;
     }
 
+Serial.println("ESP32_Baro_setup() calling Wire.begin()...");
     /* Start from 1st I2C bus */
     Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);
+Serial.println("... Baro_probe() ...");
     if (Baro_probe())
       return true;
 

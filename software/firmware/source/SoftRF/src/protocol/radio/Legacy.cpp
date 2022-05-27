@@ -166,15 +166,22 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->timestamp = timestamp;
     fop->gnsstime_ms = millis();
 
-    int32_t round_lat = (int32_t) (ref_lat * 1e7) >> 7;
-    int32_t lat = (pkt->lat - round_lat) % (uint32_t) 0x080000;
-    if (lat >= 0x040000) lat -= 0x080000;
-    lat = ((lat + round_lat) << 7) /* + 0x40 */;
-
-    int32_t round_lon = (int32_t) (ref_lon * 1e7) >> 7;
-    int32_t lon = (pkt->lon - round_lon) % (uint32_t) 0x100000;
-    if (lon >= 0x080000) lon -= 0x100000;
-    lon = ((lon + round_lon) << 7) /* + 0x40 */;
+    // this section revised by MB on 220526
+    int32_t round_lat, round_lon;
+    if (ref_lat < 0.0)
+        round_lat = -(((int32_t) (-ref_lat * 1e7) + 0x40) >> 7);
+    else
+        round_lat = ((int32_t) (ref_lat * 1e7) + 0x40) >> 7;
+    int32_t ilat = ((int32_t)pkt->lat - round_lat) & 0x07FFFF;
+    if (ilat >= 0x040000) ilat -= 0x080000;
+    float lat = (float)((ilat + round_lat) << 7) * 1e-7;
+    if (ref_lon < 0.0)
+        round_lon = -(((int32_t) (-ref_lon * 1e7) + 0x40) >> 7);
+    else
+        round_lon = ((int32_t) (ref_lon * 1e7) + 0x40) >> 7;
+    int32_t ilon = ((int32_t)pkt->lon - round_lon) & 0x0FFFFF;
+    if (ilon >= 0x080000) ilon -= 0x0100000;
+    float lon = (float)((ilon + round_lon) << 7) * 1e-7;
 
     uint8_t smult = pkt->smult;
     float nsf = (float) (pkt->ns[0] << smult);      /* quarter-meters per sec */
@@ -208,8 +215,8 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     int16_t alt = pkt->alt ; /* relative to WGS84 ellipsoid */
 
     fop->airborne = pkt->airborne;
-    fop->latitude = (float)lat / 1e7;
-    fop->longitude = (float)lon / 1e7;
+    fop->latitude = lat;
+    fop->longitude = lon;
     fop->altitude = (float) alt - geo_separ;
     fop->speed = (1.0 / (4.0 * _GPS_MPS_PER_KNOT)) * speed4;
     fop->course = course;
@@ -326,8 +333,16 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     pkt->gps = 323;
 
-    pkt->lat = (uint32_t ( lat * 1e7) >> 7) & 0x7FFFF;
-    pkt->lon = (uint32_t ( lon * 1e7) >> 7) & 0xFFFFF;
+    // this section revised by MB on 220526
+    if (lat < 0.0)
+        pkt->lat = (uint32_t) (-(((int32_t) (-lat * 1e7) + 0x40) >> 7)) & 0x07FFFF;
+    else
+        pkt->lat = (((uint32_t) (lat * 1e7) + 0x40) >> 7) & 0x07FFFF;
+    if (lon < 0.0)
+        pkt->lon = (uint32_t) (-(((int32_t) (-lon * 1e7) + 0x40) >> 7)) & 0x0FFFFF;
+    else
+        pkt->lon = (((uint32_t) (lon * 1e7) + 0x40) >> 7) & 0x0FFFFF;
+
     pkt->alt = alt;
 
     pkt->_unk0 = 0;

@@ -20,9 +20,9 @@
 
 #include "Baro.h"
 
-// even with core 2.0.3 Baro_setup() does not return.
+// including BMP180 & MPL3115A2 still hangs at probe() even with ESP32 Core 2.0.3
 #define EXCLUDE_BMP180
-#define EXCLUDE_BMP280
+// #define EXCLUDE_BMP280
 #define EXCLUDE_MPL3115A2
 #if defined(EXCLUDE_BMP180) && defined(EXCLUDE_BMP280) && defined(EXCLUDE_MPL3115A2)
 byte  Baro_setup()        {return BARO_MODULE_NONE;}
@@ -125,12 +125,11 @@ barochip_ops_t bmp180_ops = {
 #if !defined(EXCLUDE_BMP280)
 static bool bmp280_probe()
 {
-  return (
-          bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID) ||
-          bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID) ||
-          bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID) ||
-          bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID)
-         );
+  if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
+  if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
+  if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
+  if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+  return false;
 }
 
 static void bmp280_setup()
@@ -228,33 +227,30 @@ barochip_ops_t mpl3115a2_ops = {
 
 bool Baro_probe()
 {
-  return (
+
 #if !defined(EXCLUDE_BMP180)
-           (baro_chip = &bmp180_ops,    baro_chip->probe()) ||
-#else
-           false                                            ||
+  baro_chip = &bmp180_ops;
+  if (baro_chip->probe())  return true;
 #endif /* EXCLUDE_BMP180 */
 
 #if !defined(EXCLUDE_BMP280)
-           (baro_chip = &bmp280_ops,    baro_chip->probe()) ||
-#else
-           false                                            ||
+  baro_chip = &bmp280_ops;
+  if (baro_chip->probe())  return true;
 #endif /* EXCLUDE_BMP280 */
 
 #if !defined(EXCLUDE_MPL3115A2)
-           (baro_chip = &mpl3115a2_ops, baro_chip->probe())
-#else
-           false
+  baro_chip = &mpl3115a2_ops;
+  if (baro_chip->probe())  return true;
 #endif /* EXCLUDE_MPL3115A2 */
-         );
+
+  return false;
 }
 
 byte Baro_setup()
 {
 Serial.println("baro setting up");
 
-  if ( SoC->Baro_setup() && Baro_probe() ) {
-
+  if ( SoC->Baro_setup() /* && Baro_probe() */ ) {    // Baro_probe() also called from inside ESP32_Baro_setup()
     Serial.print(baro_chip->name);
     Serial.println(F(" barometric pressure sensor is detected."));
 
