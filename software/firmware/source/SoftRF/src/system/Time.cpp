@@ -25,7 +25,7 @@ time_t  OurTime = 0;           /* UTC time in seconds since start of 1970 */
 uint32_t base_time_ms = 0;     /* this device millis() at last verified PPS */
 uint32_t ref_time_ms = 0;      /* assumed local millis() at last PPS */
 
-#define ADJ_FOR_FLARM_RECEPTION 50     /* ms offset from PPS, as reported by ESP32 */
+#define ADJ_FOR_FLARM_RECEPTION 40     /* seems to receive FLARM packets better this way */
 
 #if defined(EXCLUDE_WIFI)
 void Time_setup()     {}

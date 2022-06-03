@@ -313,31 +313,6 @@ byte RF_setup(void)
   }
 }
 
-#ifdef TIMETEST
-
-static bool usegnsstime = true;
-static uint32_t base_time;
-static uint32_t base_marker;
-static uint32_t end_fake;
-
-void set_fake_time(time_t Time)
-{
-    base_time = (uint32_t) Time;  /* seconds */
-    base_marker = ref_time_ms;    /* millis() when second started */
-    end_fake = millis() + 10 * 60 * 1000;  /* 10 minutes from now */;
-}
-
-void update_fake_time(void)
-{
-    if (millis() >= base_marker + 1000) {
-      base_time += 1;
-      base_marker += 1000;
-    }
-    if (millis() > end_fake)
-      usegnsstime = true;
-}
-
-#endif
 
 /* original code, now only called for protocols other than Legacy: */
 void RF_SetChannel(void)
@@ -361,11 +336,10 @@ void RF_SetChannel(void)
                 RF_TIMING_INTERVAL : RF_timing;
     break;
 #endif /* EXCLUDE_MAVLINK */
+
   case SOFTRF_MODE_NORMAL:
   default:
-#ifdef TIMETEST
-  if (usegnsstime) {
-#endif
+
     now_ms = millis();
     pps_btime_ms = SoC->get_PPS_TimeMarker();
     if (now_ms > pps_btime_ms + 1010)
@@ -401,20 +375,6 @@ void RF_SetChannel(void)
     Time = makeTime(tm) + (gnss.time.age() + time_corr_neg) / 1000;
     OurTime = Time;
 
-#ifdef TIMETEST
-    if (settings->debug_flags & 0x10) { 
-      if (GNSSTimeMarker > 0) {  /* have stable GNSS fix */
-        set_fake_time(Time,ref_time_ms);
-        usegnsstime = false;    /* do not use GNSS time from here on */
-      }
-    }
-
-  } else {  /* not using GNSS time */
-    update_fake_time();
-    Time = base_time;
-    ref_time_ms = base_marker;
-  }
-#endif
     break;
   }
 
@@ -548,8 +508,8 @@ Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
   if (rf_chip)
     rf_chip->channel(current_chan);
 
-//Serial.printf("Channel %d, Slot %d at %d ms since PPS, tx ok %d - %d, good until %d\r\n",
-//current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
+Serial.printf("Chan %d, Slot %d at PPS+%d ms, tx ok %d - %d, gd to %d\r\n",
+current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
 }
 
 size_t RF_Encode(ufo_t *fop)
@@ -594,7 +554,8 @@ bool RF_Transmit(size_t size, bool wait)
         RF_tx_size = 0;
         TxTimeMarker = TxEndMarker;  /* do not transmit again until next slot */
         /* do not set next transmit time here - it is done in RF_loop() */
-Serial.println(">");
+//Serial.println(">");
+Serial.printf("> tx at %d s + %d ms\r\n", OurTime, now_ms-ref_time_ms);
         return true;
       }
 
@@ -656,7 +617,10 @@ bool RF_Receive(void)
   if (RF_ready && rf_chip) {
     rval = rf_chip->receive();
   }
-  
+
+if (rval)
+Serial.printf("rx at %d s + %d ms\r\n", OurTime, millis()-ref_time_ms);
+
   return rval;
 }
 

@@ -21,6 +21,7 @@
 #endif
 
 #include "../system/SoC.h"
+#include "EEPROM.h"
 #include "Battery.h"
 
 unsigned long Battery_TimeMarker        = 0;
@@ -63,8 +64,11 @@ void Battery_loop()
   if (isTimeToBattery()) {
     float voltage = SoC->Battery_param(BATTERY_PARAM_VOLTAGE);
 
-    if (voltage > BATTERY_THRESHOLD_INVALID && voltage < Battery_cutoff()) {
-      if (Battery_cutoff_count > 2) {
+    if (voltage > BATTERY_THRESHOLD_INVALID &&
+         (voltage < Battery_cutoff()
+            || (settings->power_external && hw_info.model == SOFTRF_MODEL_PRIME_MK2
+                  && voltage < 3.9 && millis() > 3600000))) {
+      if (Battery_cutoff_count > 3) {
         shutdown(SOFTRF_SHUTDOWN_LOWBAT);
       } else {
         Battery_cutoff_count++;

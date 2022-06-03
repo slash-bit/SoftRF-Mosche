@@ -30,7 +30,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B07
+#define SOFTRF_EEPROM_VERSION 0x00000B08
 
 enum
 {
@@ -77,6 +77,7 @@ typedef struct Settings {
     uint8_t  json:2;
 
     uint8_t  power_save;
+    uint8_t  power_external;  /* if nonzero, shuts down if battery is not full */
 
     int8_t   freq_corr; /* +/-, kHz */
     uint8_t  resvd2;

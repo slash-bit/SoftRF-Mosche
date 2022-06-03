@@ -385,39 +385,46 @@ void Estimate_Wind()
 
 
 /* keep track of whether this aircraft is airborne */
-void this_airborne(bool report)
+void this_airborne()
 {
     /* static vars to keep track of 'airborne' status: */
+    static int airborne = -5;
+    static float prevspeed = 0;
     static float initial_latitude = 0;
     static float initial_longitude = 0;
     static float initial_altitude = 0;
-    static int airborne = -5;
-    static int was_airborne = 0;
-    static float prevspeed = 0;
 
+    int was_airborne = airborne;
     float speed = ThisAircraft.speed;
-    if (speed < 1.0)  speed = 0;
+
+    if (initial_latitude == 0) {
+      /* wait for stable fix */
+      if (! GNSSTimeMarker)
+        return;
+      /* set initial location */
+      initial_latitude = ThisAircraft.latitude;
+      initial_longitude = ThisAircraft.longitude;
+      initial_altitude = ThisAircraft.altitude;
+    }
 
     if (airborne > 0) {
-      was_airborne = 1;
-      if (speed == 0) {
-        /* after 50 calls (about 20 seconds) with near 0 speed consider it a landing */
-        if (--airborne <= 0) {
-          /* landed - set new initial location */
-          airborne = -5;
-          initial_latitude = ThisAircraft.latitude;
-          initial_longitude = ThisAircraft.longitude;
-          initial_altitude = ThisAircraft.altitude;
-        }
+
+      if (speed < 1.0)  --airborne;
+      /* after 50 calls (~20 sec if consecutive)
+         with speed < 1kt consider it a landing */
+      if (airborne <= 0) {
+        airborne = -5;
+        initial_latitude = 0;
       }
-    } else if (speed > 0.0) {     /* > 1 knot but airborne <= 0 */
+
+    } else if (speed > 1.0) {
+
+      /* > 1 knot but airborne still <= 0 */
+
       if (GNSSTimeMarker > 0 && ThisAircraft.prevtime_ms > 0) {  /* had fix for a while */
-        if (initial_latitude == 0) {
-          initial_latitude = ThisAircraft.latitude;
-          initial_longitude = ThisAircraft.longitude;
-          initial_altitude = ThisAircraft.altitude;
-        } else if (speed > 10.0                                          /* 10 knots  */
-          || fabs(ThisAircraft.latitude - initial_latitude) > 0.0018f    /* about 200 meters */
+
+        if (speed > 10.0                                                /* 10 knots  */
+          || fabs(ThisAircraft.latitude - initial_latitude) > 0.0018f   /* about 200 meters */
           || fabs(ThisAircraft.longitude - initial_longitude) > 0.0027f
           || fabs(ThisAircraft.altitude - initial_altitude) > 120.0f) {
             /* movement larger than typical GNSS noise */
@@ -425,7 +432,7 @@ void this_airborne(bool report)
             float interval = 0.001 * fabs(ThisAircraft.gnsstime_ms - ThisAircraft.prevtime_ms);
             if (fabs(ThisAircraft.altitude - ThisAircraft.prevaltitude) > 20.0 * interval
              || fabs(ThisAircraft.course - ThisAircraft.prevcourse) > 50.0 * interval
-             || speed > 4.0 * prevspeed) {
+             || speed > 4.0 * prevspeed || prevspeed > 4.0 * speed) {
                /* supposed initial movement is too jerky */
                if (airborne > -5)  airborne -= 2;
             }
@@ -434,9 +441,12 @@ void this_airborne(bool report)
                  airborne = 50;  /* now really airborne */
         }
       }
+
     }
+
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
-    if ( /* report || */ (ThisAircraft.airborne != was_airborne))
+
+    if (airborne != was_airborne)
         Serial.printf("this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n",
           airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
 }
@@ -527,7 +537,7 @@ void project_this(ufo_t *this_aircraft)
         report = true;
     }
 
-    this_airborne(report);    /* determine the "airborne" flag */
+    this_airborne();      /* determine the "airborne" flag */
 
     /* first get heading and turn rate */
 
