@@ -128,7 +128,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 7200;
+  size_t size = 8000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -617,6 +617,13 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>Power source</th>\
+<td align=right>\
+<input type='radio' name='power_external' value='0' %s>Bat\
+<input type='radio' name='power_external' value='1' %s>Ext\
+</td>\
+</tr>\
+<tr>\
 <th align=left>Stealth</th>\
 <td align=right>\
 <input type='radio' name='stealth' value='0' %s>Off\
@@ -633,6 +640,7 @@ void handleSettings() {
   (settings->power_save == POWER_SAVE_NONE ? "selected" : ""), POWER_SAVE_NONE,
   (settings->power_save == POWER_SAVE_WIFI ? "selected" : ""), POWER_SAVE_WIFI,
   (settings->power_save == POWER_SAVE_GNSS ? "selected" : ""), POWER_SAVE_GNSS,
+  (!settings->power_external ? "checked" : "") , (settings->power_external ? "checked" : ""),
   (!settings->stealth  ? "checked" : "") , (settings->stealth  ? "checked" : ""),
   (!settings->no_track ? "checked" : "") , (settings->no_track ? "checked" : "")
   );
@@ -868,6 +876,8 @@ void handleInput() {
       settings->no_track = server.arg(i).toInt();
     } else if (server.argName(i).equals("power_save")) {
       settings->power_save = server.arg(i).toInt();
+    } else if (server.argName(i).equals("power_external")) {
+      settings->power_external = server.arg(i).toInt();
     } else if (server.argName(i).equals("rfc")) {
       settings->freq_corr = server.arg(i).toInt();
     } else if (server.argName(i).equals("id_method")) {
@@ -932,6 +942,7 @@ PSTR("<html>\
 <tr><th align=left>Stealth</th><td align=right>%s</td></tr>\
 <tr><th align=left>No track</th><td align=right>%s</td></tr>\
 <tr><th align=left>Power save</th><td align=right>%d</td></tr>\
+<tr><th align=left>Power external</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
@@ -949,7 +960,7 @@ PSTR("<html>\
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s),
   settings->nmea_out, settings->gdl90, settings->d1090,
   BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-  settings->power_save, settings->freq_corr, settings->debug_flags,
+  settings->power_save, settings->power_external, settings->freq_corr, settings->debug_flags,
   settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
   );
   SoC->swSer_enableRx(false);
