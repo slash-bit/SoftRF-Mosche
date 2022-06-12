@@ -446,14 +446,18 @@ void this_airborne()
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
-    if (airborne != was_airborne)
-        Serial.printf("this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n",
+    if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+        PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n"),
           airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
+      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    }
 }
 
 
 void report_this_projection(ufo_t *this_aircraft, int proj_type)
 {
+#if 0
     if (proj_type==1)
       Serial.printf("this_proj: no history  %.1f %.1f %d %d %d %d\r\n",
         this_aircraft->course, this_aircraft->heading,
@@ -480,6 +484,7 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
         this_aircraft->fla_ns[1], this_aircraft->fla_ew[1]);
     else
       Serial.printf("this_proj: eh?\r\n");
+#endif
     if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSPTA,%d,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
@@ -495,11 +500,13 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
 
 void report_that_projection(ufo_t *fop, int proj_type)
 {
+#if 0
     Serial.printf("that_proj: %d %.1f %.1f %d %d %d %d %d %d\r\n",
           proj_type, fop->course, fop->heading,
           fop->air_ns[0], fop->air_ew[0],
           fop->air_ns[1], fop->air_ew[1],
           fop->air_ns[2], fop->air_ew[2]);
+#endif
     if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSPOA,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d\r\n"),
@@ -934,8 +941,10 @@ float Estimate_Climbrate(void)
     static uint32_t time_to_report = 0;
     if (millis() > time_to_report) {
         time_to_report = millis() + 6300;
+#if 0
         Serial.printf("climbrate fpm: %.0f  %.0f,%.0f,%d,%d\r\n", avg_climbrate,
                  ThisAircraft.altitude, ThisAircraft.prevaltitude, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms);
+#endif
         if (settings->nmea_d && (settings->debug_flags & DEBUG_WIND)) {
             snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                PSTR("$PSWCR,%.0f,%.0f,%.0f,%d,%d\r\n"), avg_climbrate,

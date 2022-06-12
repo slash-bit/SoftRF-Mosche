@@ -234,7 +234,7 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
   }
 
   Sound_setup();
-Serial.println("calling Sound_test()");
+//Serial.println("calling Sound_test()");
   SoC->Sound_test(resetInfo->reason);
 
   switch (settings->mode)
@@ -256,10 +256,10 @@ Serial.println("calling Sound_test()");
 
   SoC->WDT_setup();
 
-Serial.print("... setup() done, hw_info.model=");
-Serial.print(hw_info.model);
-Serial.print(", revision=");
-Serial.println(hw_info.revision);
+//Serial.print("... setup() done, hw_info.model=");
+//Serial.print(hw_info.model);
+//Serial.print(", revision=");
+//Serial.println(hw_info.revision);
 }
 
 void loop()
@@ -344,7 +344,7 @@ void loop()
 
 void shutdown(int reason)
 {
-Serial.println("shutdown()...");
+//Serial.println("shutdown()...");
 
   SoC->WDT_fini();
 
@@ -370,7 +370,7 @@ Serial.println("shutdown()...");
     GNSS_fini();
   }
 
-Serial.println("calling Display_fini()");
+//Serial.println("calling Display_fini()");
   SoC->Display_fini(reason);
 
   RF_Shutdown();

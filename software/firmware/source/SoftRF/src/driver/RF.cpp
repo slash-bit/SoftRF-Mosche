@@ -402,7 +402,7 @@ void RF_SetChannel(void)
   uint8_t chan = RF_FreqPlan.getChannel(Time, Slot, OGN);
 
 #if DEBUG
-  Serial.print("Plan: "); Serial.println(RF_FreqPlan.Plan);
+  int("Plan: "); Serial.println(RF_FreqPlan.Plan);
   Serial.print("Slot: "); Serial.println(Slot);
   Serial.print("OGN: "); Serial.println(OGN);
   Serial.print("Channel: "); Serial.println(chan);
@@ -456,13 +456,11 @@ void RF_loop()
 
   int ms_since_pps = now_ms - ref_time_ms;
   if (ms_since_pps < 0) {   /* should not happen */
-Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
     --OurTime;
     ref_time_ms -= 1000;
     return;
   }
   if (ms_since_pps >= 1300) {   /* should not happen */
-Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
     ++OurTime;
     ref_time_ms += 1000;
     return;
@@ -508,8 +506,8 @@ Serial.printf("ref_time_ms %d, now %d ??\r\n", ref_time_ms, now_ms);
   if (rf_chip)
     rf_chip->channel(current_chan);
 
-Serial.printf("Chan %d, Slot %d at PPS+%d ms, tx ok %d - %d, gd to %d\r\n",
-current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
+//Serial.printf("Chan %d, Slot %d at PPS+%d ms, tx ok %d - %d, gd to %d\r\n",
+//current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
 }
 
 size_t RF_Encode(ufo_t *fop)
@@ -555,14 +553,14 @@ bool RF_Transmit(size_t size, bool wait)
         TxTimeMarker = TxEndMarker;  /* do not transmit again until next slot */
         /* do not set next transmit time here - it is done in RF_loop() */
 //Serial.println(">");
-Serial.printf("> tx at %d s + %d ms\r\n", OurTime, now_ms-ref_time_ms);
+//Serial.printf("> tx at %d s + %d ms\r\n", OurTime, now_ms-ref_time_ms);
         return true;
       }
 
 //static int i = 0;
 //if (++i > 9) {
 //i = 0;
-Serial.print("-");
+//Serial.print("-");
 //}
       return false;
     }
@@ -618,8 +616,8 @@ bool RF_Receive(void)
     rval = rf_chip->receive();
   }
 
-if (rval)
-Serial.printf("rx at %d s + %d ms\r\n", OurTime, millis()-ref_time_ms);
+//if (rval)
+//Serial.printf("rx at %d s + %d ms\r\n", OurTime, millis()-ref_time_ms);
 
   return rval;
 }

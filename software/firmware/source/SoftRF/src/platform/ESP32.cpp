@@ -273,8 +273,8 @@ static void ESP32_setup()
 
 static void ESP32_post_init()
 {
-Serial.printf("...Wire1.endTrans returned %d\r\n", Wire_Trans_rval);
-Serial.printf("...axp.begin returned %d\r\n", axp_begin_rval);
+//Serial.printf("...Wire1.endTrans returned %d\r\n", Wire_Trans_rval);
+//Serial.printf("...axp.begin returned %d\r\n", axp_begin_rval);
 
   Serial.println();
   Serial.println(F("Data output device(s):"));
@@ -341,8 +341,8 @@ static void ESP32_loop()
 
     if (is_irq) {
 
-Serial.println("ESP32_loop() handling PMU IRQ...");
-Serial.flush();
+//Serial.println("ESP32_loop() handling PMU IRQ...");
+//Serial.flush();
 
 //#define SKIPREADIRQ
 #ifdef SKIPREADIRQ
@@ -354,13 +354,13 @@ Serial.flush();
 
         if (axp.isPEKLongtPressIRQ()) {
           down = true;
-#if 1
+#if 0
           Serial.println(F("Long press IRQ"));
           Serial.flush();
 #endif
         }
         if (axp.isPEKShortPressIRQ()) {
-#if 1
+#if 0
           Serial.println(F("Short press IRQ"));
           Serial.flush();
 #endif
@@ -373,12 +373,14 @@ Serial.flush();
         axp.clearIRQ();
 
       } else {
+#if 0
 Serial.printf("axpreadIRQ_rval = %d\r\n", axpreadIRQ_rval);
 Serial.flush();
 Serial.printf("axp.isPEKLongtPressIRQ() = %d\r\n", axp.isPEKLongtPressIRQ());
 Serial.flush();
 Serial.printf("axp.isPEKShortPressIRQ() = %d\r\n", axp.isPEKShortPressIRQ());
 Serial.flush();
+#endif
         axp.clearIRQ();
       }
 #endif
@@ -406,7 +408,7 @@ Serial.flush();
 
 static void ESP32_fini(int reason)
 {
-Serial.println("ESP32_fini()...");
+//Serial.println("ESP32_fini()...");
 
   SPI.end();
 
@@ -429,7 +431,7 @@ Serial.println("ESP32_fini()...");
   } else if (hw_info.model    == SOFTRF_MODEL_PRIME_MK2 &&
              hw_info.revision == 8) {
 
-Serial.println("turning LED off...");
+//Serial.println("turning LED off...");
     axp.setChgLEDMode(AXP20X_LED_OFF);
 
 #if PMK2_SLEEP_MODE == 2
@@ -602,24 +604,26 @@ static long ESP32_random(long howsmall, long howBig)
 
 static void ESP32_Sound_test(int var)
 {
-Serial.println("Sound_test()...");
+//Serial.println("Sound_test()...");
 
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && settings->volume != BUZZER_OFF) {
 
     ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
     ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
     ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(50);
+    // without this pre-tone the first tone below did not sound,
+    // after upgrading to ESP32 Core 2.0.2+
 
     if (var == REASON_DEFAULT_RST ||
         var == REASON_EXT_SYS_RST ||
         var == REASON_SOFT_RESTART) {
-Serial.println("... tone 1:");
+//Serial.println("... tone 1:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
-Serial.println("... tone 2:");
+//Serial.println("... tone 2:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 640);delay(500);
-Serial.println("... tone 3:");
+//Serial.println("... tone 3:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 840);delay(500);
-Serial.println("... tone 4:");
+//Serial.println("... tone 4:");
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);
     } else if (var == REASON_WDT_RST) {
       ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
@@ -635,7 +639,7 @@ Serial.println("... tone 4:");
     delay(600);
 
     ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
-Serial.println("... done tones");
+//Serial.println("... done tones");
 
     ledcDetachPin(SOC_GPIO_PIN_BUZZER);
     pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
@@ -1108,7 +1112,7 @@ static void ESP32_Display_fini(int reason)
 {
 #if defined(USE_OLED)
 
-Serial.println("calling OLED_fini()...");
+//Serial.println("calling OLED_fini()...");
   OLED_fini(reason);
 
   if (u8x8) {
@@ -1247,10 +1251,10 @@ static bool ESP32_Baro_setup()
       hw_info.revision = 5;
     }
 
-Serial.println("ESP32_Baro_setup() calling Wire.begin()...");
+//Serial.println("ESP32_Baro_setup() calling Wire.begin()...");
     /* Start from 1st I2C bus */
     Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);
-Serial.println("... Baro_probe() ...");
+//Serial.println("... Baro_probe() ...");
     if (Baro_probe())
       return true;
 
