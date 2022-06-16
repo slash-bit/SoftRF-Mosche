@@ -96,6 +96,17 @@ TinyGPSCustom C_Stealth      (gnss, "PSRFC", 17);
 TinyGPSCustom C_noTrack      (gnss, "PSRFC", 18);
 TinyGPSCustom C_PowerSave    (gnss, "PSRFC", 19);
 
+// additional settings added by MB
+TinyGPSCustom D_Version      (gnss, "PSRFD", 1);
+TinyGPSCustom D_id_method    (gnss, "PSRFD", 2);
+TinyGPSCustom D_aircraft_id  (gnss, "PSRFD", 3);
+TinyGPSCustom D_ignore_id    (gnss, "PSRFD", 4);
+TinyGPSCustom D_follow_id    (gnss, "PSRFD", 5);
+TinyGPSCustom D_baud_rate    (gnss, "PSRFD", 6);
+TinyGPSCustom D_power_ext    (gnss, "PSRFD", 7);
+TinyGPSCustom D_NMEA_debug   (gnss, "PSRFD", 8);
+TinyGPSCustom D_debug_flags  (gnss, "PSRFD", 9);
+
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
 TinyGPSCustom S_Version      (gnss, "PSRFS", 1);
@@ -1481,6 +1492,72 @@ void PickGNSSFix()
           }
         }
       }
+
+      if (D_Version.isUpdated()) {
+        if (strncmp(D_Version.value(), "?", 1) == 0) {
+          char psrfd_buf[MAX_PSRFD_LEN];
+          snprintf_P(psrfd_buf, sizeof(psrfd_buf),
+              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X*"),
+              PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
+              settings->ignore_id,      settings->follow_id,  settings->baud_rate,
+              settings->power_external, settings->nmea_d,     settings->debug_flags );
+          NMEA_add_checksum(psrfd_buf, sizeof(psrfd_buf) - strlen(psrfd_buf));
+          uint8_t dest = settings->nmea_out;
+          NMEA_Out(dest, (byte *) psrfd_buf, strlen(psrfd_buf), false);
+
+        } else if (atoi(D_Version.value()) == PSRFD_VERSION) {
+          bool cfg_is_updated = false;
+
+          if (D_id_method.isUpdated()) {
+            settings->id_method = atoi(D_id_method.value());
+            Serial.print(F("ID method = ")); Serial.println(settings->id_method);
+            cfg_is_updated = true;
+          }
+          if (D_aircraft_id.isUpdated()) {
+            settings->aircraft_id = strtoul(D_aircraft_id.value(), NULL, 16);
+            Serial.print(F("Aircraft ID = ")); Serial.println(settings->aircraft_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_ignore_id.isUpdated()) {
+            settings->ignore_id = strtoul(D_ignore_id.value(), NULL, 16);
+            Serial.print(F("Ignore ID = ")); Serial.println(settings->ignore_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_follow_id.isUpdated()) {
+            settings->follow_id = strtoul(D_follow_id.value(), NULL, 16);
+            Serial.print(F("Follow ID = ")); Serial.println(settings->follow_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_baud_rate.isUpdated()) {
+            settings->baud_rate = atoi(D_baud_rate.value());
+            Serial.print(F("Baud rate = ")); Serial.println(settings->baud_rate);
+            cfg_is_updated = true;
+          }
+          if (D_power_ext.isUpdated()) {
+            settings->power_external = atoi(D_power_ext.value());
+            Serial.print(F("Power source = ")); Serial.println(settings->power_external);
+            cfg_is_updated = true;
+          }
+          if (D_NMEA_debug.isUpdated()) {
+            settings->nmea_d = atoi(D_NMEA_debug.value());
+            Serial.print(F("NMEA_debug = ")); Serial.println(settings->nmea_d);
+            cfg_is_updated = true;
+          }
+          if (D_debug_flags.isUpdated()) {
+            settings->debug_flags = atoi(D_debug_flags.value());
+            Serial.print(F("Debug flags = ")); Serial.println(settings->debug_flags);
+            cfg_is_updated = true;
+          }
+
+          if (cfg_is_updated) {
+            SoC->WDT_fini();
+            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+            EEPROM_store();
+            nmea_cfg_restart();
+          }
+        }
+      }
+
 #if defined(USE_OGN_ENCRYPTION)
       if (S_Version.isUpdated()) {
         if (strncmp(S_Version.value(), "?", 1) == 0) {

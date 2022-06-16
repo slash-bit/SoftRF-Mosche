@@ -37,6 +37,10 @@ enum
 #define PSRFC_VERSION       1
 #define MAX_PSRFC_LEN       64
 
+// added by MB for additional settings
+#define PSRFD_VERSION       1
+#define MAX_PSRFD_LEN       64
+
 #define PSRFS_VERSION       1
 #define MAX_PSRFS_LEN       64
 
