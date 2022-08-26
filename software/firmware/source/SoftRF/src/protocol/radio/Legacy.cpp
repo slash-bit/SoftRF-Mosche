@@ -252,6 +252,7 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
         fop->addr, fop->gnsstime_ms,
         bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
+        // fop->airborne, vs10, pkt->_unk2);   // this line compiled in MB08e only (with %d,%d,%d added).
       NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 
@@ -347,7 +348,7 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     pkt->_unk0 = 0;
     pkt->_unk1 = 0;
-    pkt->_unk2 = 0;
+    pkt->_unk2 = 1;     /* this is what FLARM seems to send from a glider */
     pkt->_unk3 = 0;
 //    pkt->_unk4 = 0;
 

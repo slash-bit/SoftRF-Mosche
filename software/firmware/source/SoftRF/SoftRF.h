@@ -31,7 +31,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB08d"
+#define SOFTRF_FIRMWARE_VERSION "MB08f"
 #define SOFTRF_IDENT            "SoftRF-"
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */

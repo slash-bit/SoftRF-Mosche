@@ -164,13 +164,25 @@ void setup()
 
   SoC->Button_setup();
 
-  if (settings->id_method == ADDR_TYPE_ICAO && settings->aircraft_id != 0)
+  if (settings->id_method == ADDR_TYPE_ICAO && settings->aircraft_id != 0) {
     ThisAircraft.addr = settings->aircraft_id;
-  else if (settings->id_method == ADDR_TYPE_RANDOM
-        || settings->id_method == ADDR_TYPE_ANONYMOUS)
+  } else if (settings->id_method == ADDR_TYPE_RANDOM
+        || settings->id_method == ADDR_TYPE_ANONYMOUS) {
     ThisAircraft.addr = 0;  /* will be filled in later */
-  else
-    ThisAircraft.addr = SoC->getChipId() & 0x00FFFFFF;
+  } else {
+    uint32_t id = SoC->getChipId() & 0x00FFFFFF;
+    /* remap address to avoid overlapping with congested FLARM range */
+    if (id >= 0x00DD0000 && id <= 0x00DFFFFF) {
+      id += 0x00100000;
+    /*
+     * OGN 0.2.8+ does not decode 'Air V6' traffic when leading byte of 24-bit Id is 0x5B
+     * Remap 11xxxx addresses to avoid overlapping with congested Skytraxx range
+     */
+    } else if ((id & 0x00FF0000) == 0x005B0000 || (id & 0x00FF0000) == 0x00110000) {
+      id += 0x00010000;
+    }
+    ThisAircraft.addr = id;
+  }
 Serial.printf("ID_method: %d, settings_ID: %06X, used_ID: %06X\r\n",
 settings->id_method, settings->aircraft_id, ThisAircraft.addr);
 
