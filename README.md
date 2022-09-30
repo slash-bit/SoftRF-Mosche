@@ -3,13 +3,22 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ## Features of this fork:
 
-* Correct frequency hopping and time slots
+Beyond Lyusupov's version 1.0:
+
+* Corrected frequency hopping and time slots
 * Collision prediction for circling aircraft
 * Estimates wind while circling, uses for collision prediction
 * Support 3-level collision alarms via buzzer
 * Can set aircraft ID for self, ID to ignore, and ID to follow
 * Settable baud rate for serial output
 
+Source code, and a [compiled binary for ESP32 (only)](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF), are available here.
+<br>
+<br>
+Open [discussion forum](https://gitter.im/SoftRF-open/community).
+<br>
+<br>
+Content below is from Lyusupov's Readme:
 <br>
 
 ## SoftRF Models:
