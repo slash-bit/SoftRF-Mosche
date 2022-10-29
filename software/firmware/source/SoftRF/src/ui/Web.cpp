@@ -619,8 +619,8 @@ void handleSettings() {
 <tr>\
 <th align=left>Power source</th>\
 <td align=right>\
-<input type='radio' name='power_external' value='0' %s>Bat\
-<input type='radio' name='power_external' value='1' %s>Ext\
+<input type='radio' name='power_external' value='0' %s>Battery\
+<input type='radio' name='power_external' value='1' %s>External\
 </td>\
 </tr>\
 <tr>\
@@ -689,7 +689,8 @@ void handleSettings() {
 <INPUT type='text' name='igc_key' maxlength='32' size='32' value='%08X%08X%08X%08X'>\
 </td>\
 </tr>"),
-  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]);
+//  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]);
+  0, 0, 0, 0);    /* do not show the existing secret key */
 
   len = strlen(offset);
   offset += len;

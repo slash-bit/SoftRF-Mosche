@@ -266,6 +266,10 @@ struct rst_info {
 #define U8X8_OLED_I2C_BUS_TYPE  U8X8_SSD1306_128X64_NONAME_2ND_HW_I2C
 #endif /* USE_OLED */
 
+/* this function should be reached via SoC_Ops instead, */
+/* as done in astir13 fork */
+extern bool ESP32_onExternalPower();
+
 #endif /* PLATFORM_ESP32_H */
 
 #endif /* ESP32 */

@@ -59,15 +59,40 @@ uint8_t Battery_charge() {
   return (uint8_t) SoC->Battery_param(BATTERY_PARAM_CHARGE);
 }
 
+/*
+ * When set to run on external power but with a battery installed, allow running
+ * on the battery as long as still airborne.  Shut down after at least an hour
+ * of operation, once external power is turned off, and battery voltage is
+ * somewhat down.  For now only implemented for T-Beam.
+ */
+static bool follow_ext_power_shutoff(float voltage)
+{
+#if defined(ESP32)
+    if (! settings->power_external)
+        return false;
+    if (hw_info.model != SOFTRF_MODEL_PRIME_MK2)
+        return false;
+    if (ESP32_onExternalPower())
+        return false;
+    if (ThisAircraft.airborne)
+        return false;
+    if (voltage >= 3.9)
+        return false;
+    if (millis() < 3600000)
+        return false;
+    return true;
+#else
+    return false;
+#endif
+}
+
 void Battery_loop()
 {
   if (isTimeToBattery()) {
     float voltage = SoC->Battery_param(BATTERY_PARAM_VOLTAGE);
 
     if (voltage > BATTERY_THRESHOLD_INVALID &&
-         (voltage < Battery_cutoff()
-            || (settings->power_external && hw_info.model == SOFTRF_MODEL_PRIME_MK2
-                  && voltage < 3.9 && millis() > 3600000))) {
+         (voltage < Battery_cutoff() || follow_ext_power_shutoff(voltage))) {
       if (Battery_cutoff_count > 3) {
         shutdown(SOFTRF_SHUTDOWN_LOWBAT);
       } else {

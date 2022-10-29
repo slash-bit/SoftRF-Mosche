@@ -1124,6 +1124,16 @@ static void ESP32_Display_fini(int reason)
 #endif /* USE_OLED */
 }
 
+/* external Power is available from USB port (VBUS0) */
+/* this function copied from astir13 fork of SoftRF */
+bool ESP32_onExternalPower() {
+  if (axp.isVBUSPlug()) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 static void ESP32_Battery_setup()
 {
   if ((hw_info.model    == SOFTRF_MODEL_PRIME_MK2 &&

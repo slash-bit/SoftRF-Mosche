@@ -15,6 +15,9 @@ Beyond Lyusupov's version 1.0:
 Source code, and a [compiled binary for ESP32 (only)](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF), are available here.
 <br>
 <br>
+New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).
+<br>
+<br>
 Open [discussion forum](https://gitter.im/SoftRF-open/community).
 <br>
 <br>

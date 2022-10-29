@@ -1,0 +1,255 @@
+Preliminary Documentation for Moshe Braner's version of SoftRF
+==============================================================
+
+By Moshe Braner
+
+This version last updated October 29, 2022
+to fit software version MB08h based on v1.0
+
+
+PART 1: USER GUIDE
+
+
+WHAT IS SOFTRF
+
+SoftRF is a do-it-yourself, multifunctional, compatible, radio-based proximity awareness system for general aviation.  SoftRF is free, open-source software that runs on inexpensive off-the-shelf hardware.  This software, when installed on suitable hardware and carried in an aircraft, transmits data on its position, and receives position data from other aircraft with compatible systems.  It can send information about nearby traffic, in standard formats, to visualization devices and to navigation software commonly used in sailplanes.  Several radio communications and local data exchange protocols are supported, but the one of interest to most glider pilots is the FLARM-compatible "Legacy" mode.  Both incoming and outgoing radio transmissions are fully interoperable with FLARM devices and with OGN ground stations.
+
+Using SoftRF in your aircraft (when configured as "Legacy") will:
+* make you visible to other FLARMs
+* allow you to see other FLARMs
+* make you visible to the OGN and viewable on websites like https://glidertracker.org/
+
+Some people call this an "OGN tracker", although that label should be reserved for the transmit-only devices used in some high level soaring competitions for the spectators' benefit.  SoftRF in "Legacy" mode is better described as a functional equivalent for FLARM.
+
+What can SoftRF do that FLARM cannot?
+
+On appropriate hardware, SoftRF can send traffic (and position) data out via WiFi or Bluetooth, which older FLARM models cannot do without additional hardware.  The new "Fusion" versions of FLARM do have wireless connectivity.  SoftRF can also operate using radio communications protocols other than the one used by FLARM, such as OGNTP, P3I or FANET.  But for the vast majority of glider pilots the FLARM protocol is the important one, as it simultaneously offers both bidirectional air-to-air traffic awareness for collision avoidance and the option to be tracked by OGN ground stations.  SoftRF can run all day on a small internal battery.
+
+What can FLARM do that SoftRF cannot?
+
+The more advanced PowerFLARM units can listen to FLARM signals via two antennas for more complete coverage.  Additionally, PowerFLARM can also receive ADS-B signals from aircraft that do not have FLARM, and even as re-broadcast from air traffic control ground stations.  This offers FLARM users awareness of some non-FLARM traffic, although the same is not true in reverse.  FLARM is also available off the shelf from an established company that offers services such as annual software updates.  But all this comes at a significant monetary price.
+
+What can my version of SoftRF do that the mainline version cannot?
+
+My version fixes some radio protocol bugs, making interoperability with FLARM more reliable.  My version correctly transmits the curved path of the aircraft (if circling) so that FLARM units receiving the data can predict collisions accordingly.  My version also receives and interprets the curved path of other aircraft as sent by FLARM units, and predicts collisions based on that.  And it does so even when the aircraft are subject to significant wind drift.  My version also offers built-in audible collision warnings in 3 levels of urgency, similar to what PowerFLARM Portable does.  My version also offers some conveniences, such as assigning the ID to this aircraft, and other IDs to ignore or to follow,
+
+What can the mainline version of SoftRF do that my version cannot?
+
+The main branch of SoftRF offers compiled binaries for a wide variety of hardware platforms.  My version has only been compiled for ESP32-based hardware so far.  It can in theory be compiled for other hardware, but that is not a quick and easy thing to do.  I have concentrated on the "T-Beam" hardware because I believe it is the best choice at this time: is includes all the components one might want, integrated into a single board, including a holder for a 18650 size lithium cell, charger circuit, GNSS module, WiFi and Bluetooth capable CPU with nonvolatile flash memory, and an ISM-band radio.  The only thing missing is an SD card slot, which could have helped with software updates and also allowed operation as an (inofficial) flight recorder.
+
+
+HISTORY
+
+FLARM, the traffic awareness and collision avoidance system which has been adopted by most glider (and many other aircraft) pilots in Europe, operates in the 866-928 MHz range (depending on what is legal in each region of the world - 470 MHz in China).  It transmits in low power (20 milliwatts), in short bursts of a few milliseconds, once or twice per second.  It was developed before the latest developments in hardware integration and modulation schemes, and is oriented towards collision avoidance, not longe-range communications.
+
+The Open Glider Network (OGN) has encouraged the establishment of many ground stations, especially in Europe, that listen to signals from FLARM and other devices, and feed the data to servers on the internet.  Despite FLARM's low power, these stations can receive signals from tens of km away.
+
+The "Internet of Things" (IoT) community has prompted manufacturers to develop inexpensive low-power hardware that integrates significant computing power and memory, along with communications capabilities including WiFi, Bluetooth, GNSS (such as GPS), and radios that operate in the unlicensed bands in the 400-1000 MHz range, in a variety of modulation schemes.
+
+Linar Yusupov ( https://github.com/lyusupov/SoftRF ) developed SoftRF, which (among other things) sends, receives and interprets signals to and from aircraft in the same protocol as used by FLARM, or in some other protocols.  SoftRF runs on several types of the IoT hardware devices.
+
+Moshe Braner ( https://github.com/moshe-braner/SoftRF ) further developed SoftRF, filling in some gaps as described avove, thus making it a more complete functional equivalent to FLARM.  Ideally, these improvements would be incorporated into the main development branch of SoftRF.  But so far Linar Yusupov has not done that.  Thus to reap the benefits one must use this development fork.
+
+
+HOW TO USE SOFTRF
+
+Hardware choices
+
+At this time my version of SoftRF runs specifically on devices based on the ESP32 "system on a chip" CPU.  Namely the device from the LilyGo (TTGO) company they call the "T-Beam".  The software is "embedded", i.e., runs on the bare hardware without an operating system, although it incorporates software libraries from the hardware manufacturers and from third parties.  The software is developed on other systems (e.g., Linux or Windows) and then copied ("flashed") into the flash memory of the IoT device, via a USB cable or Wifi.  The size of this compiled firmware is less than 2 megabytes.
+
+If you are buying a T-Beam, be sure to order the version that fits your regional radio frequencies.  I.e., in Europe the 868 MHz version, in the USA the 915 MHz version, etc.  I suspect the two mentioned are really the same board, but with different antennas.  The 433/470 MHz board (for use in China) is definitely different!
+
+I've bought T-Beam boards from LilyGo's "store" on Amazon:
+    https://www.amazon.com/dp/B09VLFQQG4
+or from banggood.com (they accept Paypal).
+
+With my version of SoftRF you have the option of attaching a passive piezo buzzer between GPIO Pin 14 and ground, to get audible indications of collision warnings.  A suitable buzzer is this one:
+https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
+Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".
+
+Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".
+
+One needs to arrange a case for the T-Beam board.  Arranging the case is actually the hardest part of setting it up!  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  Some have used 3D-printed cases.  STL files for that purpose are available, e.g. here:
+https://github.com/lyusupov/SoftRF/tree/master/case/v5
+but these files make a case that is too small, hard to use, and won't fit a gopro mount.  A modified 3D model is available here:
+https://drive.google.com/drive/folders/1hdEJ-nRVz4D_sYihwv1Re2S-p8_nsYaM?usp=sharing
+which is larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
+If you don't have a 3d printer you can order a case from treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  Cost is about $20 for 1, and as low as $12 each for 4 or more.
+
+A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, should give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is busy with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
+
+Even when using an antenna with a cable, the T-Beam needs to be mounted with the antenna connector on top, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one gets an external GNSS antenna with a longer cable, that is possible but I have not tried it.  
+
+Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  Note: this device may take as long as 30 minutes to find the first GPS fix. The gps antenna is passive and very weak.  It will not work indoors and needs a clear outdoor area to work.  Some units are better than others.
+
+
+How to power the SoftRF device
+
+There are basically 3 options:
+
+One can install an 18650 size cylindrical lithium-ion cell in the battery holder of the T-Beam, and run the device on that battery.  (Be sure to buy FLAT TOP and not BUTTON TOP 18650 batteries as only FLAT TOP will fit in the holder.)  If the cell has at least 1800 mAH usable capacity, it will suffice for long flights.  The battery can be charged via the USB port of the T-Beam board.  When a charger is attached, the board turns on, one can then turn it off to make the charging process somewhat faster.  There is no indication of when the charging is complete.  If your charger gets warm to the touch while charging, it will be cool to the touch when no longer charging at a significant rate.
+
+Or, one can power the T-Beam via the USB port, without installing a battery on the board.  Any USB power source will do.  You may install a 12V to 5V dc-dc converter and use the aircraft main power so that SoftRF (plugged in via a USB cable) turns on when aircraft power is turned on.  The needed current is about 120 mA normally, perhaps double that during the very short transmission pulses (1 % of the time).  A disadvantage of this approach is that, after sitting unpowered for a while, the device may take a relatively long time to acquire a GNSS fix.  An advantage is that the device can be mounted "permanently" in the aircraft, one does not need to dismount it and take it elsewhere to charge it.
+
+Or, a hybrid power system can be used, combining external USB power and an on-board battery.  That way the USB power charges the on-board battery while the device is in use.  If the external power fails the device will keep running on the battery.  If mounted in the aircraft in an inaccessible way, one can use the "external power" option in the settings (unique to my version of SoftRF) which will automaticall turn the device off after several conditions are met: the device was running for at least an hour, the aircraft is not airborne, the external power has been turned off, and the battery voltage has decreased to under 3.9 volts.  But, if you store the device, with a lithium battery, in the glider trailer that gets hot in the summer sun, you may be nervous about the possibility of a fire.  Your choice.
+
+After several weeks in the apparently "off" mode, the battery installed in a T-Beam may be depleted.  This seems to happen in some boards more than others.  Perhaps those with a barometric sensor added have a charge leak that causes that.  Always recharge the battery before attempting to use the device following a storage period of more than a couple of weeks.
+
+
+Turning the T-Beam on and off
+
+To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing, and the third button is a reset button.
+
+The Power Management Unit (PMU) on the T-Beam is always active.  The on/off button just sends instructions to the PMU.  The PMU can turn the power to individual parts of the board (e.g., the CPU, or the GNSS module) on or off.  There are 3 LEDs on the board.  The bright blue LED near the PMU is controlled by the PMU (with indirect instructions from the CPU).  The dim red LED near it signifies that the CPU is powered (I think).  The red LED near the GNSS module, when blinking, is indicating that the GNSS module has a "fix", i.e., is receiving signals from enough satellites.  If any of the 3 LEDs are lit, the board is not as close to "off" as it can be.
+
+If a battery is installed on the board, the T-Beam is never completely turned "off".  Always remove the battery from the holder before soldering wires to the board.
+
+
+Installing firmware for the first time
+
+The T-Beam often arrives from the factory with some version of SoftRF already installed.  That allows installation of other versions of SoftRF via Wifi.  See the section below about firmware updates.
+
+Note: if the board arrives with the "RC9" version of SoftRF, do not update the firmware via WiFi.  There is a bug in that version.  It will fail!  Use the USB method (this section) for the initial installation, of either my version of SoftRF, or version 1.0 (or higher) of the main line SoftRF.  After that, it will be possible to update the firmware to later versions via WiFi.
+
+If the board arrives with other software, e.g., "Meshtastic", or after a failed WiFi update, one may need to install SoftRF via the USB jack.  Follow the instructions here: https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#esp32 - substituting the  .bin file for the desired version of the software (e.g., from here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF ) instead of the original SoftRF.ino.bin file.  A ZIP file with the other 3 small .bin files needed, and more detailed instructions, is available here: 
+https://github.com/moshe-braner/SoftRF/tree/master/software/app/Flashing
+You will need a PC running Windows, that can recognize the USB interface inside the T-Beam as a virtual serial port.  The copy of Windows 10 on my laptop did that as-is.  If it does not, you need to find and install "driver" software that fits the USB hardware inside the T-Beam.  Once the T-Beam shows up as a "COM port" (e.g., COM5) on the PC's device manager that hurdle is passed.  Then you need to download and run the software (mentioned in the instructions) from Expressif, the makers of the ESP32 chips.  It is not very intuitive to use, follow the written info, including the image: you must set the memory addresses as shown.  If it goes horribly wrong the T-Beam may appear dead (won't boot any more), but so far I've always managed to bring it back to life with repeated attempts with that utility software.
+
+
+The Web Interface
+
+After startup, SoftRF on a T-Beam creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.
+
+
+Choosing the operational settings
+
+Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings are rarely what you want.  Connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings:
+
+Mode: normally select "Normal".
+
+Device ID: this is unique to each device.  You cannot change it.
+
+ICAO ID: you can enter any ID you want (6 HEX digits), but normally this would be the ICAO ID of your aircraft (which you can obtain from the authorities in your country, the FAA in the USA).  If you also have a transponder or some other device, setting all of them to the same ID will avoid duplicate reporting of the aircraft if the data is later mixed together in OGN.
+
+ID type to use: You can choose Random, ICAO (the ID entered above), Device (the fixed device ID), or Anonymous.  The latter is random but is fixed for the flight, while Random changes during the flight.  If you choose ICAO (best), or device ID, you can register your chosen ID on http://ddb.glidernet.org/ as your aircraft.  If you don't register it then only the cryptic ID will show up on OGN viewers such as https://glidertracker.org/ instead of your N number or tail number.
+
+Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT want to include in traffic data (and collision warnings) reported by SoftRF.  E.g., if your towplane has FLARM and you tend to get unnecessary collision warning during the tow.  Leave as 000000 to not use this feature.
+
+Aircraft ID to follow: You can enter an aircraft (or device) ID to give priority to in traffic reports.  E.g., your flying buddy in another aircraft.  Leave as 000000 to not use this feature.  Normally SoftRF reports up to 8 aircraft, selecting the closest ones.  If an ID to follow is specified, it will be shown even if it is not one of the 8 closest.  An close-by aircraft that is a collision danger will always take priority though.
+
+Protocol:  Choose "Legacy" for the FLARM radio protocol.  Legacy is visible to FLARMS, to SoftRF devices in Legacy mode, and to OGN stations. OGNTP is invisible to FLARMS but visible to OGN stations. You are using this device to see and be seen by other gliders using FLARM, so change it to Legacy.  For towplanes: If the device is setting off collision alerts on tow, it can be configured to OGNTP, so that it does not alert FLARMs, but is still visible to OGN receivers on the ground.
+
+Region: you must choose your geographical region, otherwise the radio will be on the wrong frequency and fail to communicate with the devices in other aircraft in your area.  E.g., choose EU (868 MHz) in Europe, and US (915 MHz) in the USA and Canada.
+
+Aircraft type: E.g., glider, powered plane, etc.  This is important for collision avoidance and situational awareness, and also for OGN tracking.
+
+Alarm trigger: this setting chooses an algorithm to base collision warnings on.  Recommended: "Legacy" (unique to my version), which mimics what FLARM does, predicting near-future paths of circling aircraft.  If neither aircraft is circling, this algorithm will automatically revert to the "Vector" method, which extrapolates straight lines.  And if movement is not determined, that (in my version) will revert to "Distance", which warns simply by the distance between the aircraft.  Thus, if you select "Legacy", then ALL the algorithms are used as appropriate.  If you select "None" then you will not get collision warnings.
+
+Tx Power: transmitter power.  Normally use "Full" (which is less then a tenth of a watt).  Use "Low" (2 mw) for short-range testing, and "Off" if you want to see but not be seen - appropriate when running SoftRF on the ground just to see where other aircraft are.  If you are flying, and want to limit visibility to other aircraft while retaining collision avoidance, use "Stealth mode" instead - see below.
+
+Volume: if a piezo buzzer is attached to the board for audible collision warnings, choose "Loud" here.  (It is not quite loud enough.)  If you get audible warnings via a connected device, e.g., XCsoar, then you can set the buzzer Volume to Low or Off.
+
+LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
+
+Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).  (Only SPP may work on the T-Beam, I am not sure.)
+
+NMEA sentences: Data is sent to connected devices via text "sentences" in the NMEA format.  You can turn on or off each of the following types of sentences:  GNSS (position data), Private (SoftRF debugging, leave off), 
+Legacy (traffic data in the same format used by FLARM), Sensors (e.g., barometric sensor, if you attach such to the board), and Debug (debugging of my SoftRF version, leave off).
+
+NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
+
+Serial Output Baud Rate: the default is 38400, you can choose some other speed if your connected device cannot use 38400.  E.g., the ILEC SN10 wants 19200.
+
+GDL90: this is for a different (non-NMEA) local data transfer protocol, usually leave Off.
+
+Dump1090: yet another local data transfer protocol, usually leave Off.
+
+Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
+
+Power source: select "External" only if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, leave this setting as "Battery".
+
+Stealth: if set to "On", your aircraft will not be shown on other aircraft' display, AND VICE VERSA (except at close range and in the case of collision danger).  This is opting out of long-range "FLARM RADAR" mutual visibility.
+
+No track: this is similar to Stealth, but for the purpose of telling ground (OGN) stations to not report your position.
+
+Radio CF correction: you can tell SoftRF (on some devices) to adjust the radio frequency up or down a bit.  Only use this if you have reliable information (e.g., from OGN ground stations) telling you that your device is a bit off-frequency.
+
+Debug flags: this is for my debugging scheme (mentioned above), leave as 00 normally.
+
+Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
+
+
+How to connect external devices
+
+SoftRF can send data out to other devices, in several formats.  Most commonly, the format is NMEA, which is lines of text that start with a code that identifies the type of data in the "sentence".  For example:
+   $PFLAU,1,0,2,1,0,14,2,0,57,A8B031*7C
+which happens to be a FLARM-like sentence describing a nearby aircraft.
+
+The external device can be a dedicated display for traffic data, for example:
+    https://github.com/lyusupov/SoftRF/wiki/SkyView-EZ
+
+Alternatively, the external device can be a glide computer, such as the ILEC SN10, or an e-reader, phone or tablet running the XCsoar or Tophat software.  In some cases such a device benefits from SoftRF also sending position (GNSS) data.
+
+The data can be sent out via a serial cable, a USB cable, WiFi (UDP or TCP), or Bluetooth.
+
+The wireless methods (WiFi or Bluetooth) are convenient in that no cable is needed.  Only need to choose the relevant SoftRF settings as described above.  Instructions on how to connect to XCSoar (or Tophat) via UDP (WiFi) are here: https://github.com/lyusupov/SoftRF/wiki/Prime-Edition-MkII.-Quick-start - the result is that traffic becomes visible right on the moving map in XCsoar, the FLARM RADAR screen is available, and you can get spoken collision warnings such as "Traffic, 2 O'Clock High!".
+
+The wired methods require additional hardware.  At the least, a USB cable.  For example, a PC can be connected via a USB cable and one can run terminal software on it (e.g., "Termite") that will display the data coming out of SoftRF.  That is useful for debugging.
+
+But most external devices of interest do not have a USB interface that is capable of emulating a serial port.  Instead, one can use the serial port (UART) that is built into the T-Beam.  Two pins at the corner of the board are labeled TX (transmit data) and RX (receive data).  They need to be used in combination with one of the Ground pins to complete the circuit.  But, these pins operate at TTL voltage levels (0v and about +3V).  Many external devices are set up to use RS232 voltage levels, i.e., several volts negative and several volts positive.  To bridge such devices to the TTL UART, one needs to add a voltage-level conversion interface circuit, e.g., based on the MAX232 chip.  Such a chip can be powered from the 3.3V pins of the T-Beam.  This is not hard to do in principle, but there are some issues.  There may be little spare space inside the case holding the T-Beam.  And some of the cheap MAX232-like chips may be unstable and oscillate, resulting in excessive power draw from the board.  To protect the circuit, I suggest: (1) These conversion boards usually have two independent pairs of conversion circuits, thus one is used to connect to the T-Beam UART and one is not used.  Connect unused TTL inputs of the MAX232 board to +3.3V (via a resistor, about 22Kohms), do not leave them open-circuit.  And: (2) connect the MAX232 board power input to the 3.3V source via a resistor (about 39 ohms).
+
+Once connected, be sure to set the baud rate on the external device to match what SoftRF is using (38400 baud by default), or vice versa.
+
+Note that due to the way the T-Beam is designed, the same data is sent out via both the USB interface and the UART pins.  They cannot be separated.
+
+
+Updating the firmware
+
+When it's time install a newer version of the SoftRF firmware on your device, the easiest way is to do it via WiFi (also called On The Air, OTA).
+
+Note: if your T-Beam currently has the "RC9" version of SoftRF, do not update the firmware via WiFi.  It will fail!  There is a bug in that version.  Use the USB method (above) for the initial installation, of either my version of SoftRF, or version 1.0 (or higher) of the main line SoftRF.  After that, it will be possible to update the firmware to later versions via WiFi.
+
+Here are step by step instructions for OTA firmware update:
+
+* Download the .zip file with the most recent firmware.  My version is here:
+  https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF
+
+* Unzip the firmware file, the actual firmware file has the suffix .bin and its size is about 1.7 megabytes.
+
+* Fully charge the battery in your SoftRF device.
+
+* Boot up SoftRF.
+
+* Connect your PC/Tablet/Cellphone to the Wi-Fi Access Point created by SoftRF
+    SSID: SoftRF-XXXXXX
+    Key: 12345678
+
+* Open up a browser and proceed to the URL: http://192.168.1.1
+
+* Inspect the firmware version listed in that status page.
+
+* Go to the Settings page and Write down your SoftRF settings, or take a screen shot of the SoftRF web-interface settings page from your browser.  Return to the status page.
+
+* Click the "Firmware update" button in the SoftRF status web page.
+
+* Click the "Choose file" button and select the .bin file with the new firmware.
+
+* Click the "Update" button.
+
+* Wait until the progress indicator reaches 100%, then wait some more...
+
+ATTENTION! The update progress indicator shows file transfer completion only. So be patient and wait 30+ seconds more, do not touch anything or you will likely get a dead device.
+
+* When the update is completed the SoftRF device typically reboots automatically.  If it does not reboot itself, after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
+
+* Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.
+
+* Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be set, or all of them will need to be selected again (when different from the defaults).
+
+If this firmware update method fails, proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
+
+See similar instructions with screen shots here: https://github.com/lyusupov/SoftRF/wiki/Firmware-update-%28Web-method%29#esp32
+
+
+
+PART 2: UNDER THE HOOD - see separate document

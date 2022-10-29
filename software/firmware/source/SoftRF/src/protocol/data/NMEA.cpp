@@ -305,8 +305,8 @@ void NMEA_Export()
     int HP_index = MAX_TRACKING_OBJECTS;
     int HP_alt_diff = 0;
     int HP_alarm_level = ALARM_LEVEL_NONE;
-    float HP_adj_dist  = 2147483647;
-    float HP_distance  = 2147483647;
+    float HP_adj_dist  = 999999999;
+    float HP_distance  = 999999999;
     float HP_bearing = 0;
     uint32_t HP_addr = 0;
     int total_objects = 0;
@@ -384,13 +384,13 @@ void NMEA_Export()
 
              /* Alarm or close traffic is treated as highest priority */
              if (alarm_level > HP_alarm_level ||
-                    (alarm_level == HP_alarm_level && adj_dist < HP_adj_dist)) {
+                    (alarm_level == HP_alarm_level && adj_dist <= HP_adj_dist)) {  // was <
                 HP_bearing = bearing;
                 HP_alt_diff = alt_diff;
                 HP_alarm_level = alarm_level;
                 HP_distance = distance;
                 HP_adj_dist = adj_dist;
-                HP_addr = cip->addr;
+                HP_addr = (stealth? 0xFFFFF0 + i : cip->addr);
              }
           }
         }
@@ -426,7 +426,10 @@ void NMEA_Export()
                             DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
 
          uint32_t id = fop->addr;
-         if (stealth)  id = 0xFFFFF0 + i;   /* show as anonymous (but addr still shown?) */
+         if (stealth) {
+           id = 0xFFFFF0 + i;   /* show as anonymous */
+           addr_type = ADDR_TYPE_ANONYMOUS;
+         }
 
          /*
           * When callsign is available - send it to a NMEA client.
@@ -438,7 +441,7 @@ void NMEA_Export()
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
-              alt_diff, addr_type, fop->addr, NMEA_CallSign_Prefix[fop->protocol], id,
+              alt_diff, addr_type, id, NMEA_CallSign_Prefix[fop->protocol], id,
               (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
               ltrim(str_climb_rate), fop->aircraft_type
               PFLAA_EXT1_ARGS );
@@ -452,7 +455,7 @@ void NMEA_Export()
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
-              alt_diff, addr_type, fop->addr, fop->callsign,
+              alt_diff, addr_type, id, fop->callsign,
               (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
               ltrim(str_climb_rate), fop->aircraft_type
               PFLAA_EXT1_ARGS );
@@ -476,6 +479,24 @@ void NMEA_Export()
                          POWER_STATUS_BAD : POWER_STATUS_GOOD;
 
     if (total_objects > 0) {
+        if (HP_addr == 0) {
+           /* no aircraft has been identified as high priority, use */
+           /*  the aircraft from the top of the sorted list, if any */
+           ufo_t *cip = &Container[head];
+           if (cip->addr) {
+               HP_bearing = cip->bearing;
+               HP_alt_diff = cip->alt_diff;
+               HP_alarm_level = cip->alarm_level;
+               HP_distance = cip->distance;
+               if (cip->stealth || ThisAircraft.stealth)
+                   HP_addr = 0xFFFFF0;
+               else
+                   HP_addr = cip->addr;
+           }
+        }
+    }
+
+    if (HP_addr) {
         int rel_bearing = (int) (HP_bearing - ThisAircraft.course);
         rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
         if (HP_alarm_level > ALARM_LEVEL_NONE)  --HP_alarm_level;
@@ -493,7 +514,7 @@ void NMEA_Export()
                 has_Fix && (settings->txpower != RF_TX_POWER_OFF) ?
                   TX_STATUS_ON : TX_STATUS_OFF,
                 has_Fix ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_NONE,
-                power_status, HP_alarm_level
+                power_status, ALARM_LEVEL_NONE
                 PFLAU_EXT1_ARGS );
     }
 
