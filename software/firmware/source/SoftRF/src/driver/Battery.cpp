@@ -81,6 +81,20 @@ static bool follow_ext_power_shutoff(float voltage)
     if (millis() < 3600000)
         return false;
     return true;
+#elif defined(ARDUINO_ARCH_NRF52)
+    if (! settings->power_external)
+        return false;
+    if (hw_info.model != SOFTRF_MODEL_BADGE)
+        return false;
+//  if (_____onExternalPower())
+//      return false;
+    if (ThisAircraft.airborne)
+        return false;
+    if (voltage >= 3.9)
+        return false;
+    if (millis() < 3600000)
+        return false;
+    return true;
 #else
     return false;
 #endif

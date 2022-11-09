@@ -1,6 +1,6 @@
 /*
  * EPDHelper.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this is modified from v1.1.
+
 #include "../system/SoC.h"
 
 #if defined(USE_EPAPER)
@@ -27,21 +29,23 @@
 #include "../TrafficHelper.h"
 #include "../system/Time.h"
 
-#include <Fonts/FreeMonoBold24pt7b.h>
-#include <Fonts/FreeMonoBold18pt7b.h>
-#include <Fonts/FreeMonoBold12pt7b.h>
-#include <Fonts/FreeMono18pt7b.h>
+#include <gfxfont.h>
+#include <FreeMonoBold24pt7b.h>
+#include <FreeMonoBold18pt7b.h>
+#include <FreeMonoBold12pt7b.h>
+#include <FreeMonoBold9pt7b.h>
+#include <FreeMono18pt7b.h>
 
-#include <Fonts/Org_01.h>
-#include <Fonts/FreeMonoBoldOblique9pt7b.h>
-#include <Fonts/FreeSerif9pt7b.h>
+#include <Org_01.h>
+#include <FreeMonoBoldOblique9pt7b.h>
+#include <FreeSerif9pt7b.h>
 
 const char EPD_SoftRF_text1[] = "SoftRF";
 const char EPD_SoftRF_text2[] =  "and"  ;
 const char EPD_SoftRF_text3[] = "LilyGO";
 const char EPD_SoftRF_text4[] = "Author: ";
 const char EPD_SoftRF_text5[] = "Linar Yusupov";
-const char EPD_SoftRF_text6[] = "(C) 2016-2021";
+const char EPD_SoftRF_text6[] = "(C) 2016-2022";
 
 
 const char EPD_Radio_text[]   = "RADIO   ";
@@ -50,13 +54,20 @@ const char EPD_Display_text[] = "DISPLAY ";
 const char EPD_RTC_text[]     = "RTC     ";
 const char EPD_Flash_text[]   = "FLASH   ";
 const char EPD_Baro_text[]    = "BARO  ";
+const char EPD_IMU_text[]     = "IMU   ";
 
 unsigned long EPDTimeMarker = 0;
 static unsigned long EPD_anti_ghosting_timer = 0;
 static uint8_t anti_ghosting_minutes = 0;
 
 static int EPD_view_mode = 0;
+int EPD_prev_view = 0;
 bool EPD_vmode_updated = true;
+uint16_t EPD_pages_mask = (1 << VIEW_MODE_STATUS) |
+                          (1 << VIEW_MODE_RADAR ) |
+                          (1 << VIEW_MODE_TEXT  ) |
+                          (1 << VIEW_MODE_CONF  ) |
+                          (1 << VIEW_MODE_TIME  );
 
 volatile uint8_t EPD_update_in_progress = EPD_UPDATE_NONE;
 
@@ -111,11 +122,15 @@ bool EPD_setup(bool splash_screen)
     display->print(EPD_SoftRF_text3);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "HW: %s SW: %s", hw_info.revision > 2 ?
-                  Hardware_Rev[3] : Hardware_Rev[hw_info.revision],
+//    snprintf(buf, sizeof(buf), "HW: %s SW: %s", hw_info.revision > 2 ?
+//                  Hardware_Rev[3] : Hardware_Rev[hw_info.revision],
+//                  SOFTRF_FIRMWARE_VERSION);
+    snprintf(buf, sizeof(buf), "HW:%d SW:%s",
+                  hw_info.revision,
                   SOFTRF_FIRMWARE_VERSION);
 
-    display->setFont(&Org_01);
+//    display->setFont(&Org_01); 
+    display->setFont(&FreeMonoBold9pt7b);
     display->getTextBounds(buf, 0, 0, &tbx4, &tby4, &tbw4, &tbh4);
     x = (display->width() - tbw4) / 2;
     y = display->height() - tbh4;
@@ -134,15 +149,27 @@ bool EPD_setup(bool splash_screen)
 
   EPD_POWEROFF;
 
-  rval = display->epd2.probe();
-
-  EPD_view_mode = ui->vmode;
+  rval = display->probe();
 
   EPD_status_setup();
   EPD_radar_setup();
   EPD_text_setup();
+  EPD_conf_setup();
   EPD_baro_setup();
   EPD_time_setup();
+  EPD_imu_setup();
+
+  EPD_view_mode = ui->vmode;
+  if (EPD_pages_mask & (1 << EPD_view_mode) == 0) {
+    for (int i=0; i < VIEW_MODES_COUNT; i++) {
+      int next_view_mode = (EPD_view_mode + i) % VIEW_MODES_COUNT;
+      if ((next_view_mode != EPD_view_mode) &&
+          (EPD_pages_mask & (1 << next_view_mode))) {
+        EPD_view_mode = next_view_mode;
+        break;
+      }
+    }
+  }
 
   switch (ui->aghost)
   {
@@ -191,7 +218,7 @@ void EPD_info1()
     display->fillScreen(GxEPD_WHITE);
 
     x = 5;
-    y = (tbh + INFO_1_LINE_SPACING);
+    y = (tbh + INFO_1_LINE_SPACING - 2);
 
     display->setCursor(x, y);
     display->print(EPD_Radio_text);
@@ -231,6 +258,18 @@ void EPD_info1()
       display->setCursor(x, y);
       display->print(EPD_Baro_text);
       display->print(hw_info.baro != BARO_MODULE_NONE ? "  +" : "N/A");
+
+      y += (tbh + INFO_1_LINE_SPACING);
+
+      if (hw_info.imu == IMU_NONE) {
+        display->setFont(&FreeMono18pt7b);
+      } else {
+        display->setFont(&FreeMonoBold18pt7b);
+      }
+
+      display->setCursor(x, y);
+      display->print(EPD_IMU_text);
+      display->print(hw_info.imu != IMU_NONE ? "  +" : "N/A");
     }
 
 #if defined(USE_EPD_TASK)
@@ -425,17 +464,24 @@ void EPD_loop()
       case VIEW_MODE_TEXT:
         EPD_text_loop();
         break;
+      case VIEW_MODE_CONF:
+        EPD_conf_loop();
+        break;
       case VIEW_MODE_BARO:
         EPD_baro_loop();
         break;
       case VIEW_MODE_TIME:
         EPD_time_loop();
         break;
+      case VIEW_MODE_IMU:
+        EPD_imu_loop();
+        break;
       case VIEW_MODE_STATUS:
       default:
         EPD_status_loop();
         break;
       }
+      EPD_prev_view = EPD_view_mode;
 
       bool auto_ag_condition = ui->aghost == ANTI_GHOSTING_AUTO  &&
                                (EPD_view_mode == VIEW_MODE_RADAR ||
@@ -578,22 +624,14 @@ void EPD_fini(int reason, bool screen_saver)
 void EPD_Mode()
 {
   if (hw_info.display == DISPLAY_EPD_1_54) {
-    if (EPD_view_mode == VIEW_MODE_STATUS) {
-      EPD_view_mode = VIEW_MODE_RADAR;
-      EPD_vmode_updated = true;
-    }  else if (EPD_view_mode == VIEW_MODE_RADAR) {
-      EPD_view_mode = VIEW_MODE_TEXT;
-      EPD_vmode_updated = true;
-    }  else if (EPD_view_mode == VIEW_MODE_TEXT) {
-      EPD_view_mode = (hw_info.baro == BARO_MODULE_NONE ?
-                       VIEW_MODE_TIME : VIEW_MODE_BARO);
-      EPD_vmode_updated = true;
-    }  else if (EPD_view_mode == VIEW_MODE_BARO) {
-      EPD_view_mode = VIEW_MODE_TIME;
-      EPD_vmode_updated = true;
-    }  else if (EPD_view_mode == VIEW_MODE_TIME) {
-      EPD_view_mode = VIEW_MODE_STATUS;
-      EPD_vmode_updated = true;
+    for (int i=0; i < VIEW_MODES_COUNT; i++) {
+      int next_view_mode = (EPD_view_mode + i) % VIEW_MODES_COUNT;
+      if ((next_view_mode != EPD_view_mode) &&
+          (EPD_pages_mask & (1 << next_view_mode))) {
+        EPD_view_mode = next_view_mode;
+        EPD_vmode_updated = true;
+        break;
+      }
     }
   }
 }
@@ -614,6 +652,9 @@ void EPD_Up()
       break;
     case VIEW_MODE_TIME:
       EPD_time_prev();
+      break;
+    case VIEW_MODE_IMU:
+      EPD_imu_prev();
       break;
     case VIEW_MODE_STATUS:
     default:
@@ -639,6 +680,9 @@ void EPD_Down()
       break;
     case VIEW_MODE_TIME:
       EPD_time_next();
+      break;
+    case VIEW_MODE_IMU:
+      EPD_imu_next();
       break;
     case VIEW_MODE_STATUS:
     default:

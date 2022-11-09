@@ -16,23 +16,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this version incorporates some things from main branch v1.1.
+
 #ifndef SOFTRF_H
 #define SOFTRF_H
 
-#if defined(ARDUINO)
+#if defined(ARDUINO) || defined(HACKRF_ONE)
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2)
+#if defined(ENERGIA_ARCH_CC13XX) || defined(ENERGIA_ARCH_CC13X2) || defined(HACKRF_ONE) || defined(ARDUINO_ARCH_AVR)
 #include <TimeLib.h>
-#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 */
+#endif /* ENERGIA_ARCH_CC13XX || ENERGIA_ARCH_CC13X2 || defined(HACKRF_ONE) */
 
 #if defined(RASPBERRY_PI)
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB08h"
+#define SOFTRF_FIRMWARE_VERSION "MB09a"
 #define SOFTRF_IDENT            "SoftRF-"
+#define SOFTRF_USB_FW_VERSION   0x0101
 
 #define ENTRY_EXPIRATION_TIME   10 /* seconds */
 #define LED_EXPIRATION_TIME     5 /* seconds */
@@ -182,6 +185,8 @@ typedef struct hardware_info {
     byte  storage;
     byte  rtc;
     byte  imu;
+    byte  mag;
+    byte  pmu;
 } hardware_info_t;
 
 typedef struct IODev_ops_struct {
@@ -215,6 +220,7 @@ enum
 
 enum
 {
+	SOFTRF_MODEL_UNKNOWN,
 	SOFTRF_MODEL_STANDALONE,
 	SOFTRF_MODEL_PRIME,
 	SOFTRF_MODEL_UAV,
@@ -225,12 +231,18 @@ enum
 	SOFTRF_MODEL_RETRO,
 	SOFTRF_MODEL_SKYWATCH,
 	SOFTRF_MODEL_DONGLE,
-	SOFTRF_MODEL_MULTI,
+	SOFTRF_MODEL_OCTAVE,
 	SOFTRF_MODEL_UNI,
+	SOFTRF_MODEL_WEBTOP_SERIAL,
 	SOFTRF_MODEL_MINI,
 	SOFTRF_MODEL_BADGE,
 	SOFTRF_MODEL_ES,
-	SOFTRF_MODEL_BRACELET
+	SOFTRF_MODEL_BRACELET,
+	SOFTRF_MODEL_ACADEMY,
+	SOFTRF_MODEL_LEGO,
+	SOFTRF_MODEL_WEBTOP_USB,
+	SOFTRF_MODEL_PRIME_MK3,
+	SOFTRF_MODEL_BALKAN,
 };
 
 enum
@@ -249,15 +261,32 @@ enum
 enum
 {
 	STORAGE_NONE,
-	STORAGE_SD,
-	STORAGE_FLASH
+	STORAGE_FLASH,
+	STORAGE_CARD,
+	STORAGE_FLASH_AND_CARD,
 };
+
+#define STORAGE_SD STORAGE_CARD
 
 enum
 {
 	IMU_NONE,
+	ACC_BMA423,
+	ACC_ADXL362,
+	IMU_MPU6886,
+	IMU_MPU9250,
 	IMU_BNO080,
-	IMU_ICM20948
+	IMU_ICM20948,
+	IMU_QMI8658,
+};
+
+enum
+{
+	MAG_NONE,
+	MAG_AK8963,
+	MAG_AK09916,
+	MAG_IIS2MDC,
+	MAG_QMC6310,
 };
 
 static inline uint32_t DevID_Mapper(uint32_t id)

@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated October 29, 2022
-to fit software version MB08h based on v1.0
+This version last updated November 9, 2022
+to fit software version MB09a based on v1.0
 
 
 PART 1: USER GUIDE - see separate document
@@ -123,6 +123,14 @@ Some have asked for an option to mount the SoftRF device in an inaccessible plac
 Spurious alarm warnings caused in FLARM by stationary SoftRF
 
 Made multiple rounds of changes to the computation of the "airborne" status for this aircraft.  Now in Wind.cpp.  Set undocumented _unk2 bit in outgoing Legacy radio packets to 1 to mimic what FLARM does.  Affected: protocol/radio/Legacy legacy_encode().
+
+Hide IGC encryption key
+
+If compiled so as to enable the encryption in OGNTP, the key is divided into 4 sections, each is 8 hexadecimal digits.  (It's stored and used internally as 4 32-bit integers.)  For each section separately, if it's zero, it shows as "00000000", otherwise it shows as "88888888".  One can overwrite the "88888888" with something else (including "00000000") and it would then get saved.  If left as "88888888" then it is ignored and the current key is left intact.  This way a contestant can inspect or change other settings as needed, without losing the key, and without being able to see the key, that was earlier entered by a contest official.  And anybody can see whether a non-zero key has been set.  If set to all zeros then no encryption is done.
+
+Support "Badge Edition" (T-Echo, nRF52840)
+
+Incorporated mainline v1.2 EPD code.  Baro sensor probing hangs up the booting, even the BMP280, so removed all baro sensor access from the nRF52 version for now.  Created a new display screen that shows most of the settings.  Moved protocol & aircraft ID here from the status screen.  Replaced in the status screen with number of GNSS satellites and current collision alarm level.  Compiled two binaries, one with EU region as default and the other with US region.  All settings can be changed in either version.  Settings not changeable via the SoftRF Tool app can be changed via a USB connection and the "SoftRF settings tool 2.html" file.  The "SoftRF settings tool 1.html" offers the choice of "Legacy" alarm method, which is also now the default.  New file: Conf_EPD.cpp.
 
 
 KNOWN ISSUES

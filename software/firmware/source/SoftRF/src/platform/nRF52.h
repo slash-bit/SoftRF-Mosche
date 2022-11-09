@@ -1,6 +1,6 @@
 /*
  * Platform_nRF52.h
- * Copyright (C) 2020-2021 Linar Yusupov
+ * Copyright (C) 2020-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+// This is nRF52.h from SoftRF mainline v1.1, with a few comments added.
+
 #if defined(ARDUINO_ARCH_NRF52)
 
 #ifndef PLATFORM_NRF52_H
@@ -46,7 +49,9 @@
 
 #define SerialOutput            Serial1
 #define USBSerial               Serial
-#define swSer                   Serial2
+#define swSer                   Serial2   /* for compatibility with v1.0 GNSS.cpp */
+#define Serial_GNSS_In          Serial2
+#define Serial_GNSS_Out         Serial_GNSS_In
 #define UATSerial               Serial1
 
 enum rst_reason {
@@ -63,8 +68,24 @@ enum nRF52_board_id {
   NRF52_NORDIC_PCA10059,        /* reference low power board */
   NRF52_LILYGO_TECHO_REV_0,     /* 20-8-6 */
   NRF52_LILYGO_TECHO_REV_1,     /* 2020-12-12 */
-  NRF52_LILYGO_TECHO_REV_2      /* 2021-3-26 */
+  NRF52_LILYGO_TECHO_REV_2,     /* 2021-3-26 */
 };
+
+// #define TECHO_DISPLAY_MODEL   GxEPD2_154_D67
+
+enum nRF52_display_id {
+  EP_UNKNOWN,
+  EP_GDEH0154D67,
+  EP_GDEP015OC1,
+  EP_DEPG0150BN,
+};
+
+typedef struct {
+  uint64_t         id;
+  nRF52_board_id   rev;
+  nRF52_display_id panel;
+  uint8_t          tag;
+} __attribute__((packed)) prototype_entry_t;
 
 struct rst_info {
   uint32_t reason;
@@ -76,9 +97,6 @@ struct rst_info {
   uint32_t depc;
 };
 
-#define TECHO_DISPLAY_MODEL   GxEPD2_154_D67
-//#define TECHO_DISPLAY_MODEL   GxEPD2_154
-
 #define VBAT_MV_PER_LSB       (0.73242188F)   // 3.0V ADC range and 12-bit ADC resolution = 3000mV/4096
 #define SOC_ADC_VOLTAGE_DIV   (2.0F)          // 100K + 100K voltage divider on VBAT
 #define REAL_VBAT_MV_PER_LSB  (SOC_ADC_VOLTAGE_DIV * VBAT_MV_PER_LSB)
@@ -89,13 +107,17 @@ struct rst_info {
 
 #define DFU_MAGIC_SKIP        (0x6d)
 #define BME280_ADDRESS        (0x77)
+#define MPU9250_ADDRESS       (0x68)
+
+#define MIDI_CHANNEL_TRAFFIC  1
+#define MIDI_CHANNEL_VARIO    2
 
 /* Peripherals */
 #define SOC_GPIO_PIN_CONS_RX  _PINNUM(0, 8) // P0.08
 #define SOC_GPIO_PIN_CONS_TX  _PINNUM(0, 6) // P0.06
 
-#define SOC_GPIO_PIN_SWSER_RX _PINNUM(1, 9) // P1.09
-#define SOC_GPIO_PIN_SWSER_TX _PINNUM(1, 8) // P1.08
+#define SOC_GPIO_PIN_GNSS_RX  _PINNUM(1, 9) // P1.09
+#define SOC_GPIO_PIN_GNSS_TX  _PINNUM(1, 8) // P1.08
 
 #define SOC_GPIO_PIN_LED      SOC_UNUSED_PIN
 
@@ -154,6 +176,11 @@ struct rst_info {
 #define SOC_GPIO_PIN_PCA10059_MISO      _PINNUM(0, 13) // P0.13
 #define SOC_GPIO_PIN_PCA10059_SCK       _PINNUM(0, 14) // P0.14
 
+#define SOC_GPIO_PIN_WB_MOSI            _PINNUM(1, 12) // P1.12
+#define SOC_GPIO_PIN_WB_MISO            _PINNUM(1, 13) // P0.13
+#define SOC_GPIO_PIN_WB_SCK             _PINNUM(1, 11) // P1.11
+#define SOC_GPIO_PIN_WB_SS              _PINNUM(1, 10) // P1.10
+
 /* NRF905 */
 #define SOC_GPIO_PIN_TXE      SOC_UNUSED_PIN
 #define SOC_GPIO_PIN_CE       SOC_UNUSED_PIN
@@ -170,8 +197,14 @@ struct rst_info {
 #define SOC_GPIO_PIN_DIO1     _PINNUM(0, 20) // P0.20
 #define SOC_GPIO_PIN_BUSY     _PINNUM(0, 17) // P0.17
 
+#define SOC_GPIO_PIN_WB_RST   _PINNUM(1,  6) // P1.06
+#define SOC_GPIO_PIN_WB_DIO1  _PINNUM(1, 15) // P1.15
+#define SOC_GPIO_PIN_WB_BUSY  _PINNUM(1, 14) // P1.14
+
 /* RF antenna switch */
 #define SOC_GPIO_PIN_ANT_RXTX SOC_UNUSED_PIN
+#define SOC_GPIO_PIN_WB_TXEN  _PINNUM(1,  7) // P1.07
+#define SOC_GPIO_PIN_WB_RXEN  _PINNUM(1,  5) // P1.05
 
 /* I2C */
 #define SOC_GPIO_PIN_SDA      _PINNUM(0, 26) // P0.26
@@ -219,6 +252,7 @@ struct rst_info {
 #define EXCLUDE_WIFI
 #define EXCLUDE_CC13XX
 //#define EXCLUDE_TEST_MODE
+#define EXCLUDE_SOFTRF_HEARTBEAT
 //#define EXCLUDE_LK8EX1
 
 #define EXCLUDE_GNSS_UBLOX
@@ -258,22 +292,22 @@ struct rst_info {
 //#define USE_BLE_MIDI
 //#define USE_PWM_SOUND
 //#define USE_GDL90_MSL
+//#define USE_IBEACON
 //#define EXCLUDE_NUS
-//#define USE_OGN_ENCRYPTION
-#define EXCLUDE_BOARD_SELF_DETECT
+//#define EXCLUDE_IMU
+#define USE_OGN_ENCRYPTION
 
 /* FTD-012 data port protocol version 8 and 9 */
 #define PFLAA_EXT1_FMT  ",%d,%d,%d"
 #define PFLAA_EXT1_ARGS ,Container[i].no_track,data_source,Container[i].rssi
-/* SoftRF/nRF52 PFLAU NMEA sentence extension(s) */
-//#define PFLAU_EXT1_FMT  ",%06X,%d,%d,%d,%d"
-//#define PFLAU_EXT1_ARGS ,ThisAircraft.addr,settings->rf_protocol,rx_packets_counter,tx_packets_counter,(int)(Battery_voltage()*100)
 
 #if defined(USE_PWM_SOUND)
 #define SOC_GPIO_PIN_BUZZER   (hw_info.rf != RF_IC_SX1262 ? SOC_UNUSED_PIN           : \
                                hw_info.revision == 1 ? SOC_GPIO_PIN_TECHO_REV_1_DIO0 : \
                                hw_info.revision == 2 ? SOC_GPIO_PIN_TECHO_REV_2_DIO0 : \
                                SOC_UNUSED_PIN)
+
+#define ALARM_TONE_HZ         2480 // seems to be the best value for 27 mm piezo buzzer
 #else
 #define SOC_GPIO_PIN_BUZZER   SOC_UNUSED_PIN
 #endif /* USE_PWM_SOUND */
@@ -292,11 +326,7 @@ extern PCF8563_Class *rtc;
 extern const char *nRF52_Device_Manufacturer, *nRF52_Device_Model, *Hardware_Rev[];
 
 #if defined(USE_EPAPER)
-#include <GxEPD2_BW.h>
-
 typedef void EPD_Task_t;
-
-extern GxEPD2_BW<TECHO_DISPLAY_MODEL, TECHO_DISPLAY_MODEL::HEIGHT> *display;
 #endif /* USE_EPAPER */
 
 #endif /* PLATFORM_NRF52_H */

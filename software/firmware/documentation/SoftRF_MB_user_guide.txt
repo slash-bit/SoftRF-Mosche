@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated October 29, 2022
-to fit software version MB08h based on v1.0
+This version last updated November 9, 2022
+to fit software version MB09a based on v1.0
 
 
 PART 1: USER GUIDE
@@ -50,20 +50,22 @@ Linar Yusupov ( https://github.com/lyusupov/SoftRF ) developed SoftRF, which (am
 
 Moshe Braner ( https://github.com/moshe-braner/SoftRF ) further developed SoftRF, filling in some gaps as described avove, thus making it a more complete functional equivalent to FLARM.  Ideally, these improvements would be incorporated into the main development branch of SoftRF.  But so far Linar Yusupov has not done that.  Thus to reap the benefits one must use this development fork.
 
+The software is "embedded", i.e., runs on the bare hardware without an operating system, although it incorporates software libraries from the hardware manufacturers and from third parties.  The software is developed on other systems (e.g., Linux or Windows) and then copied ("flashed") into the flash memory of the IoT device, via a USB cable or Wifi.  The size of this compiled firmware is less than 2 megabytes.
+
 
 HOW TO USE SOFTRF
 
 Hardware choices
 
-At this time my version of SoftRF runs specifically on devices based on the ESP32 "system on a chip" CPU.  Namely the device from the LilyGo (TTGO) company they call the "T-Beam".  The software is "embedded", i.e., runs on the bare hardware without an operating system, although it incorporates software libraries from the hardware manufacturers and from third parties.  The software is developed on other systems (e.g., Linux or Windows) and then copied ("flashed") into the flash memory of the IoT device, via a USB cable or Wifi.  The size of this compiled firmware is less than 2 megabytes.
+At this time my version of SoftRF runs specifically on devices based on the ESP32 "system on a chip" CPU.  Namely the device from the LilyGo (TTGO) company they call the "T-Beam", and also on the "T-Echo" which is based on the nRF52840 CPU.  These are also called the "Prime Mark II" and "Badge" editions of SoftRF, respectively.
 
-If you are buying a T-Beam, be sure to order the version that fits your regional radio frequencies.  I.e., in Europe the 868 MHz version, in the USA the 915 MHz version, etc.  I suspect the two mentioned are really the same board, but with different antennas.  The 433/470 MHz board (for use in China) is definitely different!
+If you are buying a T-Beam or T-Echo, be sure to order the version that fits your regional radio frequencies.  I.e., in Europe the 868 MHz version, in the USA the 915 MHz version, etc.  I suspect the two mentioned are really the same board, but with different antennas.  The 433/470 MHz board (for use in China) is definitely different!
 
 I've bought T-Beam boards from LilyGo's "store" on Amazon:
     https://www.amazon.com/dp/B09VLFQQG4
 or from banggood.com (they accept Paypal).
 
-With my version of SoftRF you have the option of attaching a passive piezo buzzer between GPIO Pin 14 and ground, to get audible indications of collision warnings.  A suitable buzzer is this one:
+With my version of SoftRF you have the option of attaching a passive piezo buzzer to the T-Beam, between GPIO Pin 14 and ground, to get audible indications of collision warnings.  A suitable buzzer is this one:
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
 Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".
 
@@ -82,12 +84,14 @@ Even when using an antenna with a cable, the T-Beam needs to be mounted with the
 
 Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  Note: this device may take as long as 30 minutes to find the first GPS fix. The gps antenna is passive and very weak.  It will not work indoors and needs a clear outdoor area to work.  Some units are better than others.
 
+The T-Echo offers a 1.5-inch e-paper display, which makes the device more self-contained.  But adjusting the settings on it is more difficult than on the T-Beam, because the T-Echo does not have WiFi connectivity.
+
 
 How to power the SoftRF device
 
 There are basically 3 options:
 
-One can install an 18650 size cylindrical lithium-ion cell in the battery holder of the T-Beam, and run the device on that battery.  (Be sure to buy FLAT TOP and not BUTTON TOP 18650 batteries as only FLAT TOP will fit in the holder.)  If the cell has at least 1800 mAH usable capacity, it will suffice for long flights.  The battery can be charged via the USB port of the T-Beam board.  When a charger is attached, the board turns on, one can then turn it off to make the charging process somewhat faster.  There is no indication of when the charging is complete.  If your charger gets warm to the touch while charging, it will be cool to the touch when no longer charging at a significant rate.
+One can install an 18650 size cylindrical lithium-ion cell in the battery holder of the T-Beam (or a small Lithium-polymer pouch battery in the T-Echo), and run the device on that battery.  (Be sure to buy FLAT TOP and not BUTTON TOP 18650 batteries as only FLAT TOP will fit in the holder.)  This will suffice for long flights.  The battery can be charged via the USB port of the T-Beam or T-Echo.  When a charger is attached, the board turns on, one can then turn it off to make the charging process somewhat faster.  There is no indication on the T-Beam of when the charging is complete.  If your charger gets warm to the touch while charging, it will be cool to the touch when no longer charging at a significant rate.
 
 Or, one can power the T-Beam via the USB port, without installing a battery on the board.  Any USB power source will do.  You may install a 12V to 5V dc-dc converter and use the aircraft main power so that SoftRF (plugged in via a USB cable) turns on when aircraft power is turned on.  The needed current is about 120 mA normally, perhaps double that during the very short transmission pulses (1 % of the time).  A disadvantage of this approach is that, after sitting unpowered for a while, the device may take a relatively long time to acquire a GNSS fix.  An advantage is that the device can be mounted "permanently" in the aircraft, one does not need to dismount it and take it elsewhere to charge it.
 
@@ -96,7 +100,7 @@ Or, a hybrid power system can be used, combining external USB power and an on-bo
 After several weeks in the apparently "off" mode, the battery installed in a T-Beam may be depleted.  This seems to happen in some boards more than others.  Perhaps those with a barometric sensor added have a charge leak that causes that.  Always recharge the battery before attempting to use the device following a storage period of more than a couple of weeks.
 
 
-Turning the T-Beam on and off
+Turning the device on and off
 
 To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing, and the third button is a reset button.
 
@@ -104,26 +108,43 @@ The Power Management Unit (PMU) on the T-Beam is always active.  The on/off butt
 
 If a battery is installed on the board, the T-Beam is never completely turned "off".  Always remove the battery from the holder before soldering wires to the board.
 
+The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - but they cannot be changed here, see below.  See more info about operating the T-Echo ("Badge Edition") here:
+https://github.com/lyusupov/SoftRF/wiki/Badge-Edition
+
 
 Installing firmware for the first time
 
-The T-Beam often arrives from the factory with some version of SoftRF already installed.  That allows installation of other versions of SoftRF via Wifi.  See the section below about firmware updates.
+The T-Beam often arrives from the factory with some version of SoftRF already installed, currently mainline v1.1.  That allows installation of other versions of SoftRF via Wifi.  See the section below about firmware updates.
 
 Note: if the board arrives with the "RC9" version of SoftRF, do not update the firmware via WiFi.  There is a bug in that version.  It will fail!  Use the USB method (this section) for the initial installation, of either my version of SoftRF, or version 1.0 (or higher) of the main line SoftRF.  After that, it will be possible to update the firmware to later versions via WiFi.
 
-If the board arrives with other software, e.g., "Meshtastic", or after a failed WiFi update, one may need to install SoftRF via the USB jack.  Follow the instructions here: https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#esp32 - substituting the  .bin file for the desired version of the software (e.g., from here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF ) instead of the original SoftRF.ino.bin file.  A ZIP file with the other 3 small .bin files needed, and more detailed instructions, is available here: 
+If the T-Beam board arrives with other software, e.g., "Meshtastic", or after a failed WiFi update, one may need to install SoftRF via the USB jack.  Follow the instructions here: https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#esp32 - substituting the  .bin file for the desired version of the software (e.g., from here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF ) instead of the original SoftRF.ino.bin file.  A ZIP file with the other 3 small .bin files needed, and more detailed instructions, is available here: 
 https://github.com/moshe-braner/SoftRF/tree/master/software/app/Flashing
 You will need a PC running Windows, that can recognize the USB interface inside the T-Beam as a virtual serial port.  The copy of Windows 10 on my laptop did that as-is.  If it does not, you need to find and install "driver" software that fits the USB hardware inside the T-Beam.  Once the T-Beam shows up as a "COM port" (e.g., COM5) on the PC's device manager that hurdle is passed.  Then you need to download and run the software (mentioned in the instructions) from Expressif, the makers of the ESP32 chips.  It is not very intuitive to use, follow the written info, including the image: you must set the memory addresses as shown.  If it goes horribly wrong the T-Beam may appear dead (won't boot any more), but so far I've always managed to bring it back to life with repeated attempts with that utility software.
+
+The T-Echo usually includes a "bootloader" which makes it easy to update the firmware.  See the "updating the firmware" section below.
 
 
 The Web Interface
 
-After startup, SoftRF on a T-Beam creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.
+After startup, SoftRF on a T-Beam creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
 
 Choosing the operational settings
 
-Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings are rarely what you want.  Connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings:
+Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings often don't quite do what you want.
+
+On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
+
+On the T-Echo, adjusting the settings is more difficult.  An Android app is available that can display and change the basic settings, see here: https://github.com/lyusupov/SoftRF/wiki/SoftRF-Configuration-Tool
+But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  (One must first use the Android app to change the NMEA output of SoftRF to USB, if it is currently routed to Bluetooth.)  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click in a different input field than the last one changed.  The cryptic $PSRF... line of text at the bottome will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
+
+Because adjusting the settings on the T-Echo is more difficult, I offer two binaries here:
+https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage
+One has the frequencies for the EU region as the default, the other the US region.  Either can be configured as needed, but picking one may bypass the need to change the settings.  Both of these binaries also have the following defaults:  Mode normal, aircraft type glider, transmitter power full, Legacy protocol, Legacy alarm trigger method, NMEA output to Bluetooth.
+
+
+Description of the settings:
 
 Mode: normally select "Normal".
 
@@ -176,7 +197,7 @@ Radio CF correction: you can tell SoftRF (on some devices) to adjust the radio f
 
 Debug flags: this is for my debugging scheme (mentioned above), leave as 00 normally.
 
-Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
+IGC encryption key:  Only shown if compiled so as to enable the encryption option in OGNTP. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 
 
 How to connect external devices
@@ -203,9 +224,11 @@ Once connected, be sure to set the baud rate on the external device to match wha
 Note that due to the way the T-Beam is designed, the same data is sent out via both the USB interface and the UART pins.  They cannot be separated.
 
 
-Updating the firmware
+Updating the firmware on the T-Beam
 
-When it's time install a newer version of the SoftRF firmware on your device, the easiest way is to do it via WiFi (also called On The Air, OTA).
+For the T-Echo see the next section.
+
+When it's time install a newer version of the SoftRF firmware on your T-Beam, the easiest way is to do it via WiFi (also called On The Air, OTA).
 
 Note: if your T-Beam currently has the "RC9" version of SoftRF, do not update the firmware via WiFi.  It will fail!  There is a bug in that version.  Use the USB method (above) for the initial installation, of either my version of SoftRF, or version 1.0 (or higher) of the main line SoftRF.  After that, it will be possible to update the firmware to later versions via WiFi.
 
@@ -249,6 +272,23 @@ ATTENTION! The update progress indicator shows file transfer completion only. So
 If this firmware update method fails, proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
 
 See similar instructions with screen shots here: https://github.com/lyusupov/SoftRF/wiki/Firmware-update-%28Web-method%29#esp32
+
+
+Updating the firmware on the T-Echo
+
+The T-Echo usually includes a "bootloader" which makes it easy to update the firmware:
+* Download an appropriate version of SoftRF firmware, from here:
+https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage
+* Unzip the file and make sure you now have a .uf2 file.
+* Connect the SoftRF Badge Edition device to your PC by means of a USB cable (Type-A <-> Type-C)
+* Double click (within 0.5 seconds) the RESET button on the T-Echo.
+* A virtual disk with NRF52BOOT (or TECHOBOOT) label should appear in your "File manager".
+* Drag the .uf2 firmware file by your pointing device (mouse, trackball,...) and drop it into the window showing the NRF52BOOT (or TECHOBOOT) virtual disk.
+* Wait until the file transfer is complete.  The window contents will disappear and the T-Echo will reboot itself.
+Note that this "virtual disk" is not really a disk.  You will never see the dragged-and-dropped file stored on it.  And you cannot store other files on the T-Echo.
+
+See similar instructions here:
+https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#nrf52840
 
 
 

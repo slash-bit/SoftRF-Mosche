@@ -1,6 +1,6 @@
 /*
  * Platform_nRF52.cpp
- * Copyright (C) 2020-2021 Linar Yusupov
+ * Copyright (C) 2020-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+// This is nRF52.h from SoftRF mainline v1.2, with a few comments added, and with
+// the changes for Arduino JSON library v6 (document rather than buffer, etc).
 
 #if defined(ARDUINO_ARCH_NRF52)
 
@@ -45,9 +48,13 @@
 
 #include "uCDB.hpp"
 
-#if defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
+#if defined(USE_BLE_MIDI)
+#include <bluefruit.h>
+#endif /* USE_BLE_MIDI */
+
+#if defined(USE_BLE_MIDI) || defined(USE_USB_MIDI)
 #include <MIDI.h>
-#endif /* USE_USB_MIDI */
+#endif /* USE_BLE_MIDI || USE_USB_MIDI */
 
 typedef volatile uint32_t REG32;
 #define pREG32 (REG32 *)
@@ -88,19 +95,27 @@ static struct rst_info reset_info = {
   .reason = REASON_DEFAULT_RST,
 };
 
-static uint32_t bootCount = 0;
+static uint32_t bootCount __attribute__ ((section (".noinit")));
 
 static nRF52_board_id nRF52_board = NRF52_LILYGO_TECHO_REV_2; /* default */
+static nRF52_display_id nRF52_display = EP_UNKNOWN;
 
-const char *nRF52_Device_Manufacturer = "SoftRF";
+const char *nRF52_Device_Manufacturer = SOFTRF_IDENT;
 const char *nRF52_Device_Model = "Badge Edition";
-const uint16_t nRF52_Device_Version = 0x0100;
+const uint16_t nRF52_Device_Version = SOFTRF_USB_FW_VERSION;
 
 const char *Hardware_Rev[] = {
   [0] = "2020-8-6",
   [1] = "2020-12-12",
   [2] = "2021-3-26",
   [3] = "Unknown"
+};
+
+const prototype_entry_t techo_prototype_boards[] = {
+  { 0x684f99bd2d5c7fae, NRF52_LILYGO_TECHO_REV_0, EP_GDEP015OC1,  0 }, /* orange */
+  { 0xf353e11726ea8220, NRF52_LILYGO_TECHO_REV_0, EP_GDEH0154D67, 0 }, /* blue   */
+  { 0xf4e0f04ded1892da, NRF52_LILYGO_TECHO_REV_1, EP_GDEH0154D67, 0 }, /* green  */
+  { 0x65ab5994ea2c9094, NRF52_LILYGO_TECHO_REV_1, EP_GDEH0154D67, 0 }, /* blue   */
 };
 
 PCF8563_Class *rtc = nullptr;
@@ -140,13 +155,23 @@ SPIClass SPI1(_SPI1_DEV,
               SOC_GPIO_PIN_EPD_MOSI);
 #endif
 
-GxEPD2_BW<TECHO_DISPLAY_MODEL, TECHO_DISPLAY_MODEL::HEIGHT> epd_ttgo_techo(TECHO_DISPLAY_MODEL(
-                                                            SOC_GPIO_PIN_EPD_SS,
-                                                            SOC_GPIO_PIN_EPD_DC,
-                                                            SOC_GPIO_PIN_EPD_RST,
-                                                            SOC_GPIO_PIN_EPD_BUSY));
+GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT> epd_d67(GxEPD2_154_D67(
+                                                          SOC_GPIO_PIN_EPD_SS,
+                                                          SOC_GPIO_PIN_EPD_DC,
+                                                          SOC_GPIO_PIN_EPD_RST,
+                                                          SOC_GPIO_PIN_EPD_BUSY));
+GxEPD2_BW<GxEPD2_154, GxEPD2_154::HEIGHT>         epd_c1 (GxEPD2_154(
+                                                          SOC_GPIO_PIN_EPD_SS,
+                                                          SOC_GPIO_PIN_EPD_DC,
+                                                          SOC_GPIO_PIN_EPD_RST,
+                                                          SOC_GPIO_PIN_EPD_BUSY));
+GxEPD2_BW<GxEPD2_150_BN, GxEPD2_150_BN::HEIGHT>   epd_bn (GxEPD2_150_BN(
+                                                          SOC_GPIO_PIN_EPD_SS,
+                                                          SOC_GPIO_PIN_EPD_DC,
+                                                          SOC_GPIO_PIN_EPD_RST,
+                                                          SOC_GPIO_PIN_EPD_BUSY));
 
-GxEPD2_BW<TECHO_DISPLAY_MODEL, TECHO_DISPLAY_MODEL::HEIGHT> *display;
+GxEPD2_GFX *display;
 #endif /* USE_EPAPER */
 
 Adafruit_FlashTransport_QSPI HWFlashTransport(SOC_GPIO_PIN_SFL_SCK,
@@ -204,13 +229,13 @@ WEBUSB_URL_DEF(landingPage, 1 /*https*/, "adafruit.github.io/Adafruit_TinyUSB_Ar
 WEBUSB_URL_DEF(landingPage, 1 /*https*/, "lyusupov.github.io/SoftRF/settings.html");
 #endif /* USE_WEBUSB_SETTINGS */
 
-#if defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
+#if defined(USE_USB_MIDI)
 // USB MIDI object
 Adafruit_USBD_MIDI usb_midi;
 
 // Create a new instance of the Arduino MIDI Library,
 // and attach usb_midi as the transport.
-MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI);
+MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI_USB);
 #endif /* USE_USB_MIDI */
 
 ui_settings_t ui_settings = {
@@ -230,6 +255,18 @@ ui_settings_t ui_settings = {
 
 ui_settings_t *ui;
 uCDB<FatFileSystem, File> ucdb(fatfs);
+
+#if !defined(EXCLUDE_IMU)
+#define IMU_UPDATE_INTERVAL 500 /* ms */
+
+#include <MPU9250.h>
+MPU9250 imu;
+
+static bool nRF52_has_imu = false;
+static unsigned long IMU_Time_Marker = 0;
+
+extern float IMU_g;
+#endif /* EXCLUDE_IMU */
 
 // Callback invoked when received READ10 command.
 // Copy disk's data to buffer (up to bufsize) and
@@ -270,7 +307,6 @@ static void nRF52_setup()
 {
   ui = &ui_settings;
 
-#if 0
   uint32_t reset_reason = readResetReason();
 
   if      (reset_reason & POWER_RESETREAS_RESETPIN_Msk)
@@ -309,7 +345,6 @@ static void nRF52_setup()
   {
       reset_info.reason = REASON_DEEP_SLEEP_AWAKE;
   }
-#endif
 
   /* inactivate initVariant() of PCA10056 */
   pinMode(PIN_LED1, INPUT);
@@ -348,34 +383,20 @@ static void nRF52_setup()
     }
   }
 
-#if !defined(EXCLUDE_BOARD_SELF_DETECT)
-
-  if (!nRF52_has_rtc) {
-    nRF52_board = NRF52_NORDIC_PCA10059;
-  }
-
-  if (nRF52_board == NRF52_LILYGO_TECHO_REV_2) {
-    Wire.beginTransmission(BME280_ADDRESS);
-    nRF52_board = Wire.endTransmission() == 0 ?
-                  nRF52_board : NRF52_LILYGO_TECHO_REV_0;
-  }
-
-  if (nRF52_board == NRF52_LILYGO_TECHO_REV_2) {
-    digitalWrite(SOC_GPIO_PIN_3V3_PWR, LOW);
-    pinMode(SOC_GPIO_PIN_3V3_PWR,  OUTPUT);     /* PWR_EN is OFF */
-    delay(100);
-
-    Wire.beginTransmission(BME280_ADDRESS);
-    nRF52_board = Wire.endTransmission() == 0 ?
-                  NRF52_LILYGO_TECHO_REV_1 : nRF52_board;
-
-    digitalWrite(SOC_GPIO_PIN_3V3_PWR, INPUT);  /* PWR_EN is ON */
-    delay(200);
-  }
-
-#endif /* EXCLUDE_BOARD_SELF_DETECT */
+#if !defined(EXCLUDE_IMU)
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  nRF52_has_imu = (Wire.endTransmission() == 0);
+#endif /* EXCLUDE_IMU */
 
   Wire.end();
+
+  for (int i=0; i < sizeof(techo_prototype_boards) / sizeof(prototype_entry_t); i++) {
+    if (techo_prototype_boards[i].id == ((uint64_t) DEVICE_ID_HIGH << 32 | (uint64_t) DEVICE_ID_LOW)) {
+      nRF52_board   = techo_prototype_boards[i].rev;
+      nRF52_display = techo_prototype_boards[i].panel;
+      break;
+    }
+  }
 
   /* GPIO pins init */
   switch (nRF52_board)
@@ -458,6 +479,18 @@ static void nRF52_setup()
     hw_info.rtc = RTC_PCF8563;
   }
 
+#if !defined(EXCLUDE_IMU)
+  if (nRF52_has_imu && imu.setup(MPU9250_ADDRESS)) {
+    imu.verbose(false);
+    if (imu.isSleeping()) {
+      imu.sleep(false);
+    }
+    hw_info.imu = IMU_MPU9250;
+    hw_info.mag = MAG_AK8963;
+    IMU_Time_Marker = millis();
+  }
+#endif /* EXCLUDE_IMU */
+
   /* (Q)SPI flash init */
   switch (nRF52_board)
   {
@@ -483,11 +516,7 @@ static void nRF52_setup()
 
   hw_info.storage = nRF52_has_spiflash ? STORAGE_FLASH : STORAGE_NONE;
 
-  if (nRF52_has_spiflash
-#if 1
-      && (nRF52_board != NRF52_LILYGO_TECHO_REV_0)
-#endif
-     ) {
+  if (nRF52_has_spiflash) {
     spiflash_id = SPIFlash->getJEDECID();
 
     //mx25_status_config[0] = SPIFlash->readStatus();
@@ -521,11 +550,17 @@ static void nRF52_setup()
     FATFS_is_mounted = fatfs.begin(SPIFlash);
   }
 
-#if defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
+#if defined(USE_USB_MIDI)
   // Initialize MIDI with no any input channels
   // This will also call usb_midi's begin()
-  MIDI.begin(MIDI_CHANNEL_OFF);
+  MIDI_USB.begin(MIDI_CHANNEL_OFF);
 #endif /* USE_USB_MIDI */
+
+  Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
+
+#if defined(USE_TINYUSB) && defined(USBCON)
+  for (int i=0; i < 20; i++) {if (Serial) break; else delay(100);}
+#endif
 }
 
 static void nRF52_post_init()
@@ -533,6 +568,14 @@ static void nRF52_post_init()
   if (nRF52_board == NRF52_LILYGO_TECHO_REV_0 ||
       nRF52_board == NRF52_LILYGO_TECHO_REV_1 ||
       nRF52_board == NRF52_LILYGO_TECHO_REV_2) {
+
+#if 0
+    char strbuf[32];
+    Serial.println();
+    Serial.print  (F("64-bit Device ID: "));
+    snprintf(strbuf, sizeof(strbuf),"0x%08x%08x", DEVICE_ID_HIGH, DEVICE_ID_LOW);
+    Serial.println(strbuf);
+#endif
 
 #if 0
     Serial.println();
@@ -545,7 +588,9 @@ static void nRF52_post_init()
 #endif
 
     Serial.println();
-    Serial.print  (F("LilyGO T-Echo ("));
+    Serial.print  (F("LilyGO T-Echo (v"));
+    Serial.print  (hw_info.revision);
+    Serial.print  (":");
     Serial.print  (hw_info.revision > 2 ?
                    Hardware_Rev[3] : Hardware_Rev[hw_info.revision]);
     Serial.println(F(") Power-on Self Test"));
@@ -567,10 +612,10 @@ static void nRF52_post_init()
     Serial.println(hw_info.display == DISPLAY_EPD_1_54 ? F("PASS") : F("FAIL"));
     Serial.flush();
     Serial.print(F("RTC     : "));
-    Serial.println(nRF52_has_rtc                       ? F("PASS") : F("FAIL"));
+    Serial.println(hw_info.rtc     == RTC_PCF8563      ? F("PASS") : F("FAIL"));
     Serial.flush();
     Serial.print(F("FLASH   : "));
-    Serial.println(nRF52_has_spiflash                  ? F("PASS") : F("FAIL"));
+    Serial.println(hw_info.storage == STORAGE_FLASH    ? F("PASS") : F("FAIL"));
     Serial.flush();
 
     if (nRF52_board == NRF52_LILYGO_TECHO_REV_1 ||
@@ -580,8 +625,16 @@ static void nRF52_post_init()
       Serial.flush();
     }
 
+#if !defined(EXCLUDE_IMU)
     Serial.println();
-    Serial.println(F("Power-on Self Test is completed."));
+    Serial.println(F("External components:"));
+    Serial.print(F("IMU     : "));
+    Serial.println(hw_info.imu    == IMU_MPU9250       ? F("PASS") : F("N/A"));
+    Serial.flush();
+#endif /* EXCLUDE_IMU */
+
+    Serial.println();
+    Serial.println(F("Power-on Self Test is complete."));
     Serial.println();
     Serial.flush();
   } else if (nRF52_board == NRF52_NORDIC_PCA10059) {
@@ -745,16 +798,38 @@ static void nRF52_loop()
   }
 
 #endif /* USE_WEBUSB_SETTINGS */
+
+#if !defined(EXCLUDE_IMU)
+  if (hw_info.imu == IMU_MPU9250 &&
+      (millis() - IMU_Time_Marker) > IMU_UPDATE_INTERVAL) {
+    if (imu.update()) {
+      float a_x = imu.getAccX();
+      float a_y = imu.getAccY();
+      float a_z = imu.getAccZ();
+
+      IMU_g = sqrtf(a_x*a_x + a_y*a_y + a_z*a_z);
+    }
+    IMU_Time_Marker = millis();
+  }
+#endif /* EXCLUDE_IMU */
 }
 
 static void nRF52_fini(int reason)
 {
   uint8_t sd_en;
 
-//  if (nRF52_has_spiflash) {
-//    usb_msc.end();
-//  }
-//    if (SPIFlash != NULL) SPIFlash->end();
+  if (nRF52_has_spiflash) {
+    usb_msc.setUnitReady(false);
+//  usb_msc.end(); /* N/A */
+  }
+
+  if (SPIFlash != NULL) SPIFlash->end();
+
+#if !defined(EXCLUDE_IMU)
+  if (hw_info.imu == IMU_MPU9250) {
+    imu.sleep(true);
+  }
+#endif /* EXCLUDE_IMU */
 
   switch (nRF52_board)
   {
@@ -764,14 +839,14 @@ static void nRF52_fini(int reason)
       digitalWrite(SOC_GPIO_PIN_GNSS_WKE, LOW);
       pinMode(SOC_GPIO_PIN_GNSS_WKE, OUTPUT);
 
-    //swSer.write("$PGKC105,4*33\r\n");
+    // Serial_GNSS_Out.write("$PGKC105,4*33\r\n");
 #else
       pinMode(SOC_GPIO_PIN_GNSS_WKE, INPUT);
 
-      //swSer.write("$PGKC051,0*37\r\n");
-      // swSer.write("$PGKC051,1*36\r\n");
+      // Serial_GNSS_Out.write("$PGKC051,0*37\r\n");
+      // Serial_GNSS_Out.write("$PGKC051,1*36\r\n");
 #endif
-      //swSer.flush(); delay(250);
+      // Serial_GNSS_Out.flush(); delay(250);
 
       ledOff(SOC_GPIO_LED_TECHO_REV_0_GREEN);
       ledOff(SOC_GPIO_LED_TECHO_REV_0_RED);
@@ -791,14 +866,14 @@ static void nRF52_fini(int reason)
       digitalWrite(SOC_GPIO_PIN_GNSS_WKE, LOW);
       pinMode(SOC_GPIO_PIN_GNSS_WKE, OUTPUT);
 
-    //swSer.write("$PGKC105,4*33\r\n");
+    // Serial_GNSS_Out.write("$PGKC105,4*33\r\n");
 #else
       pinMode(SOC_GPIO_PIN_GNSS_WKE, INPUT);
 
-      //swSer.write("$PGKC051,0*37\r\n");
-      // swSer.write("$PGKC051,1*36\r\n");
+      // Serial_GNSS_Out.write("$PGKC051,0*37\r\n");
+      // Serial_GNSS_Out.write("$PGKC051,1*36\r\n");
 #endif
-      //swSer.flush(); delay(250);
+      // Serial_GNSS_Out.flush(); delay(250);
 
       ledOff(SOC_GPIO_LED_TECHO_REV_1_GREEN);
       ledOff(SOC_GPIO_LED_TECHO_REV_1_RED);
@@ -847,10 +922,10 @@ static void nRF52_fini(int reason)
       break;
   }
 
-  swSer.end();
+  Serial_GNSS_In.end();
 
-  // pinMode(SOC_GPIO_PIN_SWSER_RX, INPUT);
-  // pinMode(SOC_GPIO_PIN_SWSER_TX, INPUT);
+  // pinMode(SOC_GPIO_PIN_GNSS_RX, INPUT);
+  // pinMode(SOC_GPIO_PIN_GNSS_TX, INPUT);
 
   // pinMode(SOC_GPIO_PIN_BATTERY, INPUT);
 
@@ -979,23 +1054,14 @@ static long nRF52_random(long howsmall, long howBig)
   return random(howsmall, howBig);
 }
 
-#if defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
-
-#define MIDI_CHANNEL_TRAFFIC  1
-#define MIDI_CHANNEL_VARIO    2
-
+#if defined(USE_USB_MIDI)
 byte note_sequence[] = {62,65,69,65,67,67,65,64,69,69,67,67,62,62};
 #endif /* USE_USB_MIDI */
 
 static void nRF52_Sound_test(int var)
 {
-#if defined(USE_BLE_MIDI) && !defined(USE_USB_MIDI)
-    nRF52_BLEMIDI_test();
-#endif /* USE_BLE_MIDI */
-
-#if defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
-  if (USBDevice.mounted()) {
-
+#if defined(USE_USB_MIDI)
+  if (USBDevice.mounted() && settings->volume != BUZZER_OFF) {
     unsigned int position = 0;
     unsigned int current  = 0;
 
@@ -1008,30 +1074,36 @@ static void nRF52_Sound_test(int var)
       unsigned int previous = (current == 0) ? (sizeof(note_sequence)-1) : current - 1;
 
       // Send Note On for current position at full velocity (127) on channel 1.
-      MIDI.sendNoteOn(note_sequence[current], 127, MIDI_CHANNEL_TRAFFIC);
+      MIDI_USB.sendNoteOn(note_sequence[current], 127, MIDI_CHANNEL_TRAFFIC);
 
       // Send Note Off for previous note.
-      MIDI.sendNoteOff(note_sequence[previous], 0, MIDI_CHANNEL_TRAFFIC);
+      MIDI_USB.sendNoteOff(note_sequence[previous], 0, MIDI_CHANNEL_TRAFFIC);
 
       delay(286);
     }
 
-    MIDI.sendNoteOff(note_sequence[current], 0, MIDI_CHANNEL_TRAFFIC);
+    MIDI_USB.sendNoteOff(note_sequence[current], 0, MIDI_CHANNEL_TRAFFIC);
   }
 #endif /* USE_USB_MIDI */
 
-#if !defined(USE_USB_MIDI) && !defined(USE_BLE_MIDI)
+#if defined(USE_PWM_SOUND)
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && settings->volume != BUZZER_OFF) {
     tone(SOC_GPIO_PIN_BUZZER, 440,  500); delay(500);
     tone(SOC_GPIO_PIN_BUZZER, 640,  500); delay(500);
     tone(SOC_GPIO_PIN_BUZZER, 840,  500); delay(500);
     tone(SOC_GPIO_PIN_BUZZER, 1040, 500); delay(600);
   }
-#endif /* NOT(USE_BLE_MIDI OR USE_USB_MIDI) */
+#endif /* USE_PWM_SOUND */
 }
+
+#if defined(USE_BLE_MIDI)
+extern BLEMidi blemidi;
+extern midi::MidiInterface<BLEMidi> MIDI_BLE;
+#endif /* USE_BLE_MIDI */
 
 static void nRF52_Sound_tone(int hz, uint8_t volume)
 {
+#if defined(USE_PWM_SOUND)
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && volume != BUZZER_OFF) {
     if (hz > 0) {
       tone(SOC_GPIO_PIN_BUZZER, hz, ALARM_TONE_MS);
@@ -1039,6 +1111,29 @@ static void nRF52_Sound_tone(int hz, uint8_t volume)
       noTone(SOC_GPIO_PIN_BUZZER);
     }
   }
+#endif /* USE_PWM_SOUND */
+
+#if defined(USE_USB_MIDI)
+  if (USBDevice.mounted() && volume != BUZZER_OFF) {
+    if (hz > 0) {
+      MIDI_USB.sendNoteOn (60, 127, MIDI_CHANNEL_TRAFFIC); // 60 == middle C
+    } else {
+      MIDI_USB.sendNoteOff(60,   0, MIDI_CHANNEL_TRAFFIC);
+    }
+  }
+#endif /* USE_USB_MIDI */
+
+#if defined(USE_BLE_MIDI)
+  if (volume != BUZZER_OFF  &&
+      Bluefruit.connected() &&
+      blemidi.notifyEnabled()) {
+    if (hz > 0) {
+      MIDI_BLE.sendNoteOn (60, 127, MIDI_CHANNEL_TRAFFIC); // 60 == middle C
+    } else {
+      MIDI_BLE.sendNoteOff(60,   0, MIDI_CHANNEL_TRAFFIC);
+    }
+  }
+#endif /* USE_BLE_MIDI */
 }
 
 static void nRF52_WiFi_set_param(int ndx, int value)
@@ -1099,24 +1194,19 @@ static void nRF52_EEPROM_extension(int cmd)
         raw[i] = EEPROM.read(sizeof(eeprom_t) + i);
       }
 
-      if ( nRF52_has_spiflash                       &&
-#if 1
-          (nRF52_board != NRF52_LILYGO_TECHO_REV_0) &&
-#endif
-           FATFS_is_mounted ) {
+      if ( nRF52_has_spiflash && FATFS_is_mounted ) {
         File file = fatfs.open("/settings.json", FILE_READ);
 
         if (file) {
 
-          deserializeJson(nRF52_jsonDoc, file);
-          JsonObject root = nRF52_jsonDoc.as<JsonObject>();
+          DeserializationError error = deserializeJson(nRF52_jsonDoc, file);
+          if (! error) {
 
-          if (root.success()) {
-            JsonVariant msg_class = root["class"];
+            JsonObject root = nRF52_jsonDoc.as<JsonObject>();
 
-            if (msg_class.success()) {
+            if (root.containsKey("class")) {
+              JsonVariant msg_class = root["class"];
               const char *msg_class_s = msg_class.as<char*>();
-
               if (!strcmp(msg_class_s,"SOFTRF")) {
                 parseSettings  (root);
                 parseUISettings(root);
@@ -1175,8 +1265,8 @@ static void nRF52_SPI_begin()
 
 static void nRF52_swSer_begin(unsigned long baud)
 {
-  swSer.setPins(SOC_GPIO_PIN_SWSER_RX, SOC_GPIO_PIN_SWSER_TX);
-  swSer.begin(baud);
+  Serial_GNSS_In.setPins(SOC_GPIO_PIN_GNSS_RX, SOC_GPIO_PIN_GNSS_TX);
+  Serial_GNSS_In.begin(baud);
 }
 
 static void nRF52_swSer_enableRx(boolean arg)
@@ -1186,6 +1276,94 @@ static void nRF52_swSer_enableRx(boolean arg)
 
 SemaphoreHandle_t Display_Semaphore;
 unsigned long TaskInfoTime;
+
+#if defined(USE_EPAPER)
+
+#include <SoftSPI.h>
+SoftSPI swSPI(SOC_GPIO_PIN_EPD_MOSI,
+              SOC_GPIO_PIN_EPD_MOSI, /* half duplex */
+              SOC_GPIO_PIN_EPD_SCK);
+
+static nRF52_display_id nRF52_EPD_ident()
+{
+  nRF52_display_id rval = EP_GDEH0154D67; /* default */
+
+  digitalWrite(SOC_GPIO_PIN_EPD_SS, HIGH);
+  pinMode(SOC_GPIO_PIN_EPD_SS, OUTPUT);
+  digitalWrite(SOC_GPIO_PIN_EPD_DC, HIGH);
+  pinMode(SOC_GPIO_PIN_EPD_DC, OUTPUT);
+
+  digitalWrite(SOC_GPIO_PIN_EPD_RST, LOW);
+  pinMode(SOC_GPIO_PIN_EPD_RST, OUTPUT);
+  delay(20);
+  pinMode(SOC_GPIO_PIN_EPD_RST, INPUT_PULLUP);
+  delay(200);
+  pinMode(SOC_GPIO_PIN_EPD_BUSY, INPUT);
+
+  swSPI.begin();
+
+  uint8_t buf[11];
+
+  taskENTER_CRITICAL();
+
+  digitalWrite(SOC_GPIO_PIN_EPD_DC, LOW);
+  digitalWrite(SOC_GPIO_PIN_EPD_SS, LOW);
+
+  swSPI.transfer_out(0x2D /* 0x2E */);
+
+  pinMode(SOC_GPIO_PIN_EPD_MOSI, INPUT);
+  digitalWrite(SOC_GPIO_PIN_EPD_DC, HIGH);
+
+  for (int i=0; i<10; i++) {
+    buf[i] = swSPI.transfer_in();
+  }
+
+  digitalWrite(SOC_GPIO_PIN_EPD_SCK, LOW);
+  digitalWrite(SOC_GPIO_PIN_EPD_DC,  LOW);
+  digitalWrite(SOC_GPIO_PIN_EPD_SS,  HIGH);
+
+  taskEXIT_CRITICAL();
+
+  swSPI.end();
+
+#if 0
+  for (int i=0; i<10; i++) {
+    Serial.print(buf[i], HEX);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+/*
+ *  0x2D:
+ *  FF FF FF FF FF FF FF FF FF FF FF - C1
+ *  00 00 00 00 00 FF 40 00 00 00 01 - D67 SYX 1942
+ *  00 00 00 FF 00 00 40 01 00 00 00 - D67 SYX 2118
+ *
+ *  0x2E:
+ *  00 00 00 00 00 00 00 00 00 00    - C1
+ *  00 00 00 00 00 00 00 00 00 00    - D67 SYX 1942
+ *  00 05 00 9A 00 55 35 37 14 0C    - D67 SYX 2118
+ */
+#endif
+
+  bool is_ff = true;
+  for (int i=0; i<10; i++) {
+    if (buf[i] != 0xFF) {is_ff = false; break;}
+  }
+
+  bool is_00 = true;
+  for (int i=0; i<10; i++) {
+    if (buf[i] != 0x00) {is_00 = false; break;}
+  }
+
+  if (is_ff || is_00) {
+//    rval = EP_DEPG0150BN; /* TBD */
+  }
+
+  return rval;
+}
+
+#endif /* USE_EPAPER */
 
 static byte nRF52_Display_setup()
 {
@@ -1199,9 +1377,27 @@ static byte nRF52_Display_setup()
                SOC_GPIO_PIN_EPD_MOSI);
 #endif
 
-  display = &epd_ttgo_techo;
+  if (nRF52_display == EP_UNKNOWN) {
+    nRF52_display = nRF52_EPD_ident();
+  }
 
+  switch (nRF52_display)
+  {
+  case EP_GDEP015OC1:
+    display = &epd_c1;
+    break;
+  case EP_DEPG0150BN:
+    display = &epd_bn;
+    break;
+  case EP_GDEH0154D67:
+  default:
+    display = &epd_d67;
+    break;
+  }
+
+Serial.println("calling EPD_setup()...");
   if (EPD_setup(true)) {
+Serial.println("... EPD_setup() returned");
 
 #if defined(USE_EPD_TASK)
     Display_Semaphore = xSemaphoreCreateBinary();

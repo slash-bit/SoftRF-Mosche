@@ -57,13 +57,8 @@ void Adafruit_FlashTransport_QSPI::begin(void) {
               .io2_pin = (uint8_t)g_ADigitalPinMap[_io2],
               .io3_pin = (uint8_t)g_ADigitalPinMap[_io3],
           },
-#if 1
-      .prot_if = {.readoc = NRF_QSPI_READOC_READ4O , // 0x6B read command
-                  .writeoc = NRF_QSPI_WRITEOC_PP4O , // 0x32 write command
-#else
-      .prot_if = {.readoc = NRF_QSPI_READOC_FASTREAD , // 0x0B read command
-                  .writeoc = NRF_QSPI_WRITEOC_PP ,     // 0x02 write command
-#endif
+      .prot_if = {.readoc = NRF_QSPI_READOC_READ4O, // 0x6B read command
+                  .writeoc = NRF_QSPI_WRITEOC_PP4O, // 0x32 write command
                   .addrmode = NRF_QSPI_ADDRMODE_24BIT,
                   .dpmconfig = false},
       .phy_if =
@@ -75,8 +70,18 @@ void Adafruit_FlashTransport_QSPI::begin(void) {
           },
       .irq_priority = 7};
 
+  if (_cmd_read != SFLASH_CMD_QUAD_READ) {
+    qspi_cfg.prot_if.readoc = NRF_QSPI_READOC_FASTREAD; // 0x0B read command
+    qspi_cfg.prot_if.writeoc = NRF_QSPI_WRITEOC_PP;     // 0x02 write command
+  }
+
   // No callback for blocking API
   nrfx_qspi_init(&qspi_cfg, NULL, NULL);
+}
+
+void Adafruit_FlashTransport_QSPI::end(void) {
+  nrfx_qspi_uninit();
+  _cmd_read = SFLASH_CMD_QUAD_READ;
 }
 
 void Adafruit_FlashTransport_QSPI::setClockSpeed(uint32_t clock_hz,

@@ -68,6 +68,7 @@ enum {
 class Adafruit_FlashTransport {
 public:
   virtual void begin(void) = 0;
+  virtual void end(void) = 0;
 
   virtual bool supportQuadMode(void) = 0;
 
@@ -136,6 +137,10 @@ protected:
 
 #ifdef ARDUINO_ARCH_ESP32
 #include "esp32/Adafruit_FlashTransport_ESP32.h"
+#endif
+
+#ifdef ARDUINO_ARCH_RP2040
+#include "rp2040/Adafruit_FlashTransport_RP2040.h"
 #endif
 
 #endif /* ADAFRUIT_FLASHTRANSPORT_H_ */

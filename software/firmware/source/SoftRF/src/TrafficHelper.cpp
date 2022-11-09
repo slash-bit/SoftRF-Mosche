@@ -34,6 +34,7 @@ unsigned long UpdateTrafficTimeMarker = 0;
 ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
 uint8_t fo_raw[34];
 traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
+int max_alarm_level = ALARM_LEVEL_NONE;
 
 static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
 
@@ -686,7 +687,7 @@ void Traffic_loop()
   if (isTimeToUpdateTraffic()) {
 
     ufo_t *mfop = NULL;
-    int max_alarm_level = ALARM_LEVEL_NONE;
+    max_alarm_level = ALARM_LEVEL_NONE;
         
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 

@@ -1,6 +1,6 @@
 /*
  * Baro_EPD.cpp
- * Copyright (C) 2021 Linar Yusupov
+ * Copyright (C) 2021-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this is modified from v1.1.
+
 #include "../system/SoC.h"
 
 #if defined(USE_EPAPER)
@@ -23,9 +25,10 @@
 #include "../driver/EPD.h"
 #include "../driver/Baro.h"
 
-#include <Fonts/FreeMono9pt7b.h>
-#include <Fonts/FreeMono12pt7b.h>
-#include <Fonts/FreeMonoBold18pt7b.h>
+#include <gfxfont.h>
+#include <FreeMono9pt7b.h>
+#include <FreeMono12pt7b.h>
+#include <FreeMonoBold18pt7b.h>
 #include <TinyGPS++.h>
 
 const char Altitude_text[]    = "ALTITUDE, ";
@@ -40,6 +43,10 @@ static float alt_scale = 1.0;
 
 void EPD_baro_setup()
 {
+  if (hw_info.baro != BARO_MODULE_NONE) {
+    EPD_pages_mask |= (1 << VIEW_MODE_BARO);
+  }
+
   alt_scale = ui->units == UNITS_METRIC ? 1.0 : _GPS_FEET_PER_METER;
 
   memcpy(navbox1.title, Altitude_text, strlen(Altitude_text));

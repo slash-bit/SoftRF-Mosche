@@ -1,6 +1,6 @@
 /*
  * View_Radar_EPD.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+// this is modified from v1.1.
 
 #include "../system/SoC.h"
 
@@ -31,10 +33,11 @@
 #include "../driver/LED.h"
 #include "../driver/RF.h"
 
-#include <Fonts/FreeMono9pt7b.h>
-#include <Fonts/FreeMonoBold9pt7b.h>
-#include <Fonts/FreeMonoBold12pt7b.h>
-#include <Fonts/Picopixel.h>
+#include <gfxfont.h>
+#include <FreeMono9pt7b.h>
+#include <FreeMonoBold9pt7b.h>
+#include <FreeMonoBold12pt7b.h>
+#include <Picopixel.h>
 
 static int EPD_zoom = ZOOM_MEDIUM;
 
@@ -348,7 +351,7 @@ void EPD_radar_setup()
 void EPD_radar_loop()
 {
   if (isTimeToEPD()) {
-    bool hasFix = isValidGNSSFix();
+    bool hasFix = isValidGNSSFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST);
 
     if (hasFix) {
       EPD_Draw_Radar();

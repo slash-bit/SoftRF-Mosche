@@ -551,8 +551,11 @@ void parseRAW(JsonObject root)
 
 void parseUISettings(JsonObject root)
 {
-  JsonVariant units = root["units"];
-  if (units.success()) {
+  const char *key;
+
+  key = "units";
+  if (root.containsKey(key)) {
+    JsonVariant units = root[key];
     const char * units_s = units.as<char*>();
     if (!strcmp(units_s,"METRIC")) {
       ui_settings.units = UNITS_METRIC;
@@ -563,8 +566,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant zoom = root["zoom"];
-  if (zoom.success()) {
+  key = "zoom";
+  if (root.containsKey(key)) {
+    JsonVariant zoom = root[key];
     const char * zoom_s = zoom.as<char*>();
     if (!strcmp(zoom_s,"LOWEST")) {
       ui_settings.zoom = ZOOM_LOWEST;
@@ -577,8 +581,9 @@ void parseUISettings(JsonObject root)
     }
   }
 #if 0
-  JsonVariant protocol = root["data"];
-  if (protocol.success()) {
+  key = "data";
+  if (root.containsKey(key)) {
+    JsonVariant protocol = root[key];
     const char * protocol_s = protocol.as<char*>();
     if (!strcmp(protocol_s,"NMEA")) {
       ui_settings.protocol = PROTOCOL_NMEA;
@@ -594,8 +599,9 @@ void parseUISettings(JsonObject root)
   }
 #endif
 
-  JsonVariant rotate = root["rotate"];
-  if (rotate.success()) {
+  key = "rotate";
+  if (root.containsKey(key)) {
+    JsonVariant rotate = root[key];
     const char * rotate_s = rotate.as<char*>();
     if (!strcmp(rotate_s,"0")) {
       ui_settings.rotate = ROTATE_0;
@@ -608,8 +614,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant orientation = root["orientation"];
-  if (orientation.success()) {
+  key = "orientation";
+  if (root.containsKey(key)) {
+    JsonVariant orientation = root[key];
     const char * orientation_s = orientation.as<char*>();
     if (!strcmp(orientation_s,"TRACK")) {
       ui_settings.orientation = DIRECTION_TRACK_UP;
@@ -618,8 +625,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant vmode = root["vmode"];
-  if (vmode.success()) {
+  key = "vmode";
+  if (root.containsKey(key)) {
+    JsonVariant vmode = root[key];
     const char * vmode_s = vmode.as<char*>();
     if (!strcmp(vmode_s,"STATUS")) {
       ui_settings.vmode = VIEW_MODE_STATUS;
@@ -634,8 +642,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant aghost = root["aghost"];
-  if (aghost.success()) {
+  key = "aghost";
+  if (root.containsKey(key)) {
+    JsonVariant aghost = root[key];
     const char * aghost_s = aghost.as<char*>();
     if (!strcmp(aghost_s,"OFF")) {
       ui_settings.aghost = ANTI_GHOSTING_OFF;
@@ -648,8 +657,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant filter = root["filter"];
-  if (filter.success()) {
+  key = "filter";
+  if (root.containsKey(key)) {
+    JsonVariant filter = root[key];
     const char * filter_s = filter.as<char*>();
     if (!strcmp(filter_s,"OFF")) {
       ui_settings.filter = TRAFFIC_FILTER_OFF;
@@ -660,8 +670,9 @@ void parseUISettings(JsonObject root)
     }
   }
 
-  JsonVariant team = root["team"];
-  if (team.success()) {
+  key = "team";
+  if (root.containsKey(key)) {
+    JsonVariant team = root[key];
     uint32_t team_32 = team.as<unsigned int>();
     ui_settings.team = team_32;
   }
@@ -669,8 +680,11 @@ void parseUISettings(JsonObject root)
 
 void parseSettings(JsonObject root)
 {
-  JsonVariant mode = root["mode"];
-  if (mode.success()) {
+  const char *key;
+
+  key = "mode";
+  if (root.containsKey(key)) {
+    JsonVariant mode = root[key];
     const char * mode_s = mode.as<char*>();
     if (!strcmp(mode_s,"NORMAL")) {
       eeprom_block.field.settings.mode = SOFTRF_MODE_NORMAL;
@@ -683,8 +697,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant protocol = root["protocol"];
-  if (protocol.success()) {
+  key = "protocol";
+  if (root.containsKey(key)) {
+    JsonVariant protocol = root[key];
     const char * protocol_s = protocol.as<char*>();
     if (!strcmp(protocol_s,"LEGACY")) {
       eeprom_block.field.settings.rf_protocol = RF_PROTOCOL_LEGACY;
@@ -699,8 +714,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant band = root["band"];
-  if (band.success()) {
+  key = "band";
+  if (root.containsKey(key)) {
+    JsonVariant band = root[key];
     const char * band_s = band.as<char*>();
     if (!strcmp(band_s,"AUTO")) {
       eeprom_block.field.settings.band = RF_BAND_AUTO;
@@ -727,8 +743,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant aircraft_type = root["aircraft_type"];
-  if (aircraft_type.success()) {
+  key = "aircraft_type";
+  if (root.containsKey(key)) {
+    JsonVariant aircraft_type = root[key];
     const char * aircraft_type_s = aircraft_type.as<char*>();
     if (!strcmp(aircraft_type_s,"GLIDER")) {
       eeprom_block.field.settings.aircraft_type = AIRCRAFT_TYPE_GLIDER;
@@ -751,8 +768,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant alarm = root["alarm"];
-  if (alarm.success()) {
+  key = "alarm";
+  if (root.containsKey(key)) {
+    JsonVariant alarm = root[key];
     const char * alarm_s = alarm.as<char*>();
     if (!strcmp(alarm_s,"NONE")) {
       eeprom_block.field.settings.alarm = TRAFFIC_ALARM_NONE;
@@ -763,8 +781,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant txpower = root["txpower"];
-  if (txpower.success()) {
+  key = "txpower";
+  if (root.containsKey(key)) {
+    JsonVariant txpower = root[key];
     const char * txpower_s = txpower.as<char*>();
     if (!strcmp(txpower_s,"FULL")) {
       eeprom_block.field.settings.txpower = RF_TX_POWER_FULL;
@@ -775,8 +794,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant volume = root["volume"];
-  if (volume.success()) {
+  key = "volume";
+  if (root.containsKey(key)) {
+    JsonVariant volume = root[key];
     const char * volume_s = volume.as<char*>();
     if (!strcmp(volume_s,"FULL")) {
       eeprom_block.field.settings.volume = BUZZER_VOLUME_FULL;
@@ -787,8 +807,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant pointer = root["pointer"];
-  if (pointer.success()) {
+  key = "pointer";
+  if (root.containsKey(key)) {
+    JsonVariant pointer = root[key];
     const char * pointer_s = pointer.as<char*>();
     if (!strcmp(pointer_s,"TRACK")) {
       eeprom_block.field.settings.pointer = DIRECTION_TRACK_UP;
@@ -799,28 +820,17 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant nmea_g = root["nmea"]["gnss"];
-  if (nmea_g.success()) {
+  key = "nmea";
+  if (root.containsKey(key)) {
+    JsonVariant nmea_g = root[key]["gnss"];
     eeprom_block.field.settings.nmea_g = nmea_g.as<bool>();
-  }
-
-  JsonVariant nmea_p = root["nmea"]["private"];
-  if (nmea_p.success()) {
+    JsonVariant nmea_p = root[key]["private"];
     eeprom_block.field.settings.nmea_p = nmea_p.as<bool>();
-  }
-
-  JsonVariant nmea_l = root["nmea"]["legacy"];
-  if (nmea_l.success()) {
+    JsonVariant nmea_l = root[key]["legacy"];
     eeprom_block.field.settings.nmea_l = nmea_l.as<bool>();
-  }
-
-  JsonVariant nmea_s = root["nmea"]["sensors"];
-  if (nmea_s.success()) {
+    JsonVariant nmea_s = root[key]["sensors"];
     eeprom_block.field.settings.nmea_s = nmea_s.as<bool>();
-  }
-
-  JsonVariant nmea_out = root["nmea"]["output"];
-  if (nmea_out.success()) {
+    JsonVariant nmea_out = root[key]["output"];
     const char * nmea_out_s = nmea_out.as<char*>();
     if (!strcmp(nmea_out_s,"OFF")) {
       eeprom_block.field.settings.nmea_out = NMEA_OFF;
@@ -831,8 +841,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant gdl90 = root["gdl90"];
-  if (gdl90.success()) {
+  key = "gdl90";
+  if (root.containsKey(key)) {
+    JsonVariant gdl90 = root[key];
     const char * gdl90_s = gdl90.as<char*>();
     if (!strcmp(gdl90_s,"OFF")) {
       eeprom_block.field.settings.gdl90 = GDL90_OFF;
@@ -843,8 +854,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant d1090 = root["d1090"];
-  if (d1090.success()) {
+  key = "d1090";
+  if (root.containsKey(key)) {
+    JsonVariant d1090 = root[key];
     const char * d1090_s = d1090.as<char*>();
     if (!strcmp(d1090_s,"OFF")) {
       eeprom_block.field.settings.d1090 = D1090_OFF;
@@ -853,8 +865,9 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant json = root["json"];
-  if (json.success()) {
+  key = "json";
+  if (root.containsKey(key)) {
+    JsonVariant json = root[key];
     const char * json_s = json.as<char*>();
     if (!strcmp(json_s,"OFF")) {
       eeprom_block.field.settings.json = JSON_OFF;
@@ -863,18 +876,21 @@ void parseSettings(JsonObject root)
     }
   }
 
-  JsonVariant stealth = root["stealth"];
-  if (stealth.success()) {
+  key = "stealth";
+  if (root.containsKey(key)) {
+    JsonVariant stealth = root[key];
     eeprom_block.field.settings.stealth = stealth.as<bool>();
   }
 
-  JsonVariant no_track = root["no_track"];
-  if (no_track.success()) {
+  key = "no_track";
+  if (root.containsKey(key)) {
+    JsonVariant no_track = root[key];
     eeprom_block.field.settings.no_track = no_track.as<bool>();
   }
 
-  JsonVariant fcor = root["fcor"];
-  if (fcor.success()) {
+  key = "fcor";
+  if (root.containsKey(key)) {
+    JsonVariant fcor = root[key];
     int fc = fcor.as<signed int>();
     if (fc > 30) {
       fc = 30;
@@ -883,12 +899,15 @@ void parseSettings(JsonObject root)
     };
     eeprom_block.field.settings.freq_corr = fc;
   }
+
 #if defined(USE_OGN_ENCRYPTION)
-  JsonVariant key = root["igc_key"];
-  if (key.success()) {
+  key = "igc_key";
+  if (root.containsKey(key)) {
+    JsonVariant igc_keys = root[key];
+
     char buf[32 + 1];
 
-    const char *key_s = key.as<char*>();
+    const char *key_s = igc_keys.as<char*>();
     strncpy(buf, key_s, sizeof(buf));
 
     eeprom_block.field.settings.igc_key[3] = strtoul(buf + 24, NULL, 16);

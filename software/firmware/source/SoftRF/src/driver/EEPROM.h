@@ -120,5 +120,7 @@ void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 extern settings_t *settings;
+extern const char *Aircraft_Type[];
+extern const char *Region_Label[];
 
 #endif /* EEPROMHELPER_H */

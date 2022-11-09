@@ -36,6 +36,39 @@ void EEPROM_store()    {}
 #include "../protocol/data/JSON.h"
 #include "Battery.h"
 
+/* Used in EDP */
+const char *Aircraft_Type[] = {
+  [AIRCRAFT_TYPE_UNKNOWN]    = "Unkwn",
+  [AIRCRAFT_TYPE_GLIDER]     = "Glider",
+  [AIRCRAFT_TYPE_TOWPLANE]   = "Towpln",
+  [AIRCRAFT_TYPE_HELICOPTER] = "Helicp",
+  [AIRCRAFT_TYPE_PARACHUTE]  = "Parach",
+  [AIRCRAFT_TYPE_DROPPLANE]  = "Dropln",
+  [AIRCRAFT_TYPE_HANGGLIDER] = "Hanggl",
+  [AIRCRAFT_TYPE_PARAGLIDER] = "Paragl",
+  [AIRCRAFT_TYPE_POWERED]    = "Powerd",
+  [AIRCRAFT_TYPE_JET]        = "Jet",
+  [AIRCRAFT_TYPE_UFO]        = "UFO",
+  [AIRCRAFT_TYPE_BALLOON]    = "Blloon",
+  [AIRCRAFT_TYPE_ZEPPELIN]   = "Zeppel",
+  [AIRCRAFT_TYPE_UAV]        = "UAV",
+  [AIRCRAFT_TYPE_RESERVED]   = "Reserv",
+  [AIRCRAFT_TYPE_STATIC]     = "Static"
+};
+const char *Region_Label[] = {
+  [RF_BAND_AUTO] = "**",
+  [RF_BAND_EU]   = "EU",
+  [RF_BAND_US]   = "US",
+  [RF_BAND_AU]   = "AU",
+  [RF_BAND_NZ]   = "NZ",
+  [RF_BAND_RU]   = "RU",
+  [RF_BAND_CN]   = "CN",
+  [RF_BAND_UK]   = "UK",
+  [RF_BAND_IN]   = "IN",
+  [RF_BAND_IL]   = "IL",
+  [RF_BAND_KR]   = "KR"
+  };
+
 // start reading from the first byte (address 0) of the EEPROM
 
 eeprom_t eeprom_block;
@@ -86,13 +119,17 @@ void EEPROM_defaults()
   eeprom_block.field.settings.mode          = SOFTRF_MODE_NORMAL;
   eeprom_block.field.settings.rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                               RF_PROTOCOL_FANET : RF_PROTOCOL_LEGACY;
+#if defined(DEFAULT_REGION_US)
+  eeprom_block.field.settings.band          = RF_BAND_US;
+#else
   eeprom_block.field.settings.band          = RF_BAND_EU;
+#endif
   eeprom_block.field.settings.aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                               AIRCRAFT_TYPE_STATIC :
                                               AIRCRAFT_TYPE_GLIDER;
   eeprom_block.field.settings.txpower       = RF_TX_POWER_FULL;
   eeprom_block.field.settings.bluetooth     = BLUETOOTH_OFF;
-  eeprom_block.field.settings.alarm         = TRAFFIC_ALARM_DISTANCE;
+  eeprom_block.field.settings.alarm         = TRAFFIC_ALARM_LEGACY;
 
   /* This will speed up 'factory' boot sequence on Editions other than Standalone */
   if (hw_info.model == SOFTRF_MODEL_STANDALONE

@@ -1,6 +1,6 @@
 /*
  * View_Status_EPD.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this is modified from v1.1.
+
 #include "../system/SoC.h"
 
 #if defined(USE_EPAPER)
@@ -25,20 +27,24 @@
 #include "../driver/Battery.h"
 #include "../driver/EEPROM.h"
 #include "../driver/RF.h"
+#include "../driver/GNSS.h"
 #include <protocol.h>
 
-#include <Fonts/FreeMono9pt7b.h>
-#include <Fonts/FreeSerifBold12pt7b.h>
-#include <Fonts/FreeMonoBold18pt7b.h>
+#include <gfxfont.h>
+#include <FreeMono9pt7b.h>
+#include <FreeSerifBold12pt7b.h>
+#include <FreeMonoBold18pt7b.h>
 
 extern uint32_t tx_packets_counter, rx_packets_counter;
 
+#if 0
 const char ID_text[]       = "ID";
 const char PROTOCOL_text[] = "PROTOCOL";
 const char RX_text[]       = "RX";
 const char TX_text[]       = "TX";
 const char ACFTS_text[]    = "ACFTS";
 const char BAT_text[]      = "BAT";
+#endif
 
 static navbox_t navbox1;
 static navbox_t navbox2;
@@ -72,7 +78,7 @@ void EPD_status_setup()
   navbox3.y = navbox1.y + navbox1.height;
   navbox3.width  = navbox1.width;
   navbox3.height = navbox1.height;
-  navbox3.value      = ThisAircraft.addr;
+  navbox3.value = 0;                      // was aircaft ID
 //  navbox3.prev_value = navbox3.value;
   navbox3.timestamp  = millis();
 
@@ -81,7 +87,7 @@ void EPD_status_setup()
   navbox4.y = navbox3.y;
   navbox4.width  = navbox3.width;
   navbox4.height = navbox3.height;
-  navbox4.value      = settings->rf_protocol;
+  navbox4.value = 0;                      // was settings->rf_protocol;
 //  navbox4.prev_value = navbox4.value;
   navbox4.timestamp  = millis();
 
@@ -173,18 +179,17 @@ static void EPD_Draw_NavBoxes()
     display->setCursor(navbox4.x + 5, navbox4.y + 5 + tbh);
     display->print(navbox4.title);
 
-    display->setFont(&FreeSerifBold12pt7b);
-
-    display->setCursor(navbox3.x + 5, navbox3.y + 50);
-
-    snprintf(buf, sizeof(buf), "%06X", navbox3.value);
-
-    display->print(buf);
-
     display->setFont(&FreeMonoBold18pt7b);
 
-    display->setCursor(navbox4.x + 15, navbox4.y + 50);
-    display->print(Protocol_ID[navbox4.value]);
+    display->setCursor(navbox3.x + 25, navbox3.y + 50);
+    snprintf(buf, sizeof(buf), "%d", navbox3.value);
+    display->print(buf);
+
+//  display->setFont(&FreeMonoBold18pt7b);
+
+    display->setCursor(navbox4.x + 25, navbox4.y + 50);
+    snprintf(buf, sizeof(buf), "%d", navbox4.value);
+    display->print(buf);
 
     uint16_t bottom_navboxes_x = navbox5.x;
     uint16_t bottom_navboxes_y = navbox5.y;
@@ -239,6 +244,8 @@ void EPD_status_loop()
 
     navbox1.value = Traffic_Count();
     navbox2.value = (int) (Battery_voltage() * 10.0);
+    navbox3.value = gnss.satellites.value();   // was aircaft ID
+    navbox4.value = max_alarm_level;           // was settings->rf_protocol
     navbox5.value = rx_packets_counter % 1000;
     navbox6.value = tx_packets_counter % 1000;
 

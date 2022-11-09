@@ -43,6 +43,14 @@ void Adafruit_FlashTransport_ESP32::begin(void) {
   }
 }
 
+void Adafruit_FlashTransport_ESP32::end(void) {
+  _cmd_read = SFLASH_CMD_READ;
+  _addr_len = 3; // work with most device if not set
+
+  _partition = NULL;
+  memset(&_flash_device, 0, sizeof(_flash_device));
+}
+
 SPIFlash_Device_t *Adafruit_FlashTransport_ESP32::getFlashDevice(void) {
   if (!_partition) {
     return NULL;
@@ -62,6 +70,8 @@ SPIFlash_Device_t *Adafruit_FlashTransport_ESP32::getFlashDevice(void) {
 void Adafruit_FlashTransport_ESP32::setClockSpeed(uint32_t write_hz,
                                                   uint32_t read_hz) {
   // do nothing, just use current configured clock
+  (void)write_hz;
+  (void)read_hz;
 }
 
 bool Adafruit_FlashTransport_ESP32::runCommand(uint8_t command) {
@@ -79,6 +89,7 @@ bool Adafruit_FlashTransport_ESP32::readCommand(uint8_t command,
                                                 uint8_t *response,
                                                 uint32_t len) {
   // mostly is Read STATUS, just fill with 0x0
+  (void)command;
   memset(response, 0, len);
 
   return true;
@@ -87,7 +98,11 @@ bool Adafruit_FlashTransport_ESP32::readCommand(uint8_t command,
 bool Adafruit_FlashTransport_ESP32::writeCommand(uint8_t command,
                                                  uint8_t const *data,
                                                  uint32_t len) {
-  //  do nothing, mostly is Write Status
+  // mostly is Write Status, do nothing
+  (void)command;
+  (void)data;
+  (void)len;
+
   return true;
 }
 

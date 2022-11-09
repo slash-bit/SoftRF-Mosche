@@ -1,6 +1,6 @@
 /*
  * View_Time_EPD.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this is modified from v1.1.
+
 #include "../system/SoC.h"
 
 #if defined(USE_EPAPER)
@@ -30,9 +32,10 @@
 extern RTC_Date fw_build_date_time;
 #endif /* ARDUINO_ARCH_NRF52 */
 
-#include <Fonts/FreeMonoBold24pt7b.h>
-#include <Fonts/FreeMonoBold12pt7b.h>
-#include <Fonts/FreeMono18pt7b.h>
+#include <gfxfont.h>
+#include <FreeMonoBold24pt7b.h>
+#include <FreeMonoBold12pt7b.h>
+#include <FreeMono18pt7b.h>
 #include "U8g2_for_Adafruit_GFX.h"
 
 static const char TZ_text[] = "UTC";

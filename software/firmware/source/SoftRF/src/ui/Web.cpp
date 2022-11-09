@@ -689,8 +689,12 @@ void handleSettings() {
 <INPUT type='text' name='igc_key' maxlength='32' size='32' value='%08X%08X%08X%08X'>\
 </td>\
 </tr>"),
-//  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]);
-  0, 0, 0, 0);    /* do not show the existing secret key */
+  // settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]);
+  settings->igc_key[0]? 0x88888888 : settings->igc_key[0],
+  settings->igc_key[1]? 0x88888888 : settings->igc_key[1],
+  settings->igc_key[2]? 0x88888888 : settings->igc_key[2],
+  settings->igc_key[3]? 0x88888888 : settings->igc_key[3]);
+     /* mask the key from prying eyes */
 
   len = strlen(offset);
   offset += len;
@@ -898,15 +902,20 @@ void handleInput() {
 
 #if defined(USE_OGN_ENCRYPTION)
     } else if (server.argName(i).equals("igc_key")) {
-      char buf[32 + 1];
-      server.arg(i).toCharArray(buf, sizeof(buf));
-      settings->igc_key[3] = strtoul(buf + 24, NULL, 16);
-      buf[24] = 0;
-      settings->igc_key[2] = strtoul(buf + 16, NULL, 16);
-      buf[16] = 0;
-      settings->igc_key[1] = strtoul(buf +  8, NULL, 16);
-      buf[ 8] = 0;
-      settings->igc_key[0] = strtoul(buf +  0, NULL, 16);
+        char buf[32 + 1];
+        uint32_t key;
+        server.arg(i).toCharArray(buf, sizeof(buf));
+        key = strtoul(buf + 24, NULL, 16);
+        if (key != 0x88888888)  settings->igc_key[3] = key;
+        buf[24] = 0;
+        key = strtoul(buf + 16, NULL, 16);
+        if (key != 0x88888888)  settings->igc_key[2] = key;
+        buf[16] = 0;
+        key = strtoul(buf + 8, NULL, 16);
+        if (key != 0x88888888)  settings->igc_key[1] = key;
+        buf[8] = 0;
+        key = strtoul(buf + 0, NULL, 16);
+        if (key != 0x88888888)  settings->igc_key[0] = key;
 #endif
     }
   }
@@ -962,7 +971,12 @@ PSTR("<html>\
   settings->nmea_out, settings->gdl90, settings->d1090,
   BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
   settings->power_save, settings->power_external, settings->freq_corr, settings->debug_flags,
-  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
+//  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
+  (settings->igc_key[0]? 0x88888888 : 0),
+  (settings->igc_key[1]? 0x88888888 : 0),
+  (settings->igc_key[2]? 0x88888888 : 0),
+  (settings->igc_key[3]? 0x88888888 : 0)
+      /* do not show the existing secret key */
   );
   SoC->swSer_enableRx(false);
   server.send ( 200, "text/html", Input_temp );

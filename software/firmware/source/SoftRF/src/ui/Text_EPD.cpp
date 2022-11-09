@@ -1,6 +1,6 @@
 /*
  * View_Text_EPD.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+// this is modified from v1.1.
 
 #include "../system/SoC.h"
 
@@ -34,7 +36,8 @@
 #include <protocol.h>
 #include "../protocol/radio/Legacy.h"
 
-#include <Fonts/FreeMonoBold12pt7b.h>
+#include <gfxfont.h>
+#include <FreeMonoBold12pt7b.h>
 
 static int EPD_current = 1;
 
@@ -48,25 +51,6 @@ enum {
 
 static int view_state_curr = STATE_TVIEW_NONE;
 static int view_state_prev = STATE_TVIEW_NONE;
-
-const char *Aircraft_Type[] = {
-  [AIRCRAFT_TYPE_UNKNOWN]    = "Unknown",
-  [AIRCRAFT_TYPE_GLIDER]     = "Glider",
-  [AIRCRAFT_TYPE_TOWPLANE]   = "Towplane",
-  [AIRCRAFT_TYPE_HELICOPTER] = "Helicopter",
-  [AIRCRAFT_TYPE_PARACHUTE]  = "Parachute",
-  [AIRCRAFT_TYPE_DROPPLANE]  = "Dropplane",
-  [AIRCRAFT_TYPE_HANGGLIDER] = "Hangglider",
-  [AIRCRAFT_TYPE_PARAGLIDER] = "Paraglider",
-  [AIRCRAFT_TYPE_POWERED]    = "Powered",
-  [AIRCRAFT_TYPE_JET]        = "Jet",
-  [AIRCRAFT_TYPE_UFO]        = "UFO",
-  [AIRCRAFT_TYPE_BALLOON]    = "Balloon",
-  [AIRCRAFT_TYPE_ZEPPELIN]   = "Zeppelin",
-  [AIRCRAFT_TYPE_UAV]        = "UAV",
-  [AIRCRAFT_TYPE_RESERVED]   = "Reserved",
-  [AIRCRAFT_TYPE_STATIC]     = "Static"
-};
 
 static void EPD_Draw_Text()
 {
@@ -113,7 +97,8 @@ static void EPD_Draw_Text()
     }
 
     int oclock = ((bearing + 15) % 360) / 30;
-    float RelativeVertical = traffic_by_dist[EPD_current - 1].fop->alt_diff;
+    float RelativeVertical = traffic_by_dist[EPD_current - 1].fop->altitude -
+                                ThisAircraft.altitude;
 
     switch (ui->units)
     {
@@ -266,7 +251,7 @@ void EPD_text_setup()
 void EPD_text_loop()
 {
   if (isTimeToEPD()) {
-    bool hasFix = isValidGNSSFix();
+    bool hasFix = isValidGNSSFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST);
 
     if (hasFix) {
         if (Traffic_Count() > 0) {
