@@ -29,9 +29,9 @@
 #define NO_DATA_TEXT            "NO DATA"
 #define NO_FIX_TEXT             "NO FIX"
 
-#define NAVBOX1_TITLE           "ACFTS"
+#define NAVBOX1_TITLE           "SAT"
 #define NAVBOX2_TITLE           "BAT"
-#define NAVBOX3_TITLE           "SAT"
+#define NAVBOX3_TITLE           "ACFTS"
 #define NAVBOX4_TITLE           "ALARM"
 #define NAVBOX5_TITLE           "RX"
 #define NAVBOX6_TITLE           "TX"

@@ -12,7 +12,7 @@ Beyond Lyusupov's version 1.0:
 * Can set aircraft ID for self, ID to ignore, and ID to follow
 * Settable baud rate for serial output
 
-Source code, and a [compiled binaries for ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF), and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only) are available here.
+Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF), and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only) are available here.
 <br>
 <br>
 New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).

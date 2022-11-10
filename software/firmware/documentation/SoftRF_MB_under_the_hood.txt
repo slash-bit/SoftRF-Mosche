@@ -4,7 +4,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 By Moshe Braner
 
 This version last updated November 9, 2022
-to fit software version MB09a based on v1.0
+to fit software version MB09b based on v1.0
 
 
 PART 1: USER GUIDE - see separate document

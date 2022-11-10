@@ -37,15 +37,6 @@
 
 extern uint32_t tx_packets_counter, rx_packets_counter;
 
-#if 0
-const char ID_text[]       = "ID";
-const char PROTOCOL_text[] = "PROTOCOL";
-const char RX_text[]       = "RX";
-const char TX_text[]       = "TX";
-const char ACFTS_text[]    = "ACFTS";
-const char BAT_text[]      = "BAT";
-#endif
-
 static navbox_t navbox1;
 static navbox_t navbox2;
 static navbox_t navbox3;
@@ -96,7 +87,7 @@ void EPD_status_setup()
   navbox5.y = navbox3.y + navbox3.height;
   navbox5.width  = navbox3.width;
   navbox5.height = navbox3.height;
-  navbox5.value      = rx_packets_counter % 1000;
+  navbox5.value  = 0;
 //  navbox5.prev_value = navbox5.value;
   navbox5.timestamp  = millis();
 
@@ -105,7 +96,7 @@ void EPD_status_setup()
   navbox6.y = navbox5.y;
   navbox6.width  = navbox5.width;
   navbox6.height = navbox5.height;
-  navbox6.value      = tx_packets_counter % 1000;
+  navbox6.value  = 0;
 //  navbox6.prev_value = navbox6.value;
   navbox6.timestamp  = millis();
 }
@@ -151,7 +142,7 @@ static void EPD_Draw_NavBoxes()
 
     display->setFont(&FreeMonoBold18pt7b);
 
-    display->setCursor(navbox1.x + 25, navbox1.y + 52);
+    display->setCursor(navbox1.x + 25, navbox1.y + 50);
     display->print(navbox1.value);
 
     display->setCursor(navbox2.x + 15, navbox2.y + 52);
@@ -181,9 +172,8 @@ static void EPD_Draw_NavBoxes()
 
     display->setFont(&FreeMonoBold18pt7b);
 
-    display->setCursor(navbox3.x + 25, navbox3.y + 50);
-    snprintf(buf, sizeof(buf), "%d", navbox3.value);
-    display->print(buf);
+    display->setCursor(navbox3.x + 25, navbox3.y + 52);
+    display->print(navbox3.value);
 
 //  display->setFont(&FreeMonoBold18pt7b);
 
@@ -242,10 +232,10 @@ void EPD_status_loop()
 {
   if (isTimeToEPD()) {
 
-    navbox1.value = Traffic_Count();
+    navbox1.value = gnss.satellites.value();
     navbox2.value = (int) (Battery_voltage() * 10.0);
-    navbox3.value = gnss.satellites.value();   // was aircaft ID
-    navbox4.value = max_alarm_level;           // was settings->rf_protocol
+    navbox3.value = Traffic_Count();
+    navbox4.value = max_alarm_level;
     navbox5.value = rx_packets_counter % 1000;
     navbox6.value = tx_packets_counter % 1000;
 

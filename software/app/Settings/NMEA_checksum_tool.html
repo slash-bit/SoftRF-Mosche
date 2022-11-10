@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Generic NMEA checksum tool</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<meta name=keywords content="SoftRF, NMEA, checksum, settings, javascript, GNSS">
+<style type="text/css"><!--
+
+p.warn {
+    border-style: solid;
+    border-width: thin;
+    border-color: red;
+    padding:      0.5em;
+}
+
+--></style>
+<script><!--
+
+const version = 1;
+const volume  = 0;    // changed from 2 (off) to 0 (full)
+const pointer = 2;
+
+// Compute NMEA checksum and display it
+function UpdateChecksum()
+{
+  var cmd = document.getElementById("sentence").value;
+
+  // Compute the checksum by XORing all the character values in the string.
+  var checksum = 0;
+  for(var i = 0; i < cmd.length; i++) {
+    checksum = checksum ^ cmd.charCodeAt(i);
+  }
+
+  // Convert it to hexadecimal (base-16, upper case, most significant nybble first).
+  var hexsum = Number(checksum).toString(16).toUpperCase();
+  if (hexsum.length < 2) {
+    hexsum = ("00" + hexsum).slice(-2);
+  }
+  
+  // Display the result
+  settext(document.getElementById("output"), "$" + cmd + "*" + hexsum);
+}
+
+// Helper function to set the contents of the SPAN to some text
+function settext(span, text)
+{
+  if (!span.hasChildNodes()) {
+    span.appendChild(span.ownerDocument.createTextNode(text));
+    return;
+  } else {
+    span.firstChild.nodeValue = text;
+  }
+}
+
+function SelCmd()
+{
+  var id = document.getElementById("NMEA");
+  document.getElementById("sentence").value = id.value;
+  UpdateChecksum();
+}
+
+function InitSettings()
+{
+  document.getElementById("sentence").value = "PSRFC,1,?";
+  UpdateChecksum();
+}
+
+--></script>
+</head>
+<body  onload="InitSettings()">
+<h3 align=left>Generic NMEA checksum tool</h3>
+<b>NOTICE!</b> <small>Your browser should have support for JavaScript and DHTML (most modern browsers do).</small>
+<hr>
+<form>
+<table width=100%%>
+<tr>
+<tr>
+<th align=left>NMEA Sentence (without the $)</th>
+<td align=right>
+<INPUT type="text" id="NMEA" maxlength="100" size="100" value="PSRFC,1,?" onchange="SelCmd()">
+</td>
+</tr>
+</table>
+
+<!-- NMEA:  --><input type="hidden" id="sentence" size="100">
+
+<hr>
+<h3 align=center>NMEA control sentence with checksum:</h3>
+<hr>
+<h4 align=center><tt><span id="output" style="font-family: monospace;"></span><br><br></tt></h4>
+</form>
+</body>
+</html>

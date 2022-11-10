@@ -61,7 +61,7 @@ US TX P:LEG A:LEG
 NMEA: USB GLD
 */
     {
-      uint16_t x = 0;
+      uint16_t x = 6;
       uint16_t y = 20;
 
       int16_t  tbx, tby;
@@ -150,7 +150,7 @@ NMEA: USB GLD
       snprintf(info_line, sizeof(info_line), "NMEA:%s  %s",
           (settings->nmea_out == NMEA_UART ? "SER" :
           (settings->nmea_out == NMEA_USB  ? "USB" :
-          (settings->nmea_out == NMEA_BLUETOOTH ? "BLT" : "???"))),
+          (settings->nmea_out == NMEA_BLUETOOTH ? "BLT" : "---"))),
           nmeas);
       display->getTextBounds(info_line, 0, 0, &tbx, &tby, &tbw, &tbh);
       y += tbh;

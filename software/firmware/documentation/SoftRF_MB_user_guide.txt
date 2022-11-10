@@ -4,7 +4,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 By Moshe Braner
 
 This version last updated November 9, 2022
-to fit software version MB09a based on v1.0
+to fit software version MB09b based on v1.0
 
 
 PART 1: USER GUIDE
@@ -108,7 +108,7 @@ The Power Management Unit (PMU) on the T-Beam is always active.  The on/off butt
 
 If a battery is installed on the board, the T-Beam is never completely turned "off".  Always remove the battery from the holder before soldering wires to the board.
 
-The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - but they cannot be changed here, see below.  See more info about operating the T-Echo ("Badge Edition") here:
+The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - but they cannot be changed here, see below.  Find more info about operating the T-Echo ("Badge Edition") here:
 https://github.com/lyusupov/SoftRF/wiki/Badge-Edition
 
 
@@ -125,14 +125,14 @@ You will need a PC running Windows, that can recognize the USB interface inside 
 The T-Echo usually includes a "bootloader" which makes it easy to update the firmware.  See the "updating the firmware" section below.
 
 
-The Web Interface
+The Web Interface (T-Beam only)
 
 After startup, SoftRF on a T-Beam creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
 
 Choosing the operational settings
 
-Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings often don't quite do what you want.
+Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings often don't quite do what you want.  The settings you choose are stored inside the device, and are not erased even when upgrading to a new version of the firmware - as long as the stored settings are in a format compatible with the firmware version.  If, for example, you upgrade from mainline v1.x to my version MB09x, since my version has additional settings, the stored settings are erased and all the settings are set to their defaults.  In that case you need to set them again.
 
 On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
 
@@ -200,6 +200,18 @@ Debug flags: this is for my debugging scheme (mentioned above), leave as 00 norm
 IGC encryption key:  Only shown if compiled so as to enable the encryption option in OGNTP. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 
 
+The settings displayed on the T-Echo
+
+In the last display screen in the cycle of screens on the T-Echo, you will see something like this:
+
+Normal  Glider         < normal mode, aircraft type glider
+US TX P:LEG A:LEG      < US region, full power, Legacy protocol, Legacy alarm method
+Device: 60ABCD         < device ID (internal, cannot be changed)
+Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")         
+--A34567 ++A45678      < ignore ID and follow ID
+NMEA:USB  GL           < NMEA output to USB, sends GNSS & Legacy (traffic) data
+
+
 How to connect external devices
 
 SoftRF can send data out to other devices, in several formats.  Most commonly, the format is NMEA, which is lines of text that start with a code that identifies the type of data in the "sentence".  For example:
@@ -225,8 +237,6 @@ Note that due to the way the T-Beam is designed, the same data is sent out via b
 
 
 Updating the firmware on the T-Beam
-
-For the T-Echo see the next section.
 
 When it's time install a newer version of the SoftRF firmware on your T-Beam, the easiest way is to do it via WiFi (also called On The Air, OTA).
 
