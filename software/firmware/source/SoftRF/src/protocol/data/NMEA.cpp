@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.cpp
- * Copyright (C) 2017-2021 Linar Yusupov
+ * Copyright (C) 2017-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this file based on v1.2.
+
 #include <TimeLib.h>
 
 #include "NMEA.h"
@@ -27,10 +29,6 @@
 #include "../../driver/Battery.h"
 #include "../../driver/Baro.h"
 #include "../../TrafficHelper.h"
-
-#ifndef MAX_NMEA_OBJECTS
-#define MAX_NMEA_OBJECTS MAX_TRACKING_OBJECTS
-#endif
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
 
@@ -70,6 +68,70 @@ extern uint32_t tx_packets_counter, rx_packets_counter;
 unsigned long RPYL_TimeMarker = 0;
 #endif /* ENABLE_AHRS */
 
+#if defined(USE_NMEA_CFG)
+
+TinyGPSCustom C_Version;   /* 1 */
+TinyGPSCustom C_Mode;
+TinyGPSCustom C_Protocol;
+TinyGPSCustom C_Band;
+TinyGPSCustom C_AcftType;
+TinyGPSCustom C_Alarm;
+TinyGPSCustom C_TxPower;
+TinyGPSCustom C_Volume;
+TinyGPSCustom C_Pointer;
+TinyGPSCustom C_NMEA_gnss; /* 10 */
+TinyGPSCustom C_NMEA_private;
+TinyGPSCustom C_NMEA_legacy;
+TinyGPSCustom C_NMEA_sensors;
+TinyGPSCustom C_NMEA_Output;
+TinyGPSCustom C_GDL90_Output;
+TinyGPSCustom C_D1090_Output;
+TinyGPSCustom C_Stealth;
+TinyGPSCustom C_noTrack;
+TinyGPSCustom C_PowerSave; /* 19 */
+
+// additional settings added by MB
+TinyGPSCustom D_Version;   /* 1 */
+TinyGPSCustom D_id_method;
+TinyGPSCustom D_aircraft_id;
+TinyGPSCustom D_ignore_id;
+TinyGPSCustom D_follow_id;
+TinyGPSCustom D_baud_rate;
+TinyGPSCustom D_power_ext;
+TinyGPSCustom D_NMEA_debug;
+TinyGPSCustom D_debug_flags;  /* 9 */
+
+#if defined(USE_OGN_ENCRYPTION)
+/* Security and privacy */
+TinyGPSCustom S_Version;
+TinyGPSCustom S_IGC_Key;
+#endif /* USE_OGN_ENCRYPTION */
+
+#if defined(USE_SKYVIEW_CFG)
+#include "../../driver/EPD.h"
+
+TinyGPSCustom V_Version; /* 1 */
+TinyGPSCustom V_Adapter;
+TinyGPSCustom V_Connection;
+TinyGPSCustom V_Units;
+TinyGPSCustom V_Zoom;
+TinyGPSCustom V_Protocol;
+TinyGPSCustom V_Baudrate;
+TinyGPSCustom V_Server;
+TinyGPSCustom V_Key;
+TinyGPSCustom V_Rotate;  /* 10 */
+TinyGPSCustom V_Orientation;
+TinyGPSCustom V_AvDB;
+TinyGPSCustom V_ID_Pref;
+TinyGPSCustom V_VMode;
+TinyGPSCustom V_Voice;
+TinyGPSCustom V_AntiGhost;
+TinyGPSCustom V_Filter;
+TinyGPSCustom V_PowerSave;
+TinyGPSCustom V_Team;    /* 19 */
+#endif /* USE_SKYVIEW_CFG */
+#endif /* USE_NMEA_CFG */
+
 static char *ltrim(char *s)
 {
   if(s) {
@@ -96,6 +158,78 @@ void NMEA_add_checksum(char *buf, size_t limit)
 
 void NMEA_setup()
 {
+#if defined(USE_NMEA_CFG)
+  const char *psrf_c = "PSRFC";
+  int term_num = 1;
+
+  C_Version.begin      (gnss, psrf_c, term_num++); /* 1 */
+  C_Mode.begin         (gnss, psrf_c, term_num++);
+  C_Protocol.begin     (gnss, psrf_c, term_num++);
+  C_Band.begin         (gnss, psrf_c, term_num++);
+  C_AcftType.begin     (gnss, psrf_c, term_num++);
+  C_Alarm.begin        (gnss, psrf_c, term_num++);
+  C_TxPower.begin      (gnss, psrf_c, term_num++);
+  C_Volume.begin       (gnss, psrf_c, term_num++);
+  C_Pointer.begin      (gnss, psrf_c, term_num++);
+  C_NMEA_gnss.begin    (gnss, psrf_c, term_num++); /* 10 */
+  C_NMEA_private.begin (gnss, psrf_c, term_num++);
+  C_NMEA_legacy.begin  (gnss, psrf_c, term_num++);
+  C_NMEA_sensors.begin (gnss, psrf_c, term_num++);
+  C_NMEA_Output.begin  (gnss, psrf_c, term_num++);
+  C_GDL90_Output.begin (gnss, psrf_c, term_num++);
+  C_D1090_Output.begin (gnss, psrf_c, term_num++);
+  C_Stealth.begin      (gnss, psrf_c, term_num++);
+  C_noTrack.begin      (gnss, psrf_c, term_num++);
+  C_PowerSave.begin    (gnss, psrf_c, term_num  ); /* 19 */
+
+  const char *psrf_d = "PSRFD";
+  term_num = 1;
+
+  D_Version.begin      (gnss, psrf_d, term_num++); /* 1 */
+  D_id_method.begin    (gnss, psrf_d, term_num++);
+  D_aircraft_id.begin  (gnss, psrf_d, term_num++);
+  D_ignore_id.begin    (gnss, psrf_d, term_num++);
+  D_follow_id.begin    (gnss, psrf_d, term_num++);
+  D_baud_rate.begin    (gnss, psrf_d, term_num++);
+  D_power_ext.begin    (gnss, psrf_d, term_num++);
+  D_NMEA_debug.begin   (gnss, psrf_d, term_num++);
+  D_debug_flags.begin  (gnss, psrf_d, term_num++);
+
+#if defined(USE_OGN_ENCRYPTION)
+/* Security and privacy */
+  const char *psrf_s = "PSRFS";
+  term_num = 1;
+
+  S_Version.begin      (gnss, psrf_s, term_num++);
+  S_IGC_Key.begin      (gnss, psrf_s, term_num  );
+#endif /* USE_OGN_ENCRYPTION */
+
+#if defined(USE_SKYVIEW_CFG)
+  const char *pskv_c = "PSKVC";
+  term_num = 1;
+
+  V_Version.begin      (gnss, pskv_c, term_num++); /* 1 */
+  V_Adapter.begin      (gnss, pskv_c, term_num++);
+  V_Connection.begin   (gnss, pskv_c, term_num++);
+  V_Units.begin        (gnss, pskv_c, term_num++);
+  V_Zoom.begin         (gnss, pskv_c, term_num++);
+  V_Protocol.begin     (gnss, pskv_c, term_num++);
+  V_Baudrate.begin     (gnss, pskv_c, term_num++);
+  V_Server.begin       (gnss, pskv_c, term_num++);
+  V_Key.begin          (gnss, pskv_c, term_num++);
+  V_Rotate.begin       (gnss, pskv_c, term_num++); /* 10 */
+  V_Orientation.begin  (gnss, pskv_c, term_num++);
+  V_AvDB.begin         (gnss, pskv_c, term_num++);
+  V_ID_Pref.begin      (gnss, pskv_c, term_num++);
+  V_VMode.begin        (gnss, pskv_c, term_num++);
+  V_Voice.begin        (gnss, pskv_c, term_num++);
+  V_AntiGhost.begin    (gnss, pskv_c, term_num++);
+  V_Filter.begin       (gnss, pskv_c, term_num++);
+  V_PowerSave.begin    (gnss, pskv_c, term_num++);
+  V_Team.begin         (gnss, pskv_c, term_num  ); /* 19 */
+#endif /* USE_SKYVIEW_CFG */
+#endif /* USE_NMEA_CFG */
+
 #if defined(NMEA_TCP_SERVICE)
   if (settings->nmea_out == NMEA_TCP) {
     NmeaTCPServer.begin();
@@ -126,8 +260,9 @@ void NMEA_loop()
             (int) (ThisAircraft.pressure_altitude * _GPS_FEET_PER_METER),
             -1000, 60000);
 
-    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PGRMZ,%d,f,3*"),
-            altitude ); /* feet , 3D fix */
+    /* https://developer.garmin.com/downloads/legacy/uploads/2015/08/190-00684-00.pdf */
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PGRMZ,%d,f,%c*"),
+               altitude, isValidGNSSFix() ? '3' : '1'); /* feet , 3D fix */
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
@@ -287,239 +422,166 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
 
 void NMEA_Export()
 {
-    if (! settings->nmea_l)
-         return;
-
+    int bearing;
     int alt_diff;
-    int abs_alt_diff;
     float distance;
-    float adj_dist;
-    float bearing;
 
-    int alarm_level = ALARM_LEVEL_NONE;
-    int data_source = DATA_SOURCE_FLARM;
+    int total_objects  = 0;
+    int alarm_level    = ALARM_LEVEL_NONE;
+    int data_source    = DATA_SOURCE_FLARM;
     time_t this_moment = now();
-    uint32_t follow_id = settings->follow_id;
 
     /* High priority object (most relevant target) */
-    int HP_index = MAX_TRACKING_OBJECTS;
-    int HP_alt_diff = 0;
+    int HP_bearing     = 0;
+    int HP_alt_diff    = 0;
     int HP_alarm_level = ALARM_LEVEL_NONE;
-    float HP_adj_dist  = 999999999;
-    float HP_distance  = 999999999;
-    float HP_bearing = 0;
-    uint32_t HP_addr = 0;
-    int total_objects = 0;
-    int head = 0;
+    float HP_distance  = 2147483647;
+    uint32_t HP_addr   = 0;
 
-    bool has_Fix = (isValidFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST));
+    bool has_Fix       = isValidFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST);
 
     if (has_Fix) {
-
       for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        if (Container[i].addr && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
 
-        ufo_t *cip = &Container[i];
-
-        if (cip->addr && (this_moment - cip->timestamp) <= EXPORT_EXPIRATION_TIME) {
 #if 0
-          Serial.println(cip->addr);
-          Serial.println(cip->latitude, 4);
-          Serial.println(cip->longitude, 4);
-          Serial.println(cip->altitude);
-          Serial.println(cip->addr_type);
-          Serial.println(cip->vs);
-          Serial.println(cip->aircraft_type);
-          Serial.println(cip->stealth);
-          Serial.println(cip->no_track);
+          Serial.println(fo.addr);
+          Serial.println(fo.latitude, 4);
+          Serial.println(fo.longitude, 4);
+          Serial.println(fo.altitude);
+          Serial.println(fo.addr_type);
+          Serial.println(fo.vs);
+          Serial.println(fo.aircraft_type);
+          Serial.println(fo.stealth);
+          Serial.println(fo.no_track);
 #endif
-          bool stealth = (cip->stealth || ThisAircraft.stealth);  /* reciprocal */
+          if (settings->nmea_l) {
+            distance = Container[i].distance;
 
-          distance = cip->distance;
-          bearing = cip->bearing;
+            if (distance < ALARM_ZONE_NONE) {
 
-          alt_diff = (int) cip->alt_diff;                 /* sent to NMEA */
-          abs_alt_diff = (int) fabs(cip->adj_alt_diff);   /* used to pick high-priority traffic */
-          adj_dist = cip->adj_distance;
-          alarm_level = cip->alarm_level;
+              total_objects++;
 
-          bool show = true;
-          /* mask some data following FLARM protocol: */
-          if (stealth && alarm_level <= ALARM_LEVEL_CLOSE) {
-            if (distance > 2000 || abs_alt_diff > 300)
-                   show = false;
-          }
-       /* if (cip->protocol == RF_PROTOCOL_LEGACY && cip->airborne == 0)
-                   show = false; */
+              char str_climb_rate[8] = "";
+              uint8_t addr_type = Container[i].addr_type > ADDR_TYPE_ANONYMOUS ?
+                                  ADDR_TYPE_ANONYMOUS : Container[i].addr_type;
 
-          if ((alarm_level > ALARM_LEVEL_NONE
-               || (distance < ALARM_ZONE_NONE && abs_alt_diff < VERTICAL_VISIBILITY_RANGE)
-               || cip->addr == follow_id)
-              && show) {
+              bearing = Container[i].bearing;
+              alarm_level = Container[i].alarm_level;
+              alt_diff = (int) (Container[i].altitude - ThisAircraft.altitude);
 
-             /* put candidate traffic to report into a sorted list */
+              if (!Container[i].stealth && !ThisAircraft.stealth) {
+                dtostrf(
+                  constrain(Container[i].vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
+                  5, 1, str_climb_rate);
+              }
 
-             int next, previous;
-             if (total_objects == 0) {  /* first inserted into the list */
-               head = i;
-               cip->next = MAX_TRACKING_OBJECTS;
-               total_objects = 1;
-             } else {
-               next = head;
-               while (next < MAX_TRACKING_OBJECTS) {
-                 if (Container[next].alarm_level <= alarm_level
-                  && Container[next].addr != follow_id
-                  && Container[next].adj_distance >= adj_dist)
-                        break;   /* insert before this one */
-                 /* else */
-                   previous = next;  /* the preceding list entry */
-                   next = Container[next].next;
-               }
-               cip->next = next;
-               if (head == next)
-                 head = i;
-               else
-                 Container[previous].next = i;
-               total_objects++;
-             }
+              /*
+               * When callsign is available - send it to a NMEA client.
+               * If it is not - generate a callsign substitute,
+               * based upon a protocol ID and the ICAO address
+               */
+              memset((void *) NMEA_Callsign, 0, sizeof(NMEA_Callsign));
 
-             /* Alarm or close traffic is treated as highest priority */
-             if (alarm_level > HP_alarm_level ||
-                    (alarm_level == HP_alarm_level && adj_dist <= HP_adj_dist)) {  // was <
+              if (strnlen((char *) Container[i].callsign, sizeof(Container[i].callsign)) > 0) {
+                memcpy(NMEA_Callsign, Container[i].callsign, sizeof(Container[i].callsign));
+                for (int j=0; j < sizeof(NMEA_Callsign); j++) {
+                  if (NMEA_Callsign[j] == ' ' || NMEA_Callsign[j] == ',' || NMEA_Callsign[j] == '*') {
+                    NMEA_Callsign[j] = 0;
+                    break;
+                  }
+                }
+              } else {
+                memcpy(NMEA_Callsign, NMEA_CallSign_Prefix[Container[i].protocol],
+                  strlen(NMEA_CallSign_Prefix[Container[i].protocol]));
+
+                String str = "_";
+
+                ADDR_TO_HEX_STR(str, (Container[i].addr >> 16) & 0xFF);
+                ADDR_TO_HEX_STR(str, (Container[i].addr >>  8) & 0xFF);
+                ADDR_TO_HEX_STR(str, (Container[i].addr      ) & 0xFF);
+
+                str.toUpperCase();
+                memcpy(NMEA_Callsign + strlen(NMEA_CallSign_Prefix[Container[i].protocol]),
+                  str.c_str(), str.length());
+              }
+
+              data_source = (Container[i].protocol == RF_PROTOCOL_ADSB_UAT ||
+                             Container[i].protocol == RF_PROTOCOL_ADSB_1090) ?
+                            DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
+
+              snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+                      PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
+                      alarm_level,
+                      (int) (distance * cos(radians(bearing))), (int) (distance * sin(radians(bearing))),
+                      alt_diff, addr_type, Container[i].addr, NMEA_Callsign,
+                      (int) Container[i].course, (int) (Container[i].speed * _GPS_MPS_PER_KNOT),
+                      ltrim(str_climb_rate), Container[i].aircraft_type
+                      PFLAA_EXT1_ARGS );
+
+              NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+
+              NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+
+              /* Most close traffic is treated as highest priority target */
+              if (distance < HP_distance && abs(alt_diff) < VERTICAL_VISIBILITY_RANGE) {
                 HP_bearing = bearing;
                 HP_alt_diff = alt_diff;
                 HP_alarm_level = alarm_level;
                 HP_distance = distance;
-                HP_adj_dist = adj_dist;
-                HP_addr = (stealth? 0xFFFFF0 + i : cip->addr);
-             }
+                HP_addr = Container[i].addr;
+              }
+
+            }
           }
         }
-      }
-
-      ufo_t *fop = &Container[head];
-
-      for (int i=0; i < total_objects && i < MAX_NMEA_OBJECTS; i++) {
-
-        /* may want to skip the HP object */
-        /* since it will be in the PFLAU sentence */
-        /* if (fop->addr != HP_addr) */ {
-
-         bool stealth = (fop->stealth || ThisAircraft.stealth);  /* reciprocal */
-
-         alt_diff = (int) (fop->alt_diff);  /* sent to NMEA */
-
-         uint8_t addr_type = fop->addr_type > ADDR_TYPE_ANONYMOUS ?
-                                  ADDR_TYPE_ANONYMOUS : fop->addr_type;
-
-         char str_climb_rate[8] = "";
-         if (!stealth) {
-                dtostrf(
-                  constrain(fop->vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
-                  5, 1, str_climb_rate);
-         }
-
-         alarm_level = fop->alarm_level;
-         if (alarm_level > ALARM_LEVEL_NONE)  --alarm_level;
-           /* for NMEA export bypass CLOSE added between NONE and LOW */
-
-         data_source = fop->protocol == RF_PROTOCOL_ADSB_UAT ?
-                            DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
-
-         uint32_t id = fop->addr;
-         if (stealth) {
-           id = 0xFFFFF0 + i;   /* show as anonymous */
-           addr_type = ADDR_TYPE_ANONYMOUS;
-         }
-
-         /*
-          * When callsign is available - send it to a NMEA client.
-          * If it is not - generate a callsign substitute,
-          * based upon a protocol ID and the ICAO address
-          */
-         if (fop->callsign[0] == '\0') {
-
-           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
-              alarm_level, (int) fop->dy, (int) fop->dx,
-              alt_diff, addr_type, id, NMEA_CallSign_Prefix[fop->protocol], id,
-              (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
-              ltrim(str_climb_rate), fop->aircraft_type
-              PFLAA_EXT1_ARGS );
-
-         } else {   /* there is a callsign from incoming data */
-
-           /* memset((void *) NMEA_Callsign, 0, sizeof(NMEA_Callsign));
-              memcpy(NMEA_Callsign, fop->callsign, sizeof(fop->callsign)); */
-           fop->callsign[sizeof(fop->callsign)-1] = '\0';
-
-           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
-              alarm_level, (int) fop->dy, (int) fop->dx,
-              alt_diff, addr_type, id, fop->callsign,
-              (int) fop->course, (int) (fop->speed * _GPS_MPS_PER_KNOT),
-              ltrim(str_climb_rate), fop->aircraft_type
-              PFLAA_EXT1_ARGS );
-         }
-
-         NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-         NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-
-        }  /* done skipping the HP object */
-
-        if (fop->next >= MAX_NMEA_OBJECTS)  break;    /* belt and suspenders */
-
-        fop = &Container[fop->next];
       }
     }
 
     /* One PFLAU NMEA sentence is mandatory regardless of traffic reception status */
-    float voltage    = Battery_voltage();
-    int power_status = voltage > BATTERY_THRESHOLD_INVALID &&
+    if (settings->nmea_l) {
+      float voltage    = Battery_voltage();
+      int power_status = voltage > BATTERY_THRESHOLD_INVALID &&
                          voltage < Battery_threshold() ?
                          POWER_STATUS_BAD : POWER_STATUS_GOOD;
 
-    if (total_objects > 0) {
-        if (HP_addr == 0) {
-           /* no aircraft has been identified as high priority, use */
-           /*  the aircraft from the top of the sorted list, if any */
-           ufo_t *cip = &Container[head];
-           if (cip->addr) {
-               HP_bearing = cip->bearing;
-               HP_alt_diff = cip->alt_diff;
-               HP_alarm_level = cip->alarm_level;
-               HP_distance = cip->distance;
-               if (cip->stealth || ThisAircraft.stealth)
-                   HP_addr = 0xFFFFF0;
-               else
-                   HP_addr = cip->addr;
-           }
-        }
-    }
-
-    if (HP_addr) {
-        int rel_bearing = (int) (HP_bearing - ThisAircraft.course);
+      if (total_objects > 0) {
+        int rel_bearing = HP_bearing - ThisAircraft.course;
         rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
-        if (HP_alarm_level > ALARM_LEVEL_NONE)  --HP_alarm_level;
+
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                 PSTR("$PFLAU,%d,%d,%d,%d,%d,%d,%d,%d,%u,%06X" PFLAU_EXT1_FMT "*"),
                 total_objects,
-                (settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON),
-                (ThisAircraft.airborne ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_3D_GROUND),
+                settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON,
+                GNSS_STATUS_3D_MOVING,
                 power_status, HP_alarm_level, rel_bearing,
                 ALARM_TYPE_AIRCRAFT, HP_alt_diff, (int) HP_distance, HP_addr
                 PFLAU_EXT1_ARGS );
-    } else {
+      } else {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                 PSTR("$PFLAU,0,%d,%d,%d,%d,,0,,," PFLAU_EXT1_FMT "*"),
                 has_Fix && (settings->txpower != RF_TX_POWER_OFF) ?
                   TX_STATUS_ON : TX_STATUS_OFF,
                 has_Fix ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_NONE,
-                power_status, ALARM_LEVEL_NONE
+                power_status, HP_alarm_level
                 PFLAU_EXT1_ARGS );
-    }
+      }
 
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+
+      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+
+#if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+              PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
+              ThisAircraft.addr,settings->rf_protocol,
+              rx_packets_counter,tx_packets_counter,(int)(voltage*100));
+
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+
+      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+#endif /* EXCLUDE_SOFTRF_HEARTBEAT */
+    }
 }
 
 #if defined(USE_NMEALIB)
@@ -655,6 +717,431 @@ void NMEA_GGA()
 }
 
 #endif /* USE_NMEALIB */
+
+#if defined(USE_NMEA_CFG)
+
+#include "../../driver/Sound.h"
+#include "../../driver/LED.h"
+#include "GDL90.h"
+#include "D1090.h"
+
+#if !defined(SERIAL_FLUSH)
+#define SERIAL_FLUSH()       Serial.flush()
+#endif
+
+uint8_t C_NMEA_Source;
+
+static void nmea_cfg_restart()
+{
+  Serial.println();
+  Serial.println(F("Restart is in progress. Please, wait..."));
+  Serial.println();
+  SERIAL_FLUSH();
+  Sound_fini();
+  RF_Shutdown();
+  SoC->reset();
+}
+
+void NMEA_Process_SRF_SKV_Sentences()
+{
+      if (C_Version.isUpdated()) {
+        if (strncmp(C_Version.value(), "RST", 3) == 0) {
+            SoC->WDT_fini();
+            nmea_cfg_restart();
+        } else if (strncmp(C_Version.value(), "OFF", 3) == 0) {
+          shutdown(SOFTRF_SHUTDOWN_NMEA);
+        } else if (strncmp(C_Version.value(), "?", 1) == 0) {
+          char psrfc_buf[MAX_PSRFC_LEN];
+
+          snprintf_P(psrfc_buf, sizeof(psrfc_buf),
+              PSTR("$PSRFC,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
+              PSRFC_VERSION,        settings->mode,     settings->rf_protocol,
+              settings->band,       settings->aircraft_type, settings->alarm,
+              settings->txpower,    settings->volume,   settings->pointer,
+              settings->nmea_g,     settings->nmea_p,   settings->nmea_l,
+              settings->nmea_s,     settings->nmea_out, settings->gdl90,
+              settings->d1090,      settings->stealth,  settings->no_track,
+              settings->power_save );
+
+          NMEA_add_checksum(psrfc_buf, sizeof(psrfc_buf) - strlen(psrfc_buf));
+
+#if !defined(USE_NMEA_CFG)
+          uint8_t dest = settings->nmea_out;
+#else
+          uint8_t dest = C_NMEA_Source;
+#endif /* USE_NMEA_CFG */
+
+          NMEA_Out(dest, (byte *) psrfc_buf, strlen(psrfc_buf), false);
+
+        } else if (atoi(C_Version.value()) == PSRFC_VERSION) {
+          bool cfg_is_updated = false;
+
+          if (C_Mode.isUpdated())
+          {
+            settings->mode = atoi(C_Mode.value());
+            Serial.print(F("Mode = ")); Serial.println(settings->mode);
+            cfg_is_updated = true;
+          }
+          if (C_Protocol.isUpdated())
+          {
+            settings->rf_protocol = atoi(C_Protocol.value());
+            Serial.print(F("Protocol = ")); Serial.println(settings->rf_protocol);
+            cfg_is_updated = true;
+          }
+          if (C_Band.isUpdated())
+          {
+            settings->band = atoi(C_Band.value());
+            Serial.print(F("Region = ")); Serial.println(settings->band);
+            cfg_is_updated = true;
+          }
+          if (C_AcftType.isUpdated())
+          {
+            settings->aircraft_type = atoi(C_AcftType.value());
+            Serial.print(F("AcftType = ")); Serial.println(settings->aircraft_type);
+            cfg_is_updated = true;
+          }
+          if (C_Alarm.isUpdated())
+          {
+            settings->alarm = atoi(C_Alarm.value());
+            Serial.print(F("Alarm = ")); Serial.println(settings->alarm);
+            cfg_is_updated = true;
+          }
+          if (C_TxPower.isUpdated())
+          {
+            settings->txpower = atoi(C_TxPower.value());
+            Serial.print(F("TxPower = ")); Serial.println(settings->txpower);
+            cfg_is_updated = true;
+          }
+          if (C_Volume.isUpdated())
+          {
+            settings->volume = atoi(C_Volume.value());
+            Serial.print(F("Volume = ")); Serial.println(settings->volume);
+            cfg_is_updated = true;
+          }
+           if (C_Pointer.isUpdated())
+          {
+            settings->pointer = atoi(C_Pointer.value());
+            Serial.print(F("Pointer = ")); Serial.println(settings->pointer);
+            cfg_is_updated = true;
+          }
+          if (C_NMEA_gnss.isUpdated())
+          {
+            settings->nmea_g = atoi(C_NMEA_gnss.value());
+            Serial.print(F("NMEA_gnss = ")); Serial.println(settings->nmea_g);
+            cfg_is_updated = true;
+          }
+          if (C_NMEA_private.isUpdated())
+          {
+            settings->nmea_p = atoi(C_NMEA_private.value());
+            Serial.print(F("NMEA_private = ")); Serial.println(settings->nmea_p);
+            cfg_is_updated = true;
+          }
+          if (C_NMEA_legacy.isUpdated())
+          {
+            settings->nmea_l = atoi(C_NMEA_legacy.value());
+            Serial.print(F("NMEA_legacy = ")); Serial.println(settings->nmea_l);
+            cfg_is_updated = true;
+          }
+           if (C_NMEA_sensors.isUpdated())
+          {
+            settings->nmea_s = atoi(C_NMEA_sensors.value());
+            Serial.print(F("NMEA_sensors = ")); Serial.println(settings->nmea_s);
+            cfg_is_updated = true;
+          }
+          if (C_NMEA_Output.isUpdated())
+          {
+            settings->nmea_out = atoi(C_NMEA_Output.value());
+            Serial.print(F("NMEA_Output = ")); Serial.println(settings->nmea_out);
+            cfg_is_updated = true;
+          }
+          if (C_GDL90_Output.isUpdated())
+          {
+            settings->gdl90 = atoi(C_GDL90_Output.value());
+            Serial.print(F("GDL90_Output = ")); Serial.println(settings->gdl90);
+            cfg_is_updated = true;
+          }
+          if (C_D1090_Output.isUpdated())
+          {
+            settings->d1090 = atoi(C_D1090_Output.value());
+            Serial.print(F("D1090_Output = ")); Serial.println(settings->d1090);
+            cfg_is_updated = true;
+          }
+          if (C_Stealth.isUpdated())
+          {
+            settings->stealth = atoi(C_Stealth.value());
+            Serial.print(F("Stealth = ")); Serial.println(settings->stealth);
+            cfg_is_updated = true;
+          }
+          if (C_noTrack.isUpdated())
+          {
+            settings->no_track = atoi(C_noTrack.value());
+            Serial.print(F("noTrack = ")); Serial.println(settings->no_track);
+            cfg_is_updated = true;
+          }
+          if (C_PowerSave.isUpdated())
+          {
+            settings->power_save = atoi(C_PowerSave.value());
+            Serial.print(F("PowerSave = ")); Serial.println(settings->power_save);
+            cfg_is_updated = true;
+          }
+
+          if (cfg_is_updated) {
+            SoC->WDT_fini();
+            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+            EEPROM_store();
+            nmea_cfg_restart();
+          }
+        }
+      }
+
+      if (D_Version.isUpdated()) {
+        if (strncmp(D_Version.value(), "?", 1) == 0) {
+          char psrfd_buf[MAX_PSRFD_LEN];
+          snprintf_P(psrfd_buf, sizeof(psrfd_buf),
+              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X*"),
+              PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
+              settings->ignore_id,      settings->follow_id,  settings->baud_rate,
+              settings->power_external, settings->nmea_d,     settings->debug_flags);
+          NMEA_add_checksum(psrfd_buf, sizeof(psrfd_buf) - strlen(psrfd_buf));
+          NMEA_Out(C_NMEA_Source, (byte *) psrfd_buf, strlen(psrfd_buf), false);
+
+        } else if (atoi(D_Version.value()) == PSRFD_VERSION) {
+          bool cfg_is_updated = false;
+
+          if (D_id_method.isUpdated()) {
+            settings->id_method = atoi(D_id_method.value());
+            Serial.print(F("ID method = ")); Serial.println(settings->id_method);
+            cfg_is_updated = true;
+          }
+          if (D_aircraft_id.isUpdated()) {
+            settings->aircraft_id = strtoul(D_aircraft_id.value(), NULL, 16);
+            Serial.print(F("Aircraft ID = ")); Serial.println(settings->aircraft_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_ignore_id.isUpdated()) {
+            settings->ignore_id = strtoul(D_ignore_id.value(), NULL, 16);
+            Serial.print(F("Ignore ID = ")); Serial.println(settings->ignore_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_follow_id.isUpdated()) {
+            settings->follow_id = strtoul(D_follow_id.value(), NULL, 16);
+            Serial.print(F("Follow ID = ")); Serial.println(settings->follow_id, HEX);
+            cfg_is_updated = true;
+          }
+          if (D_baud_rate.isUpdated()) {
+            settings->baud_rate = atoi(D_baud_rate.value());
+            Serial.print(F("Baud rate = ")); Serial.println(settings->baud_rate);
+            cfg_is_updated = true;
+          }
+          if (D_power_ext.isUpdated()) {
+            settings->power_external = atoi(D_power_ext.value());
+            Serial.print(F("Power source = ")); Serial.println(settings->power_external);
+            cfg_is_updated = true;
+          }
+          if (D_NMEA_debug.isUpdated()) {
+            settings->nmea_d = atoi(D_NMEA_debug.value());
+            Serial.print(F("NMEA_debug = ")); Serial.println(settings->nmea_d);
+            cfg_is_updated = true;
+          }
+          if (D_debug_flags.isUpdated()) {
+            settings->debug_flags = atoi(D_debug_flags.value());
+            Serial.print(F("Debug flags = ")); Serial.println(settings->debug_flags);
+            cfg_is_updated = true;
+          }
+        }
+      }
+
+#if defined(USE_OGN_ENCRYPTION)
+      if (S_Version.isUpdated()) {
+        if (strncmp(S_Version.value(), "?", 1) == 0) {
+          char psrfs_buf[MAX_PSRFS_LEN];
+
+          snprintf_P(psrfs_buf, sizeof(psrfs_buf),
+              PSTR("$PSRFS,%d,%08X%08X%08X%08X*"),
+              PSRFS_VERSION, settings->igc_key[0], settings->igc_key[1],
+                             settings->igc_key[2], settings->igc_key[3]);
+
+          NMEA_add_checksum(psrfs_buf, sizeof(psrfs_buf) - strlen(psrfs_buf));
+
+          NMEA_Out(C_NMEA_Source, (byte *) psrfs_buf, strlen(psrfs_buf), false);
+
+        } else if (atoi(S_Version.value()) == PSRFS_VERSION) {
+          bool cfg_is_updated = false;
+
+          if (S_IGC_Key.isUpdated())
+          {
+            char buf[32 + 1];
+
+            strncpy(buf, S_IGC_Key.value(), sizeof(buf));
+
+            settings->igc_key[3] = strtoul(buf + 24, NULL, 16);
+            buf[24] = 0;
+            settings->igc_key[2] = strtoul(buf + 16, NULL, 16);
+            buf[16] = 0;
+            settings->igc_key[1] = strtoul(buf +  8, NULL, 16);
+            buf[ 8] = 0;
+            settings->igc_key[0] = strtoul(buf +  0, NULL, 16);
+
+            snprintf_P(buf, sizeof(buf),
+              PSTR("%08X%08X%08X%08X"),
+              settings->igc_key[0], settings->igc_key[1],
+              settings->igc_key[2], settings->igc_key[3]);
+
+            Serial.print(F("IGC Key = ")); Serial.println(buf);
+            cfg_is_updated = true;
+          }
+          if (cfg_is_updated) {
+            SoC->WDT_fini();
+            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+            EEPROM_store();
+            nmea_cfg_restart();
+          }
+        }
+      }
+#endif /* USE_OGN_ENCRYPTION */
+
+#if defined(USE_SKYVIEW_CFG)
+      if (V_Version.isUpdated()) {
+        if (strncmp(V_Version.value(), "?", 1) == 0) {
+          char pskvc_buf[MAX_PSKVC_LEN];
+
+          snprintf_P(pskvc_buf, sizeof(pskvc_buf),
+              PSTR("$PSKVC,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%X*"),
+              PSKVC_VERSION,  ui->adapter,      ui->connection,
+              ui->units,      ui->zoom,         ui->protocol,
+              ui->baudrate,   ui->server,       ui->key,
+              ui->rotate,     ui->orientation,  ui->adb,
+              ui->idpref,     ui->vmode,        ui->voice,
+              ui->aghost,     ui->filter,       ui->power_save,
+              ui->team);
+
+          NMEA_add_checksum(pskvc_buf, sizeof(pskvc_buf) - strlen(pskvc_buf));
+
+          NMEA_Out(C_NMEA_Source, (byte *) pskvc_buf, strlen(pskvc_buf), false);
+
+        } else if (atoi(V_Version.value()) == PSKVC_VERSION) {
+          bool cfg_is_updated = false;
+
+          if (V_Adapter.isUpdated())
+          {
+            ui->adapter = atoi(V_Adapter.value());
+            Serial.print(F("Adapter = ")); Serial.println(ui->adapter);
+            cfg_is_updated = true;
+          }
+          if (V_Connection.isUpdated())
+          {
+            ui->connection = atoi(V_Connection.value());
+            Serial.print(F("Connection = ")); Serial.println(ui->connection);
+            cfg_is_updated = true;
+          }
+          if (V_Units.isUpdated())
+          {
+            ui->units = atoi(V_Units.value());
+            Serial.print(F("Units = ")); Serial.println(ui->units);
+            cfg_is_updated = true;
+          }
+          if (V_Zoom.isUpdated())
+          {
+            ui->zoom = atoi(V_Zoom.value());
+            Serial.print(F("Zoom = ")); Serial.println(ui->zoom);
+            cfg_is_updated = true;
+          }
+          if (V_Protocol.isUpdated())
+          {
+            ui->protocol = atoi(V_Protocol.value());
+            Serial.print(F("Protocol = ")); Serial.println(ui->protocol);
+            cfg_is_updated = true;
+          }
+          if (V_Baudrate.isUpdated())
+          {
+            ui->baudrate = atoi(V_Baudrate.value());
+            Serial.print(F("Baudrate = ")); Serial.println(ui->baudrate);
+            cfg_is_updated = true;
+          }
+          if (V_Server.isUpdated())
+          {
+            strncpy(ui->server, V_Server.value(), sizeof(ui->server));
+            Serial.print(F("Server = ")); Serial.println(ui->server);
+            cfg_is_updated = true;
+          }
+           if (V_Key.isUpdated())
+          {
+            strncpy(ui->key, V_Key.value(), sizeof(ui->key));
+            Serial.print(F("Key = ")); Serial.println(ui->key);
+            cfg_is_updated = true;
+          }
+          if (V_Rotate.isUpdated())
+          {
+            ui->rotate = atoi(V_Rotate.value());
+            Serial.print(F("Rotation = ")); Serial.println(ui->rotate);
+            cfg_is_updated = true;
+          }
+          if (V_Orientation.isUpdated())
+          {
+            ui->orientation = atoi(V_Orientation.value());
+            Serial.print(F("Orientation = ")); Serial.println(ui->orientation);
+            cfg_is_updated = true;
+          }
+          if (V_AvDB.isUpdated())
+          {
+            ui->adb = atoi(V_AvDB.value());
+            Serial.print(F("AvDB = ")); Serial.println(ui->adb);
+            cfg_is_updated = true;
+          }
+          if (V_ID_Pref.isUpdated())
+          {
+            ui->idpref = atoi(V_ID_Pref.value());
+            Serial.print(F("ID_Pref = ")); Serial.println(ui->idpref);
+            cfg_is_updated = true;
+          }
+           if (V_VMode.isUpdated())
+          {
+            ui->vmode = atoi(V_VMode.value());
+            Serial.print(F("VMode = ")); Serial.println(ui->vmode);
+            cfg_is_updated = true;
+          }
+          if (V_Voice.isUpdated())
+          {
+            ui->voice = atoi(V_Voice.value());
+            Serial.print(F("Voice = ")); Serial.println(ui->voice);
+            cfg_is_updated = true;
+          }
+          if (V_AntiGhost.isUpdated())
+          {
+            ui->aghost = atoi(V_AntiGhost.value());
+            Serial.print(F("AntiGhost = ")); Serial.println(ui->aghost);
+            cfg_is_updated = true;
+          }
+          if (V_Filter.isUpdated())
+          {
+            ui->filter = atoi(V_Filter.value());
+            Serial.print(F("Filter = ")); Serial.println(ui->filter);
+            cfg_is_updated = true;
+          }
+          if (V_PowerSave.isUpdated())
+          {
+            ui->power_save = atoi(V_PowerSave.value());
+            Serial.print(F("PowerSave = ")); Serial.println(ui->power_save);
+            cfg_is_updated = true;
+          }
+          if (V_Team.isUpdated())
+          {
+            ui->team = strtoul(V_Team.value(), NULL, 16);
+            Serial.print(F("Team = ")); Serial.println(ui->team, HEX);
+            cfg_is_updated = true;
+          }
+
+          if (cfg_is_updated) {
+            SoC->WDT_fini();
+            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+            EEPROM_store();
+            nmea_cfg_restart();
+          }
+        }
+      }
+#endif /* USE_SKYVIEW_CFG */
+}
+#endif /* USE_NMEA_CFG */
 
 static char hexbuf[NMEA_BUFFER_SIZE];
 char *bytes2Hex(byte *buffer, size_t size)

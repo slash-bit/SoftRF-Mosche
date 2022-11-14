@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.h
- * Copyright (C) 2017-2021 Linar Yusupov
+ * Copyright (C) 2017-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,10 +16,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this file based on v1.2.
+
 #ifndef NMEAHELPER_H
 #define NMEAHELPER_H
 
+#ifdef __cplusplus
 #include "../../system/SoC.h"
+#endif /* __cplusplus */
 
 enum
 {
@@ -37,7 +41,6 @@ enum
 #define PSRFC_VERSION       1
 #define MAX_PSRFC_LEN       64
 
-// added by MB for additional settings
 #define PSRFD_VERSION       1
 #define MAX_PSRFD_LEN       64
 
@@ -59,6 +62,12 @@ void NMEA_add_checksum(char *, size_t);
 char *bytes2Hex(byte *, size_t);
 
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
+
+#if defined(USE_NMEA_CFG)
+void NMEA_Process_SRF_SKV_Sentences(void);
+
+extern uint8_t C_NMEA_Source;
+#endif /* USE_NMEA_CFG */
 
 #if defined(NMEA_TCP_SERVICE)
 

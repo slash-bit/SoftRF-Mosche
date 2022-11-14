@@ -36,6 +36,8 @@
 #define SerialOutput            Serial
 #define SoftwareSerial          HardwareSerial
 #define swSer                   Serial1
+#define Serial_GNSS_In          Serial1
+#define Serial_GNSS_Out         Serial_GNSS_In
 #define UATSerial               Serial2
 #define EEPROM_commit()         EEPROM.commit()
 

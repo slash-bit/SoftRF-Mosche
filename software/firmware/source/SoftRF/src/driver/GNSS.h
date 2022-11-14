@@ -1,6 +1,6 @@
 /*
  * GNSSHelper.h
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this file based on v1.2.
+
 #ifndef GNSSHELPER_H
 #define GNSSHELPER_H
 
@@ -28,7 +30,9 @@ typedef enum
   GNSS_MODULE_U6,   /* Ublox 6 */
   GNSS_MODULE_U7,   /* Ublox 7 */
   GNSS_MODULE_U8,   /* Ublox 8 */
-  GNSS_MODULE_U9,   /* reserved for Ublox 9 */
+  GNSS_MODULE_U9,   /* Ublox 9 */
+  GNSS_MODULE_U10,  /* Ublox 10 */
+  GNSS_MODULE_U11,  /* RESERVED */
   GNSS_MODULE_MAV,  /* MAVLink */
   GNSS_MODULE_SONY, /* S7XG */
   GNSS_MODULE_AT65, /* AT6558 */
@@ -64,7 +68,7 @@ void GNSSTimeSync    (void);
 void PickGNSSFix     (void);
 int LookupSeparation (float, float);
 
-extern const gnss_chip_ops_t *gnss_chip;
+extern const gnss_chip_ops_t *gnss_chip;  // added
 extern TinyGPSPlus gnss;
 extern volatile unsigned long PPS_TimeMarker;
 extern const char *GNSS_name[];
