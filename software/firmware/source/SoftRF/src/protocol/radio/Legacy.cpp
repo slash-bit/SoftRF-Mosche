@@ -237,7 +237,7 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->projtime_ms = fop->gnsstime_ms;
 
     /* send radio packet data out via NMEA for debugging */
-    if (settings->nmea_d && settings->debug_flags & DEBUG_LEGACY) {
+    if ((settings->nmea_d || settings->nmea2_d) && settings->debug_flags & DEBUG_LEGACY) {
 #if 0
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSRFL,%06X,%ld,%d,%.5f,%.5f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
@@ -246,14 +246,14 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
         heading, turnrate, vs10, smult,
         fop->fla_ns[0], fop->fla_ns[1], fop->fla_ns[2], fop->fla_ns[3],
         fop->fla_ew[0], fop->fla_ew[1], fop->fla_ew[2], fop->fla_ew[3]);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-#endif
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
       /* also output the raw (but decrypted) packet as a whole, in hex */
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
         fop->addr, fop->gnsstime_ms,
         bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
         // fop->airborne, vs10, pkt->_unk2);   // this line compiled in MB08e only (with %d,%d,%d added).
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+#endif
     }
 
     return true;

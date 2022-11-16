@@ -150,8 +150,15 @@ void EEPROM_defaults()
   eeprom_block.field.settings.nmea_s     = true;
   eeprom_block.field.settings.nmea_d     = false;
 
+  eeprom_block.field.settings.nmea2_g     = true;
+  eeprom_block.field.settings.nmea2_p     = false;
+  eeprom_block.field.settings.nmea2_l     = true;
+  eeprom_block.field.settings.nmea2_s     = true;
+  eeprom_block.field.settings.nmea2_d     = false;
+
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   eeprom_block.field.settings.nmea_out   = NMEA_USB;
+  eeprom_block.field.settings.nmea_out2  = NMEA_OFF;
 #else
   eeprom_block.field.settings.nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              NMEA_BLUETOOTH :
@@ -160,6 +167,13 @@ void EEPROM_defaults()
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
                                              NMEA_UDP :
                                            NMEA_UART));
+  eeprom_block.field.settings.nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
+                                             NMEA_USB :
+                                          (hw_info.model == SOFTRF_MODEL_PRIME ?
+                                             NMEA_UART :
+                                          (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
+                                             NMEA_UART :
+                                           NMEA_OFF));
 #endif
 
   eeprom_block.field.settings.gdl90      = GDL90_OFF;

@@ -10,9 +10,10 @@ Beyond Lyusupov's version 1.0:
 * Estimates wind while circling, uses for collision prediction
 * Support 3-level collision alarms via buzzer
 * Can set aircraft ID for self, ID to ignore, and ID to follow
+* Can configure two simultaneous NMEA output destinations
 * Settable baud rate for serial output
 
-Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF), and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only) are available here.
+Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
 <br>
 <br>
 New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).

@@ -239,7 +239,11 @@ MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI_USB);
 #endif /* USE_USB_MIDI */
 
 ui_settings_t ui_settings = {
+#if defined(DEFAULT_REGION_US)
+    .units        = UNITS_IMPERIAL,
+#else
     .units        = UNITS_METRIC,
+#endif
     .zoom         = ZOOM_MEDIUM,
     .protocol     = PROTOCOL_NMEA,
     .rotate       = ROTATE_0,
@@ -1171,7 +1175,11 @@ static void nRF52_EEPROM_extension(int cmd)
     case EEPROM_EXT_DEFAULTS:
       ui->adapter      = 0;
       ui->connection   = 0;
+#if defined(DEFAULT_REGION_US)
+      ui->units        = UNITS_IMPERIAL;
+#else
       ui->units        = UNITS_METRIC;
+#endif
       ui->zoom         = ZOOM_MEDIUM;
       ui->protocol     = PROTOCOL_NMEA;
       ui->baudrate     = 0;
@@ -1246,6 +1254,10 @@ static void nRF52_EEPROM_extension(int cmd)
 
       break;
   }
+
+//#if defined(DEFAULT_REGION_US)
+//      ui->units = UNITS_IMPERIAL;
+//#endif
 }
 
 static void nRF52_SPI_begin()

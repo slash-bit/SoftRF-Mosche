@@ -1330,8 +1330,7 @@ void PickGNSSFix()
           else
 #endif
           {
-            NMEA_Out(settings->nmea_out,  &GNSSbuf[ndx], write_size, true);
-//          NMEA_Out(settings->nmea_out2, &GNSSbuf[ndx], write_size, true);
+            NMEA_Outs(settings->nmea_g, settings->nmea2_g, &GNSSbuf[ndx], write_size, true);
           }
 
           break;

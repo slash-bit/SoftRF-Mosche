@@ -120,6 +120,9 @@ static const char about_html[] PROGMEM = "<html>\
 <tr><th align=left>Lewis He</th><td align=left>AXP20X library</td></tr>\
 <tr><th align=left>Bodmer</th><td align=left>TFT library</td></tr>\
 <tr><th align=left>Michael Kuyper</th><td align=left>Basic MAC library</td></tr>\
+<tr><th align=left>Moshe Braner</th><td align=left>Fast approx math</td></tr>\
+<tr><th align=left>Moshe Braner</th><td align=left>Wind estimation</td></tr>\
+<tr><th align=left>Moshe Braner</th><td align=left>Collision algorithm for circling aircraft</td></tr>\
 </table>\
 <hr>\
 Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
@@ -128,7 +131,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 8000;
+  size_t size = 9000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -436,7 +439,38 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
-<th align=left>NMEA sentences:</th>\
+<th align=left>NMEA primary output</th>\
+<td align=right>\
+<select name='nmea_out'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Serial</option>\
+<option %s value='%d'>UDP</option>"),
+  (settings->nmea_out == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
+  (settings->nmea_out == NMEA_UART ? "selected" : ""), NMEA_UART,
+  (settings->nmea_out == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
+  /* SoC specific part 2 */
+  if (SoC->id == SOC_ESP32) {
+    snprintf_P ( offset, size,
+      PSTR("\
+<option %s value='%d'>TCP</option>\
+<option %s value='%d'>Bluetooth</option>"),
+    (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP,
+    (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH);
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+  }
+
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Sentences:</th>\
 </tr>\
 <tr>\
 <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GNSS</th>\
@@ -472,35 +506,42 @@ void handleSettings() {
 <input type='radio' name='nmea_d' value='0' %s>Off\
 <input type='radio' name='nmea_d' value='1' %s>On\
 </td>\
-</tr>\
-<tr>\
-<th align=left>NMEA output</th>\
-<td align=right>\
-<select name='nmea_out'>\
-<option %s value='%d'>Off</option>\
-<option %s value='%d'>Serial</option>\
-<option %s value='%d'>UDP</option>"),
+</tr>"),
   (!settings->nmea_g ? "checked" : "") , (settings->nmea_g ? "checked" : ""),
   (!settings->nmea_p ? "checked" : "") , (settings->nmea_p ? "checked" : ""),
   (!settings->nmea_l ? "checked" : "") , (settings->nmea_l ? "checked" : ""),
   (!settings->nmea_s ? "checked" : "") , (settings->nmea_s ? "checked" : ""),
-  (!settings->nmea_d ? "checked" : "") , (settings->nmea_d ? "checked" : ""),
-  (settings->nmea_out == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
-  (settings->nmea_out == NMEA_UART ? "selected" : ""), NMEA_UART,
-  (settings->nmea_out == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
+  (!settings->nmea_d ? "checked" : "") , (settings->nmea_d ? "checked" : ""));
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+
+  /* second NMEA output route */
+  snprintf_P ( offset, size,
+    PSTR("\
+<tr>\
+<th align=left>NMEA second output</th>\
+<td align=right>\
+<select name='nmea_out2'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Serial</option>\
+<option %s value='%d'>UDP</option>"),
+  (settings->nmea_out2 == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
+  (settings->nmea_out2 == NMEA_UART ? "selected" : ""), NMEA_UART,
+  (settings->nmea_out2 == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
 
   len = strlen(offset);
   offset += len;
   size -= len;
 
-  /* SoC specific part 2 */
   if (SoC->id == SOC_ESP32) {
     snprintf_P ( offset, size,
       PSTR("\
 <option %s value='%d'>TCP</option>\
 <option %s value='%d'>Bluetooth</option>"),
-    (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP,
-    (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH);
+    (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP,
+    (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH);
 
     len = strlen(offset);
     offset += len;
@@ -509,6 +550,56 @@ void handleSettings() {
 
     snprintf_P ( offset, size,
       PSTR("\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Sentences:</th>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GNSS</th>\
+<td align=right>\
+<input type='radio' name='nmea2_g' value='0' %s>Off\
+<input type='radio' name='nmea2_g' value='1' %s>On\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Private</th>\
+<td align=right>\
+<input type='radio' name='nmea2_p' value='0' %s>Off\
+<input type='radio' name='nmea2_p' value='1' %s>On\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Legacy</th>\
+<td align=right>\
+<input type='radio' name='nmea2_l' value='0' %s>Off\
+<input type='radio' name='nmea2_l' value='1' %s>On\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sensors</th>\
+<td align=right>\
+<input type='radio' name='nmea2_s' value='0' %s>Off\
+<input type='radio' name='nmea2_s' value='1' %s>On\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debug</th>\
+<td align=right>\
+<input type='radio' name='nmea2_d' value='0' %s>Off\
+<input type='radio' name='nmea2_d' value='1' %s>On\
+</td>\
+</tr>"),
+  (!settings->nmea2_g ? "checked" : "") , (settings->nmea2_g ? "checked" : ""),
+  (!settings->nmea2_p ? "checked" : "") , (settings->nmea2_p ? "checked" : ""),
+  (!settings->nmea2_l ? "checked" : "") , (settings->nmea2_l ? "checked" : ""),
+  (!settings->nmea2_s ? "checked" : "") , (settings->nmea2_s ? "checked" : ""),
+  (!settings->nmea2_d ? "checked" : "") , (settings->nmea2_d ? "checked" : ""));
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+
+  snprintf_P ( offset, size,
+    PSTR("\
 <tr>\
 <th align=left>Serial Output Baud Rate:</th>\
 <td align=right>\
@@ -829,7 +920,7 @@ void handleRoot() {
 
 void handleInput() {
 
-  size_t size = 2000;
+  size_t size = 2500;
 
   char *Input_temp = (char *) malloc(size);
   if (Input_temp == NULL) {
@@ -857,6 +948,8 @@ void handleInput() {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
       settings->bluetooth = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea_out")) {
+      settings->nmea_out = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_g")) {
       settings->nmea_g = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_p")) {
@@ -867,8 +960,18 @@ void handleInput() {
       settings->nmea_s = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_d")) {
       settings->nmea_d = server.arg(i).toInt();
-    } else if (server.argName(i).equals("nmea_out")) {
-      settings->nmea_out = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea_out2")) {
+      settings->nmea_out2 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_g")) {
+      settings->nmea2_g = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_p")) {
+      settings->nmea2_p = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_l")) {
+      settings->nmea2_l = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_s")) {
+      settings->nmea2_s = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_d")) {
+      settings->nmea2_d = server.arg(i).toInt();
     } else if (server.argName(i).equals("baud_rate")) {
       settings->baud_rate = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
@@ -919,6 +1022,27 @@ void handleInput() {
 #endif
     }
   }
+
+  /* enforce some restrictions on second NMEA output route */
+  int nmea1 = settings->nmea_out;
+  int nmea2 = settings->nmea_out2;
+  Serial.print(F("NMEA_Output1 = ")); Serial.println(nmea1);
+  Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
+  if (nmea2 == nmea1)
+      nmea2 = NMEA_OFF;
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if ((nmea1==NMEA_UART || nmea1==NMEA_USB)
+     && (nmea2==NMEA_UART || nmea2==NMEA_USB))
+        nmea2 = NMEA_OFF;      // USB & UART wired together
+  }
+  bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
+  bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
+  if (wireless1 && wireless2)
+        nmea2 = NMEA_OFF;      // only one wireless output route possible
+  Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
+  settings->nmea_out2 = nmea2;
+
+  /* show new settings before rebooting */
   snprintf_P ( Input_temp, size,
 PSTR("<html>\
 <head>\
@@ -942,11 +1066,18 @@ PSTR("<html>\
 <tr><th align=left>Volume</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
+<tr><th align=left>NMEA Out 1</th><td align=right>%d</td></tr>\
 <tr><th align=left>NMEA GNSS</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Private</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Legacy</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Sensors</th><td align=right>%s</td></tr>\
-<tr><th align=left>NMEA Out</th><td align=right>%d</td></tr>\
+<tr><th align=left>NMEA Debug</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA Out 2</th><td align=right>%d</td></tr>\
+<tr><th align=left>NMEA2 GNSS</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA2 Private</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA2 Legacy</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA2 Sensors</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
 <tr><th align=left>GDL90</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
 <tr><th align=left>Stealth</th><td align=right>%s</td></tr>\
@@ -966,9 +1097,13 @@ PSTR("<html>\
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->pointer, settings->bluetooth,
+  settings->nmea_out,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
-  BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s),
-  settings->nmea_out, settings->gdl90, settings->d1090,
+  BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
+  settings->nmea_out2,
+  BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p),
+  BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
+  settings->gdl90, settings->d1090,
   BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
   settings->power_save, settings->power_external, settings->freq_corr, settings->debug_flags,
 //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
@@ -978,6 +1113,47 @@ PSTR("<html>\
   (settings->igc_key[3]? 0x88888888 : 0)
       /* do not show the existing secret key */
   );
+
+Serial.println("New settings:");
+Serial.print(" Mode ");Serial.println(settings->mode);
+Serial.print(" Aircraft ID ");Serial.printf("%06X\r\n", settings->aircraft_id);
+Serial.print(" ID method ");Serial.println(settings->id_method);
+Serial.print(" Ignore ID ");Serial.printf("%06X\r\n", settings->ignore_id);
+Serial.print(" Follow ID ");Serial.printf("%06X\r\n", settings->follow_id);
+Serial.print(" Protocol ");Serial.println(settings->rf_protocol);
+Serial.print(" Band ");Serial.println(settings->band);
+Serial.print(" Aircraft type ");Serial.println(settings->aircraft_type);
+Serial.print(" Alarm trigger ");Serial.println(settings->alarm);
+Serial.print(" Tx Power ");Serial.println(settings->txpower);
+Serial.print(" Volume ");Serial.println(settings->volume);
+Serial.print(" LED pointer ");Serial.println(settings->pointer);
+Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
+Serial.print(" NMEA Out 1 ");Serial.println(settings->nmea_out);
+Serial.print(" NMEA GNSS ");Serial.println(settings->nmea_g);
+Serial.print(" NMEA Private ");Serial.println(settings->nmea_p);
+Serial.print(" NMEA Legacy ");Serial.println(settings->nmea_l);
+Serial.print(" NMEA Sensors ");Serial.println(settings->nmea_s);
+Serial.print(" NMEA Debug ");Serial.println(settings->nmea_d);
+Serial.print(" NMEA Out 2 ");Serial.println(settings->nmea_out2);
+Serial.print(" NMEA2 GNSS ");Serial.println(settings->nmea2_g);
+Serial.print(" NMEA2 Private ");Serial.println(settings->nmea2_p);
+Serial.print(" NMEA2 Legacy ");Serial.println(settings->nmea2_l);
+Serial.print(" NMEA2 Sensors ");Serial.println(settings->nmea2_s);
+Serial.print(" NMEA2 Debug ");Serial.println(settings->nmea2_d);
+Serial.print(" GDL90 ");Serial.println(settings->gdl90);
+Serial.print(" DUMP1090 ");Serial.println(settings->d1090);
+Serial.print(" Stealth ");Serial.println(settings->stealth);
+Serial.print(" No track ");Serial.println(settings->no_track);
+Serial.print(" Power save ");Serial.println(settings->power_save);
+Serial.print(" Power external ");Serial.println(settings->power_external);
+Serial.print(" Freq. correction ");Serial.println(settings->freq_corr);
+Serial.print(" debug_flags ");Serial.printf("%02X\r\n", settings->debug_flags);
+Serial.print(" IGC key");
+Serial.printf(" %08X", (settings->igc_key[0]? 0x88888888 : 0));
+Serial.printf(" %08X", (settings->igc_key[1]? 0x88888888 : 0));
+Serial.printf(" %08X", (settings->igc_key[2]? 0x88888888 : 0));
+Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
+  
   SoC->swSer_enableRx(false);
   server.send ( 200, "text/html", Input_temp );
 //  SoC->swSer_enableRx(true);

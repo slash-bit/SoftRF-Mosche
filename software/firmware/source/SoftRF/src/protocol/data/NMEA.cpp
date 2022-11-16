@@ -99,7 +99,13 @@ TinyGPSCustom D_follow_id;
 TinyGPSCustom D_baud_rate;
 TinyGPSCustom D_power_ext;
 TinyGPSCustom D_NMEA_debug;
-TinyGPSCustom D_debug_flags;  /* 9 */
+TinyGPSCustom D_debug_flags;
+TinyGPSCustom D_NMEA2;    /* 10 */
+TinyGPSCustom D_NMEA2_gnss;
+TinyGPSCustom D_NMEA2_private;
+TinyGPSCustom D_NMEA2_legacy;
+TinyGPSCustom D_NMEA2_sensors;
+TinyGPSCustom D_NMEA2_debug;  /* 15 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -185,15 +191,21 @@ void NMEA_setup()
   const char *psrf_d = "PSRFD";
   term_num = 1;
 
-  D_Version.begin      (gnss, psrf_d, term_num++); /* 1 */
-  D_id_method.begin    (gnss, psrf_d, term_num++);
-  D_aircraft_id.begin  (gnss, psrf_d, term_num++);
-  D_ignore_id.begin    (gnss, psrf_d, term_num++);
-  D_follow_id.begin    (gnss, psrf_d, term_num++);
-  D_baud_rate.begin    (gnss, psrf_d, term_num++);
-  D_power_ext.begin    (gnss, psrf_d, term_num++);
-  D_NMEA_debug.begin   (gnss, psrf_d, term_num++);
-  D_debug_flags.begin  (gnss, psrf_d, term_num++);
+  D_Version.begin       (gnss, psrf_d, term_num++); /* 1 */
+  D_id_method.begin     (gnss, psrf_d, term_num++);
+  D_aircraft_id.begin   (gnss, psrf_d, term_num++);
+  D_ignore_id.begin     (gnss, psrf_d, term_num++);
+  D_follow_id.begin     (gnss, psrf_d, term_num++);
+  D_baud_rate.begin     (gnss, psrf_d, term_num++);
+  D_power_ext.begin     (gnss, psrf_d, term_num++);
+  D_NMEA_debug.begin    (gnss, psrf_d, term_num++);
+  D_debug_flags.begin   (gnss, psrf_d, term_num++);
+  D_NMEA2.begin         (gnss, psrf_d, term_num++);
+  D_NMEA2_gnss.begin    (gnss, psrf_d, term_num++);
+  D_NMEA2_private.begin (gnss, psrf_d, term_num++);
+  D_NMEA2_legacy.begin  (gnss, psrf_d, term_num++);
+  D_NMEA2_sensors.begin (gnss, psrf_d, term_num++);
+  D_NMEA2_debug.begin   (gnss, psrf_d, term_num++); /* 15 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -231,7 +243,7 @@ void NMEA_setup()
 #endif /* USE_NMEA_CFG */
 
 #if defined(NMEA_TCP_SERVICE)
-  if (settings->nmea_out == NMEA_TCP) {
+  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
     NmeaTCPServer.begin();
     Serial.print(F("NMEA TCP server has started at port: "));
     Serial.println(NMEA_TCP_PORT);
@@ -254,7 +266,8 @@ void NMEA_setup()
 void NMEA_loop()
 {
 
-  if (settings->nmea_s && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
+  if ((settings->nmea_s || settings->nmea2_s)
+      && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
 
     int altitude = constrain(
             (int) (ThisAircraft.pressure_altitude * _GPS_FEET_PER_METER),
@@ -266,7 +279,7 @@ void NMEA_loop()
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
-    NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_LK8EX1)
     char str_Vcc[6];
@@ -280,14 +293,15 @@ void NMEA_loop()
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
-    NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+
 #endif /* EXCLUDE_LK8EX1 */
 
     PGRMZ_TimeMarker = millis();
   }
 
 #if defined(ENABLE_AHRS)
-  if (settings->nmea_s && isTimeToRPYL()) {
+  if ((settings->nmea_s  || settings->nmea2_s) && isTimeToRPYL()) {
 
     AHRS_NMEA();
 
@@ -298,7 +312,7 @@ void NMEA_loop()
 #if defined(NMEA_TCP_SERVICE)
   uint8_t i;
 
-  if (settings->nmea_out == NMEA_TCP) {
+  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
 
     if (NmeaTCPServer.hasClient()) {
       for(i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
@@ -343,7 +357,7 @@ void NMEA_loop()
 void NMEA_fini()
 {
 #if defined(NMEA_TCP_SERVICE)
-  if (settings->nmea_out == NMEA_TCP) {
+  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
     NmeaTCPServer.stop();
   }
 #endif /* NMEA_TCP_SERVICE */
@@ -420,8 +434,18 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
   }
 }
 
+void NMEA_Outs(bool out1, bool out2, byte *buf, size_t size, bool nl) {
+    if (out1)
+        NMEA_Out(settings->nmea_out,  buf, size, nl);
+    if (out2)
+        NMEA_Out(settings->nmea_out2, buf, size, nl);
+}
+
 void NMEA_Export()
 {
+    if (! settings->nmea_l && ! settings->nmea2_l)
+        return;
+
     int bearing;
     int alt_diff;
     float distance;
@@ -521,7 +545,7 @@ void NMEA_Export()
 
               NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
-              NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+              NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
               /* Most close traffic is treated as highest priority target */
               if (distance < HP_distance && abs(alt_diff) < VERTICAL_VISIBILITY_RANGE) {
@@ -569,7 +593,7 @@ void NMEA_Export()
 
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
@@ -579,7 +603,7 @@ void NMEA_Export()
 
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
 
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
     }
 }
@@ -592,7 +616,7 @@ void NMEA_Position()
   size_t i;
   struct timeval tv;
 
-  if (settings->nmea_g) {
+  if (settings->nmea_g || settings->nmea2_g) {
 
     nmeaInfoClear(&info);
 
@@ -661,13 +685,16 @@ void NMEA_Position()
       (NMEALIB_SENTENCE_GPGGA | NMEALIB_SENTENCE_GPGSA | NMEALIB_SENTENCE_GPRMC));
 
     if (gen_sz) {
-      NMEA_Out(settings->nmea_out, (byte *) nmealib_buf.buffer, gen_sz, false);
+      NMEA_Outs(settings->nmea_g, settings->nmea2_g, (byte *) nmealib_buf.buffer, gen_sz, false);
     }
   }
 }
 
 void NMEA_GGA()
 {
+  if (! settings->nmea_g && ! settings->nmea2_g)
+    return;
+
   NmeaInfo info;
 
   float latitude = gnss.location.lat();
@@ -712,7 +739,7 @@ void NMEA_GGA()
                                         NMEALIB_SENTENCE_GPGGA );
 
   if (gen_sz) {
-    NMEA_Out(settings->nmea_out, (byte *) nmealib_buf.buffer, gen_sz, false);
+    NMEA_Outs(settings->nmea_g, settings->nmea2_g, (byte *) nmealib_buf.buffer, gen_sz, false);
   }
 }
 
@@ -898,10 +925,12 @@ void NMEA_Process_SRF_SKV_Sentences()
         if (strncmp(D_Version.value(), "?", 1) == 0) {
           char psrfd_buf[MAX_PSRFD_LEN];
           snprintf_P(psrfd_buf, sizeof(psrfd_buf),
-              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X*"),
+              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d*"),
               PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
               settings->ignore_id,      settings->follow_id,  settings->baud_rate,
-              settings->power_external, settings->nmea_d,     settings->debug_flags);
+              settings->power_external, settings->nmea_d,     settings->debug_flags,
+              settings->nmea_out2,      settings->nmea2_g,    settings->nmea2_p,
+              settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d);
           NMEA_add_checksum(psrfd_buf, sizeof(psrfd_buf) - strlen(psrfd_buf));
           NMEA_Out(C_NMEA_Source, (byte *) psrfd_buf, strlen(psrfd_buf), false);
 
@@ -947,6 +976,62 @@ void NMEA_Process_SRF_SKV_Sentences()
             settings->debug_flags = atoi(D_debug_flags.value());
             Serial.print(F("Debug flags = ")); Serial.println(settings->debug_flags);
             cfg_is_updated = true;
+          }
+          if (D_NMEA2.isUpdated())
+          {
+            int nmea1 = settings->nmea_out;
+            int nmea2 = atoi(D_NMEA2.value());
+            Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
+            if (nmea2 == nmea1)
+                nmea2 = NMEA_OFF;
+            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+              if ((nmea1==NMEA_UART || nmea1==NMEA_USB)
+               && (nmea2==NMEA_UART || nmea2==NMEA_USB))
+                  nmea2 = NMEA_OFF;      // USB & UART wired together
+            }
+            bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
+            bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
+            if (wireless1 && wireless2)
+                  nmea2 = NMEA_OFF;      // only one wireless output route possible
+            Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
+            settings->nmea_out2 = nmea2;
+            cfg_is_updated = true;
+          }
+          if (D_NMEA2_gnss.isUpdated())
+          {
+            settings->nmea2_g = atoi(D_NMEA2_gnss.value());
+            Serial.print(F("NMEA2_gnss = ")); Serial.println(settings->nmea_g);
+            cfg_is_updated = true;
+          }
+          if (D_NMEA2_private.isUpdated())
+          {
+            settings->nmea2_p = atoi(D_NMEA2_private.value());
+            Serial.print(F("NMEA2_private = ")); Serial.println(settings->nmea_p);
+            cfg_is_updated = true;
+          }
+          if (D_NMEA2_legacy.isUpdated())
+          {
+            settings->nmea2_l = atoi(D_NMEA2_legacy.value());
+            Serial.print(F("NMEA2_legacy = ")); Serial.println(settings->nmea_l);
+            cfg_is_updated = true;
+          }
+           if (D_NMEA2_sensors.isUpdated())
+          {
+            settings->nmea2_s = atoi(D_NMEA2_sensors.value());
+            Serial.print(F("NMEA2_sensors = ")); Serial.println(settings->nmea_s);
+            cfg_is_updated = true;
+          }
+          if (D_NMEA2_debug.isUpdated()) {
+            settings->nmea2_d = atoi(D_NMEA2_debug.value());
+            Serial.print(F("NMEA2_debug = ")); Serial.println(settings->nmea_d);
+            cfg_is_updated = true;
+          }
+
+          if (cfg_is_updated) {
+            SoC->WDT_fini();
+            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+            EEPROM_store();
+            nmea_cfg_restart();
           }
         }
       }

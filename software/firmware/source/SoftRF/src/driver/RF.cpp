@@ -274,6 +274,7 @@ byte RF_setup(void)
       RF_FreqPlan.setPlan(RF_BAND_UK);
     }
   } else {
+
     RF_FreqPlan.setPlan(settings->band);
   }
 

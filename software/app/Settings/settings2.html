@@ -30,7 +30,13 @@ function UpdateChecksum()
       + document.getElementById("baud_rate").value + ","
       + document.getElementById("power_ext").value + ","
       + document.getElementById("NMEA_debug").value + ","
-      + document.getElementById("debug_flags").value;
+      + document.getElementById("debug_flags").value + ","
+      + document.getElementById("nmea2").value + ","
+      + document.getElementById("gnss2").value + ","
+      + document.getElementById("priv2").value + ","
+      + document.getElementById("legacy2").value + ","
+      + document.getElementById("sens2").value + ","
+      + document.getElementById("debug2").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -119,6 +125,70 @@ function SelFlags()
   UpdateChecksum();
 }
 
+function SelNMEA2()
+{
+  var nmea2 = document.getElementById("NMEAs2");
+  document.getElementById("nmea2").value = nmea2.options[nmea2.selectedIndex].value;
+  UpdateChecksum();
+}
+
+
+
+function SelGNSS2()
+{
+  var gnss2 = document.getElementsByName('nmea2_g');
+  for (var i = 0; i < gnss2.length; i++) {
+      if (gnss2[i].type == "radio" && gnss2[i].checked) {
+        document.getElementById("gnss2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
+function SelPriv2()
+{
+  var priv2 = document.getElementsByName('nmea2_p');
+  for (var i = 0; i < priv2.length; i++) {
+      if (priv2[i].type == "radio" && priv2[i].checked) {
+        document.getElementById("priv2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
+function SelLegacy2()
+{
+  var legacy2 = document.getElementsByName('nmea2_l');
+  for (var i = 0; i < legacy2.length; i++) {
+      if (legacy2[i].type == "radio" && legacy2[i].checked) {
+        document.getElementById("legacy2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
+function SelSens2()
+{
+  var sens2 = document.getElementsByName('nmea2_s');
+  for (var i = 0; i < sens2.length; i++) {
+      if (sens2[i].type == "radio" && sens2[i].checked) {
+        document.getElementById("sens2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
+function SelDebug2()
+{
+  var debug2 = document.getElementsByName('nmea2_d');
+  for (var i = 0; i < debug2.length; i++) {
+      if (debug2[i].type == "radio" && debug2[i].checked) {
+        document.getElementById("debug2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
 function InitSettings()
 {
 //  document.getElementById("ver").value = 1;
@@ -130,6 +200,12 @@ function InitSettings()
   document.getElementById("power_ext").value   = 0;
   document.getElementById("NMEA_debug").value  = 0;
   document.getElementById("debug_flags").value = "00";
+  document.getElementById("nmea2").value       = 0;
+  document.getElementById("gnss2").value       = 1;
+  document.getElementById("priv2").value       = 0;
+  document.getElementById("legacy2").value     = 1;
+  document.getElementById("sens2").value       = 1;
+  document.getElementById("debug2").value      = 0;
 
   UpdateChecksum();
 }
@@ -210,7 +286,11 @@ If you are affected - please, consider to update
 </tr>
 
 <tr>
-<th align=left>NMEA sentences:</th>
+<th align=left>NMEA primary output</th>
+</tr>
+
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;sentences:</th>
 </tr>
 
 <tr>
@@ -222,9 +302,60 @@ If you are affected - please, consider to update
 </tr>
 
 <tr>
-<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debug flags</th>
+<th align=left>Debug flags</th>
 <td align=right>
 <INPUT type="text" id="Flags" maxlength="2" size="2" value="00" onchange="SelFlags()">
+</td>
+</tr>
+
+<tr>
+<th align=left>NMEA second output</th>
+<td align=right>
+<select id="NMEAs2" onchange="SelNMEA2()">
+<option selected value='0'>None</option>
+<option value='1'>Serial</option>
+<option value='4'>USB</option>
+<option value='5'>Bluetooth</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;sentences:</th>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GNSS</th>
+<td align=right>
+<input type='radio' name='nmea2_g' value='0' onchange="SelGNSS2()">Off
+<input type='radio' name='nmea2_g' value='1' onchange="SelGNSS2()" checked>On
+</td>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Private</th>
+<td align=right>
+<input type='radio' name='nmea2_p' value='0' onchange="SelPriv2()" checked>Off
+<input type='radio' name='nmea2_p' value='1' onchange="SelPriv2()">On
+</td>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Legacy</th>
+<td align=right>
+<input type='radio' name='nmea2_l' value='0' onchange="SelLegacy2()">Off
+<input type='radio' name='nmea2_l' value='1' onchange="SelLegacy2()" checked>On
+</td>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sensors</th>
+<td align=right>
+<input type='radio' name='nmea2_s' value='0' onchange="SelSens2()">Off
+<input type='radio' name='nmea2_s' value='1' onchange="SelSens2()" checked>On
+</td>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Debug</th>
+<td align=right>
+<input type='radio' name='nmea2_d' value='0' onchange="SelDebug2()" checked>Off
+<input type='radio' name='nmea2_d' value='1' onchange="SelDebug2()">On
 </td>
 </tr>
 
@@ -236,8 +367,14 @@ If you are affected - please, consider to update
 <!-- Follow:    --><input type="hidden" id="follow_id" size="6">
 <!-- Baud rate: --><input type="hidden" id="baud_rate" size="1">
 <!-- Power_ext: --><input type="hidden" id="power_ext" size="1">
-<!-- NMEA_d:    --><input type="hidden" id="NMEA_debug" size="1">
+<!-- Debug1:    --><input type="hidden" id="NMEA_debug" size="1">
 <!-- Flags:     --><input type="hidden" id="debug_flags" size="2">
+<!-- NMEA2:     --><input type="hidden" id="nmea2" size="1">
+<!-- GNSS2:     --><input type="hidden" id="gnss2" size="1">
+<!-- Private2:  --><input type="hidden" id="priv2" size="1">
+<!-- Legacy2:   --><input type="hidden" id="legacy2" size="1">
+<!-- Sensors2:  --><input type="hidden" id="sens2" size="1">
+<!-- Debug2:    --><input type="hidden" id="debug2" size="1">
 
 <h3 align=center>NMEA control sentence:</h3>
 <hr>

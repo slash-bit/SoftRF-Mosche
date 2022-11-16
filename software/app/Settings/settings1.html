@@ -336,7 +336,19 @@ If you are affected - please, consider to update
 </tr>
 
 <tr>
-<th align=left>NMEA sentences:</th>
+<th align=left>NMEA primary output</th>
+<td align=right>
+<select id="NMEAs" onchange="SelNMEA()">
+<option value='0'>Off</option>
+<option value='1'>Serial</option>
+<option selected value='4'>USB</option>
+<option value='5'>Bluetooth</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;sentences:</th>
 </tr>
 <tr>
 <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GNSS</th>
@@ -364,18 +376,6 @@ If you are affected - please, consider to update
 <td align=right>
 <input type='radio' name='nmea_s' value='0' onchange="SelSens()">Off
 <input type='radio' name='nmea_s' value='1' onchange="SelSens()" checked>On
-</td>
-</tr>
-
-<tr>
-<th align=left>NMEA output</th>
-<td align=right>
-<select id="NMEAs" onchange="SelNMEA()">
-<option value='0'>Off</option>
-<option value='1'>Serial</option>
-<option selected value='4'>USB</option>
-<option value='5'>Bluetooth</option>
-</select>
 </td>
 </tr>
 

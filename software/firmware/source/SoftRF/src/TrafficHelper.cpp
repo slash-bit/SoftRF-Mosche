@@ -226,14 +226,14 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   }
 
   /* send data out via NMEA for debugging */
-  if (settings->nmea_d && (settings->debug_flags & DEBUG_ALARM)) {
+  if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_ALARM)) {
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       PSTR("$PSALV,%06X,%ld,%d,%.1f,%.1f,%.1f,%.1f,%.5f,%.5f,%.1f,%.1f,%.1f,%.5f,%.5f,%.1f,%.1f,%.1f\r\n"),
       fop->addr, fop->gnsstime_ms, rval, V_rel_magnitude, V_rel_direction, fop->bearing, t,
       this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
          this_aircraft->speed, this_aircraft->course,
       fop->latitude, fop->longitude, fop->altitude, fop->speed, fop->course);
-    NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
   }
 
   return rval;
@@ -440,13 +440,13 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 
   /* send data out via NMEA for debugging */
   if (rval > ALARM_LEVEL_CLOSE || fop->distance < ALARM_ZONE_IMPORTANT) {
-  if (settings->nmea_d && (settings->debug_flags & DEBUG_ALARM)) {
+  if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_ALARM)) {
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       PSTR("$PSALL,%06X,%ld,%ld,%d,%d,%d,%d,%.1f,%.1f,%.1f,%ld,%ld,%.1f,%.1f,%.1f,%.1f\r\n"),
         fop->addr, fop->projtime_ms, this_aircraft->projtime_ms, rval, mintime, minsqdist, sqspeed,
         this_aircraft->speed, this_aircraft->heading, this_aircraft->turnrate,
         fop->dy, fop->dx, fop->alt_diff, fop->speed, fop->heading, fop->turnrate);
-    NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
   }
   }
 

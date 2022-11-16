@@ -33,6 +33,8 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
+#define DEFAULT_REGION_US
+
 #define SOFTRF_FIRMWARE_VERSION "MB09c"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101

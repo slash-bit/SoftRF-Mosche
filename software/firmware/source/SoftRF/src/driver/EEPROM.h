@@ -19,6 +19,8 @@
 #ifndef EEPROMHELPER_H
 #define EEPROMHELPER_H
 
+#include "../SoftRF.h"
+
 #include "../system/SoC.h"
 
 #if !defined(EXCLUDE_EEPROM)
@@ -30,7 +32,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B08
+#define SOFTRF_EEPROM_VERSION 0x00000B09
 
 enum
 {
@@ -94,7 +96,13 @@ typedef struct Settings {
     uint32_t ignore_id:24;
     uint8_t  resvd5:8;
     uint32_t follow_id:24;
-    uint8_t  resvd6:8;
+
+    bool     nmea2_g:1;
+    bool     nmea2_p:1;
+    bool     nmea2_l:1;
+    bool     nmea2_s:1;
+    bool     nmea2_d:1;
+    uint8_t  nmea_out2:3;     /* second NMEA output route */
 
 } __attribute__((packed)) settings_t;
 

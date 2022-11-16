@@ -350,14 +350,14 @@ void Estimate_Wind()
   }
 
   /* send data out via NMEA for debugging */
-  if (settings->nmea_d && (settings->debug_flags & DEBUG_WIND)) {
+  if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_WIND)) {
     if (ok) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSWGS,%ld,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\r\n"),
         new_time, ThisAircraft.speed, avg_speed, ThisAircraft.course,
         ThisAircraft.turnrate, avg_turnrate, min_gs_course, max_gs_course,
         weight_gs, wind_ns, wind_ew, wind_best_ns, wind_best_ew);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
     if (ns) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
@@ -365,7 +365,7 @@ void Estimate_Wind()
         new_time, ThisAircraft.latitude, ThisAircraft.longitude,
         ThisAircraft.speed, ThisAircraft.course, ThisAircraft.turnrate,
         interval, drift_ns, weight_cd, wind_ns, wind_best_ns, wind_best_ew);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
     if (ew) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
@@ -373,11 +373,11 @@ void Estimate_Wind()
         new_time, ThisAircraft.latitude, ThisAircraft.longitude,
         ThisAircraft.speed, ThisAircraft.course, ThisAircraft.turnrate,
         interval, drift_ew, weight_cd, wind_ew, wind_best_ns, wind_best_ew);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSWSD,%.1f,%.0f\r\n"),
         wind_speed * (1.0 / _GPS_MPS_PER_KNOT), wind_direction);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
   }
 
@@ -446,11 +446,11 @@ void this_airborne()
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
-    if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
+    if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n"),
           airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 }
 
@@ -485,7 +485,7 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
     else
       Serial.printf("this_proj: eh?\r\n");
 #endif
-    if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
+    if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSPTA,%d,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
         this_aircraft->airborne,
@@ -494,7 +494,7 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
         this_aircraft->air_ns[1], this_aircraft->air_ew[1],
         this_aircraft->fla_ns[0], this_aircraft->fla_ew[0],
         this_aircraft->fla_ns[1], this_aircraft->fla_ew[1]);
-      NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 }
 
@@ -507,14 +507,14 @@ void report_that_projection(ufo_t *fop, int proj_type)
           fop->air_ns[1], fop->air_ew[1],
           fop->air_ns[2], fop->air_ew[2]);
 #endif
-    if (settings->nmea_d && (settings->debug_flags & DEBUG_PROJECTION)) {
+    if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSPOA,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d\r\n"),
           proj_type, fop->course, fop->heading,
           fop->air_ns[0], fop->air_ew[0],
           fop->air_ns[1], fop->air_ew[1],
           fop->air_ns[2], fop->air_ew[2]);
-        NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 }
 
@@ -945,11 +945,11 @@ float Estimate_Climbrate(void)
         Serial.printf("climbrate fpm: %.0f  %.0f,%.0f,%d,%d\r\n", avg_climbrate,
                  ThisAircraft.altitude, ThisAircraft.prevaltitude, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms);
 #endif
-        if (settings->nmea_d && (settings->debug_flags & DEBUG_WIND)) {
+        if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_WIND)) {
             snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                PSTR("$PSWCR,%.0f,%.0f,%.0f,%d,%d\r\n"), avg_climbrate,
                  ThisAircraft.altitude, ThisAircraft.prevaltitude, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms);
-            NMEA_Out(settings->nmea_out, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+            NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
         }
     }
 

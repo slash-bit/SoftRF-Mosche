@@ -142,7 +142,7 @@ static void EPD_Draw_NavBoxes()
 
     display->setFont(&FreeMonoBold18pt7b);
 
-    display->setCursor(navbox1.x + 25, navbox1.y + 50);
+    display->setCursor(navbox1.x + 25, navbox1.y + 52);
     display->print(navbox1.value);
 
     display->setCursor(navbox2.x + 15, navbox2.y + 52);
@@ -172,7 +172,7 @@ static void EPD_Draw_NavBoxes()
 
     display->setFont(&FreeMonoBold18pt7b);
 
-    display->setCursor(navbox3.x + 25, navbox3.y + 52);
+    display->setCursor(navbox3.x + 25, navbox3.y + 50);
     display->print(navbox3.value);
 
 //  display->setFont(&FreeMonoBold18pt7b);

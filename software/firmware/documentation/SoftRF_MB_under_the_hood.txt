@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated November 9, 2022
-to fit software version MB09b based on v1.0
+This version last updated November 14, 2022
+to fit software version MB09c based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -131,6 +131,18 @@ If compiled so as to enable the encryption in OGNTP, the key is divided into 4 s
 Support "Badge Edition" (T-Echo, nRF52840)
 
 Incorporated mainline v1.2 EPD code.  Baro sensor probing hangs up the booting, even the BMP280, so removed all baro sensor access from the nRF52 version for now.  Created a new display screen that shows most of the settings.  Moved protocol & aircraft ID here from the status screen.  Replaced in the status screen with number of GNSS satellites and current collision alarm level.  Compiled two binaries, one with EU region as default and the other with US region.  All settings can be changed in either version.  Settings not changeable via the SoftRF Tool app can be changed via a USB connection and the "SoftRF settings tool 2.html" file.  The "SoftRF settings tool 1.html" offers the choice of "Legacy" alarm method, which is also now the default.  New file: Conf_EPD.cpp.
+
+T-Echo settings via e-paper screen
+
+(under construction)
+
+Moved settings-via-NMEA code
+
+From GNSS.cpp to NMEA.cpp, following what was done in the mainline.
+
+Second NMEA output destination
+
+(under construction)
 
 
 KNOWN ISSUES
