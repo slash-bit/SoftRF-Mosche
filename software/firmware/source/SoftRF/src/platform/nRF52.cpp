@@ -1,4 +1,5 @@
 /*
+/*
  * Platform_nRF52.cpp
  * Copyright (C) 2020-2022 Linar Yusupov
  *
@@ -660,6 +661,16 @@ static void nRF52_post_init()
     default              :  Serial.println(F("NULL"));          break;
   }
 
+  Serial.print(F("NMEA2  - "));
+  switch (settings->nmea_out2)
+  {
+    case NMEA_UART       :  Serial.println(F("UART"));          break;
+    case NMEA_USB        :  Serial.println(F("USB CDC"));       break;
+    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth LE"));  break;
+    case NMEA_OFF        :
+    default              :  Serial.println(F("NULL"));          break;
+  }
+
   Serial.print(F("GDL90  - "));
   switch (settings->gdl90)
   {
@@ -1255,6 +1266,15 @@ static void nRF52_EEPROM_extension(int cmd)
       break;
   }
 
+//  if (reset_info.reason == REASON_SOFT_RESTART)    // this does not work
+    if (reset_info.reason != REASON_EXT_SYS_RST
+     && reset_info.reason != REASON_DEFAULT_RST) {
+      ui->vmode = VIEW_MODE_CONF;     // after software restart show the settings
+Serial.print("reset reason: ");
+Serial.println(reset_info.reason);
+Serial.println("vmode set to CONF");
+    }
+
 //#if defined(DEFAULT_REGION_US)
 //      ui->units = UNITS_IMPERIAL;
 //#endif
@@ -1407,9 +1427,7 @@ static byte nRF52_Display_setup()
     break;
   }
 
-Serial.println("calling EPD_setup()...");
   if (EPD_setup(true)) {
-Serial.println("... EPD_setup() returned");
 
 #if defined(USE_EPD_TASK)
     Display_Semaphore = xSemaphoreCreateBinary();
@@ -1617,8 +1635,9 @@ void handleEvent(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
   switch (eventType) {
+
     case AceButton::kEventClicked:
-    case AceButton::kEventReleased:
+    // case AceButton::kEventReleased:
 #if defined(USE_EPAPER)
       if (button == &button_1) {
 #if 0
@@ -1634,26 +1653,38 @@ void handleEvent(AceButton* button, uint8_t eventType,
       }
 #endif
       break;
+
     case AceButton::kEventDoubleClicked:
-#if defined(USE_EPAPER)
       if (button == &button_1) {
+
+#if defined(USE_EPAPER)
+        if (EPD_view_mode == VIEW_MODE_CONF) {
+            EPD_view_mode = VIEW_CHANGE_SETTINGS;
+            //Serial.println(F("Switching to change-settings screen..."));
+
+        } else if (EPD_view_mode == VIEW_CHANGE_SETTINGS) {
+            EPD_view_mode = VIEW_SAVE_SETTINGS;
+            //Serial.println(F("Switching to save-settings screen..."));
+
+        } else {   // view_modes other than CONF: toggle backlight
 //        Serial.println(F("kEventDoubleClicked."));
         digitalWrite(SOC_GPIO_PIN_EPD_BLGT,
                      digitalRead(SOC_GPIO_PIN_EPD_BLGT) == LOW);
-      }
+        }
+      }  // button_1
 #endif
       break;
+
     case AceButton::kEventLongPressed:
       if (button == &button_1) {
 
 #if defined(USE_EPAPER)
-        if (digitalRead(SOC_GPIO_PIN_PAD) == LOW) {
-          screen_saver = true;
-        }
+            if (digitalRead(SOC_GPIO_PIN_PAD) == LOW) {
+                screen_saver = true;
+            }
 #endif
-
-        shutdown(SOFTRF_SHUTDOWN_BUTTON);
-        Serial.println(F("This will never be printed."));
+            shutdown(SOFTRF_SHUTDOWN_BUTTON);
+            Serial.println(F("This too will never be printed."));
       }
       break;
   }

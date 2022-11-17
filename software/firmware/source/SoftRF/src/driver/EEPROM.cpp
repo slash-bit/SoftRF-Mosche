@@ -36,39 +36,6 @@ void EEPROM_store()    {}
 #include "../protocol/data/JSON.h"
 #include "Battery.h"
 
-/* Used in EDP */
-const char *Aircraft_Type[] = {
-  [AIRCRAFT_TYPE_UNKNOWN]    = "Unkwn",
-  [AIRCRAFT_TYPE_GLIDER]     = "Glider",
-  [AIRCRAFT_TYPE_TOWPLANE]   = "Towpln",
-  [AIRCRAFT_TYPE_HELICOPTER] = "Helicp",
-  [AIRCRAFT_TYPE_PARACHUTE]  = "Parach",
-  [AIRCRAFT_TYPE_DROPPLANE]  = "Dropln",
-  [AIRCRAFT_TYPE_HANGGLIDER] = "Hanggl",
-  [AIRCRAFT_TYPE_PARAGLIDER] = "Paragl",
-  [AIRCRAFT_TYPE_POWERED]    = "Powerd",
-  [AIRCRAFT_TYPE_JET]        = "Jet",
-  [AIRCRAFT_TYPE_UFO]        = "UFO",
-  [AIRCRAFT_TYPE_BALLOON]    = "Blloon",
-  [AIRCRAFT_TYPE_ZEPPELIN]   = "Zeppel",
-  [AIRCRAFT_TYPE_UAV]        = "UAV",
-  [AIRCRAFT_TYPE_RESERVED]   = "Reserv",
-  [AIRCRAFT_TYPE_STATIC]     = "Static"
-};
-const char *Region_Label[] = {
-  [RF_BAND_AUTO] = "**",
-  [RF_BAND_EU]   = "EU",
-  [RF_BAND_US]   = "US",
-  [RF_BAND_AU]   = "AU",
-  [RF_BAND_NZ]   = "NZ",
-  [RF_BAND_RU]   = "RU",
-  [RF_BAND_CN]   = "CN",
-  [RF_BAND_UK]   = "UK",
-  [RF_BAND_IN]   = "IN",
-  [RF_BAND_IL]   = "IL",
-  [RF_BAND_KR]   = "KR"
-  };
-
 // start reading from the first byte (address 0) of the EEPROM
 
 eeprom_t eeprom_block;
@@ -108,6 +75,10 @@ void EEPROM_setup()
     }
   }
   settings = &eeprom_block.field.settings;
+
+//#if defined(DEFAULT_REGION_US)
+//      settings->band = RF_BAND_US;
+//#endif
 
   SoC->EEPROM_extension(cmd);
 }
@@ -201,6 +172,8 @@ void EEPROM_defaults()
 
 void EEPROM_store()
 {
+  Serial.println("Writing EEPROM...");
+
   for (int i=0; i<sizeof(eeprom_t); i++) {
     EEPROM.write(i, eeprom_block.raw[i]);
   }

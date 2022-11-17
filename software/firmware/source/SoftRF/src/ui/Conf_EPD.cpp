@@ -1,6 +1,6 @@
 /*
  * Conf_EPD.cpp
- * Copyright (C) 2019-2022 Linar Yusupov
+ * Copyright (C) 2022 Moshe Braner
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,8 @@
 #include <gfxfont.h>
 #include <FreeMonoBold9pt7b.h>
 
+bool conf_initialized = false;
+
 static void EPD_Draw_Conf()
 {
   char info_line [CONF_VIEW_LINE_LENGTH];
@@ -54,15 +56,16 @@ static void EPD_Draw_Conf()
 
 /*
 Normal  Glider
+US TX P:LEG A:LEG
 Device: 123456
 Aircft: 123456 >>
-I:123456 F:123456
-US TX P:LEG A:LEG
-NMEA: USB GLD
+--123456 ++123456
+NMEA1: BLT GLS
+NMEA2: USB LD
 */
     {
       uint16_t x = 6;
-      uint16_t y = 20;
+      uint16_t y = 12;
 
       int16_t  tbx, tby;
       uint16_t tbw, tbh;
@@ -147,13 +150,41 @@ NMEA: USB GLD
       if (i == 0)
         nmeas[i++] = '-';
       nmeas[i] = '\0';
-      snprintf(info_line, sizeof(info_line), "NMEA:%s  %s",
+      snprintf(info_line, sizeof(info_line), "NMEA1:%s %s",
           (settings->nmea_out == NMEA_UART ? "SER" :
           (settings->nmea_out == NMEA_USB  ? "USB" :
           (settings->nmea_out == NMEA_BLUETOOTH ? "BLT" : "---"))),
           nmeas);
       display->getTextBounds(info_line, 0, 0, &tbx, &tby, &tbw, &tbh);
       y += tbh;
+      display->setCursor(x, y);
+      display->print(info_line);
+      Serial.println(info_line);
+
+      y += CONF_VIEW_LINE_SPACING;
+
+      i = 0;
+      if (settings->nmea2_g)
+        nmeas[i++] = 'G';
+      if (settings->nmea2_p)
+        nmeas[i++] = 'P';
+      if (settings->nmea2_l)
+        nmeas[i++] = 'L';
+      if (settings->nmea2_s)
+        nmeas[i++] = 'S';
+      if (settings->nmea2_d)
+        nmeas[i++] = 'D';
+      if (i == 0)
+        nmeas[i++] = '-';
+      nmeas[i] = '\0';
+      snprintf(info_line, sizeof(info_line), "NMEA2:%s %s",
+          (settings->nmea_out2 == NMEA_UART ? "SER" :
+          (settings->nmea_out2 == NMEA_USB  ? "USB" :
+          (settings->nmea_out2 == NMEA_BLUETOOTH ? "BLT" : "---"))),
+          nmeas);
+      display->getTextBounds(info_line, 0, 0, &tbx, &tby, &tbw, &tbh);
+      y += tbh;
+
       display->setCursor(x, y);
       display->print(info_line);
       Serial.println(info_line);
@@ -174,10 +205,12 @@ void EPD_conf_setup() {}
 void EPD_conf_loop()
 {
   if (isTimeToEPD()) {
-    if (EPD_prev_view != VIEW_MODE_CONF)   /* no need to draw same settings repeatedly */
+    EPDTimeMarker = millis();
+    if (! conf_initialized) {    /* no need to draw same settings repeatedly */
       EPD_Draw_Conf();
+      conf_initialized = true;
+    }
   }
-  EPDTimeMarker = millis();
 }
 
 void EPD_conf_next() {}

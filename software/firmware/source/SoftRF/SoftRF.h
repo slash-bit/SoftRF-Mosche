@@ -33,7 +33,9 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define DEFAULT_REGION_US
+// one of the following two must be #defined:
+#define DEFAULT_REGION_EU
+//#define DEFAULT_REGION_US
 
 #define SOFTRF_FIRMWARE_VERSION "MB09c"
 #define SOFTRF_IDENT            "SoftRF-"
@@ -313,6 +315,7 @@ extern const float txrx_test_positions[90][2] PROGMEM;
 
 extern unsigned long GNSSTimeMarker;
 
+extern void reboot(void);
 extern void shutdown(int);
 
 #define TXRX_TEST_NUM_POSITIONS (sizeof(txrx_test_positions) / sizeof(float) / 2)

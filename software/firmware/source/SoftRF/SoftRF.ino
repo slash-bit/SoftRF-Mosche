@@ -354,6 +354,20 @@ void loop()
   yield();
 }
 
+void reboot()
+{
+#if !defined(SERIAL_FLUSH)
+#define SERIAL_FLUSH()       Serial.flush()
+#endif
+  SERIAL_FLUSH();
+  SoC->swSer_enableRx(false);
+//  SoC->swSer_enableRx(true);
+  Sound_fini();
+  RF_Shutdown();
+  delay(1000);
+  SoC->reset();
+}
+
 void shutdown(int reason)
 {
 //Serial.println("shutdown()...");

@@ -47,21 +47,54 @@ const char EPD_SoftRF_text4[] = "Author: ";
 const char EPD_SoftRF_text5[] = "Linar Yusupov";
 const char EPD_SoftRF_text6[] = "(C) 2016-2022";
 
-
 const char EPD_Radio_text[]   = "RADIO   ";
 const char EPD_GNSS_text[]    = "GNSS    ";
 const char EPD_Display_text[] = "DISPLAY ";
 const char EPD_RTC_text[]     = "RTC     ";
 const char EPD_Flash_text[]   = "FLASH   ";
-const char EPD_Baro_text[]    = "BARO  ";
-const char EPD_IMU_text[]     = "IMU   ";
+const char EPD_Baro_text[]    = "BARO    ";
+const char EPD_IMU_text[]     = "IMU     ";
+
+const char *Aircraft_Type[] = {
+  [AIRCRAFT_TYPE_UNKNOWN]    = "Unkwn",
+  [AIRCRAFT_TYPE_GLIDER]     = "Glider",
+  [AIRCRAFT_TYPE_TOWPLANE]   = "Towpln",
+  [AIRCRAFT_TYPE_HELICOPTER] = "Helicp",
+  [AIRCRAFT_TYPE_PARACHUTE]  = "Parach",
+  [AIRCRAFT_TYPE_DROPPLANE]  = "Dropln",
+  [AIRCRAFT_TYPE_HANGGLIDER] = "Hanggl",
+  [AIRCRAFT_TYPE_PARAGLIDER] = "Paragl",
+  [AIRCRAFT_TYPE_POWERED]    = "Powerd",
+  [AIRCRAFT_TYPE_JET]        = "Jet",
+  [AIRCRAFT_TYPE_UFO]        = "UFO",
+  [AIRCRAFT_TYPE_BALLOON]    = "Blloon",
+  [AIRCRAFT_TYPE_ZEPPELIN]   = "Zeppel",
+  [AIRCRAFT_TYPE_UAV]        = "UAV",
+  [AIRCRAFT_TYPE_RESERVED]   = "Reserv",
+  [AIRCRAFT_TYPE_STATIC]     = "Static"
+};
+
+const char *Region_Label[] = {
+  [RF_BAND_AUTO] = "**",
+  [RF_BAND_EU]   = "EU",
+  [RF_BAND_US]   = "US",
+  [RF_BAND_AU]   = "AU",
+  [RF_BAND_NZ]   = "NZ",
+  [RF_BAND_RU]   = "RU",
+  [RF_BAND_CN]   = "CN",
+  [RF_BAND_UK]   = "UK",
+  [RF_BAND_IN]   = "IN",
+  [RF_BAND_IL]   = "IL",
+  [RF_BAND_KR]   = "KR"
+  };
+
 
 unsigned long EPDTimeMarker = 0;
 static unsigned long EPD_anti_ghosting_timer = 0;
 static uint8_t anti_ghosting_minutes = 0;
 
-static int EPD_view_mode = 0;
-int EPD_prev_view = 0;
+int EPD_view_mode = 0;
+//int EPD_prev_view = 0;
 bool EPD_vmode_updated = true;
 uint16_t EPD_pages_mask = (1 << VIEW_MODE_STATUS) |
                           (1 << VIEW_MODE_RADAR ) |
@@ -159,7 +192,8 @@ bool EPD_setup(bool splash_screen)
   EPD_time_setup();
   EPD_imu_setup();
 
-  EPD_view_mode = ui->vmode;
+  EPD_view_mode = ui->vmode;   // default initial EPD page
+
   if (EPD_pages_mask & (1 << EPD_view_mode) == 0) {
     for (int i=0; i < VIEW_MODES_COUNT; i++) {
       int next_view_mode = (EPD_view_mode + i) % VIEW_MODES_COUNT;
@@ -464,9 +498,6 @@ void EPD_loop()
       case VIEW_MODE_TEXT:
         EPD_text_loop();
         break;
-      case VIEW_MODE_CONF:
-        EPD_conf_loop();
-        break;
       case VIEW_MODE_BARO:
         EPD_baro_loop();
         break;
@@ -476,12 +507,20 @@ void EPD_loop()
       case VIEW_MODE_IMU:
         EPD_imu_loop();
         break;
+      case VIEW_MODE_CONF:
+        EPD_conf_loop();
+        break;
+      case VIEW_CHANGE_SETTINGS:
+      case VIEW_SAVE_SETTINGS:
+      case VIEW_REBOOT:
+      case VIEW_DONE:
+        EPD_chgconf_loop();
+        break;
       case VIEW_MODE_STATUS:
-      default:
+//    default:
         EPD_status_loop();
         break;
       }
-      EPD_prev_view = EPD_view_mode;
 
       bool auto_ag_condition = ui->aghost == ANTI_GHOSTING_AUTO  &&
                                (EPD_view_mode == VIEW_MODE_RADAR ||
@@ -624,6 +663,13 @@ void EPD_fini(int reason, bool screen_saver)
 void EPD_Mode()
 {
   if (hw_info.display == DISPLAY_EPD_1_54) {
+    if (EPD_view_mode == VIEW_CHANGE_SETTINGS) {
+        EPD_chgconf_page();
+        return;
+    }
+    if (EPD_view_mode >= VIEW_MODES_COUNT) {
+        return;
+    }
     for (int i=0; i < VIEW_MODES_COUNT; i++) {
       int next_view_mode = (EPD_view_mode + i) % VIEW_MODES_COUNT;
       if ((next_view_mode != EPD_view_mode) &&
@@ -656,8 +702,17 @@ void EPD_Up()
     case VIEW_MODE_IMU:
       EPD_imu_prev();
       break;
+    case VIEW_MODE_CONF:
+      EPD_conf_prev();
+      break;
+    case VIEW_CHANGE_SETTINGS:
+    case VIEW_SAVE_SETTINGS:
+    case VIEW_REBOOT:
+    case VIEW_DONE:
+      EPD_chgconf_prev();
+      break;
     case VIEW_MODE_STATUS:
-    default:
+//    default:
       EPD_status_prev();
       break;
     }
@@ -684,8 +739,16 @@ void EPD_Down()
     case VIEW_MODE_IMU:
       EPD_imu_next();
       break;
+    case VIEW_MODE_CONF:
+      EPD_conf_next();
+      break;
+    case VIEW_CHANGE_SETTINGS:
+    case VIEW_SAVE_SETTINGS:
+    case VIEW_REBOOT:
+    case VIEW_DONE:
+      EPD_chgconf_next();
     case VIEW_MODE_STATUS:
-    default:
+//    default:
       EPD_status_next();
       break;
     }

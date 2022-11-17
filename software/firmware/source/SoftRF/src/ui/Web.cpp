@@ -1153,18 +1153,17 @@ Serial.printf(" %08X", (settings->igc_key[0]? 0x88888888 : 0));
 Serial.printf(" %08X", (settings->igc_key[1]? 0x88888888 : 0));
 Serial.printf(" %08X", (settings->igc_key[2]? 0x88888888 : 0));
 Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
-  
-  SoC->swSer_enableRx(false);
+
   server.send ( 200, "text/html", Input_temp );
-//  SoC->swSer_enableRx(true);
   delay(1000);
   free(Input_temp);
+  SoC->WDT_fini();
+  if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
   EEPROM_store();
-  Sound_fini();
-  RF_Shutdown();
-  delay(1000);
-  SoC->reset();
+  // delay(1000);
+  reboot();
 }
+
 
 void handleNotFound() {
 

@@ -752,9 +752,9 @@ void NMEA_GGA()
 #include "GDL90.h"
 #include "D1090.h"
 
-#if !defined(SERIAL_FLUSH)
-#define SERIAL_FLUSH()       Serial.flush()
-#endif
+//#if !defined(SERIAL_FLUSH)
+//#define SERIAL_FLUSH()       Serial.flush()
+//#endif
 
 uint8_t C_NMEA_Source;
 
@@ -763,10 +763,11 @@ static void nmea_cfg_restart()
   Serial.println();
   Serial.println(F("Restart is in progress. Please, wait..."));
   Serial.println();
-  SERIAL_FLUSH();
-  Sound_fini();
-  RF_Shutdown();
-  SoC->reset();
+//  SERIAL_FLUSH();
+  reboot();
+//  Sound_fini();
+//  RF_Shutdown();
+//  SoC->reset();
 }
 
 void NMEA_Process_SRF_SKV_Sentences()

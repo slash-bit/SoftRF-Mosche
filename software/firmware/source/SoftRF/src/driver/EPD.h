@@ -71,8 +71,11 @@ enum
 	VIEW_MODE_TIME,
 	VIEW_MODE_IMU,
 	VIEW_MODE_CONF,
-
 	VIEW_MODES_COUNT,
+	VIEW_CHANGE_SETTINGS,     // only reached via long-press on VIEW_MODE_CONF
+	VIEW_SAVE_SETTINGS,
+	VIEW_REBOOT,
+	VIEW_DONE
 };
 
 /*
@@ -241,8 +244,14 @@ void EPD_text_prev();
 
 void EPD_conf_setup();
 void EPD_conf_loop();
-// void EPD_conf_next();
-// void EPD_conf_prev();
+void EPD_conf_next();
+void EPD_conf_prev();
+
+void EPD_chgconf_save();
+void EPD_chgconf_loop();
+void EPD_chgconf_page();
+void EPD_chgconf_next();
+void EPD_chgconf_prev();
 
 void EPD_baro_setup();
 void EPD_baro_loop();
@@ -265,10 +274,13 @@ extern GxEPD2_GFX *display;
 #endif /* USE_EPAPER */
 
 extern unsigned long EPDTimeMarker;
-extern int EPD_prev_view;
+extern int EPD_view_mode;
+extern bool conf_initialized;
 extern bool EPD_vmode_updated;
 extern uint16_t EPD_pages_mask;
 extern volatile uint8_t EPD_update_in_progress;
+extern const char *Aircraft_Type[];
+extern const char *Region_Label[];
 extern ui_settings_t ui_settings;
 extern ui_settings_t *ui;
 

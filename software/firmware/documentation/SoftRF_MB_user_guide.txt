@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated November 9, 2022
-to fit software version MB09b based on v1.0
+This version last updated November 17, 2022
+to fit software version MB09c based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -137,11 +137,33 @@ Once the firmware is installed, before actual use in an aircraft, one must choos
 On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
 
 On the T-Echo, adjusting the settings is more difficult.  An Android app is available that can display and change the basic settings, see here: https://github.com/lyusupov/SoftRF/wiki/SoftRF-Configuration-Tool
-But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  (One must first use the Android app to change the NMEA output of SoftRF to USB, if it is currently routed to Bluetooth.)  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click in a different input field than the last one changed.  The cryptic $PSRF... line of text at the bottome will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
+But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottome will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
 
-Because adjusting the settings on the T-Echo is more difficult, I offer two binaries here:
-https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage
-One has the frequencies for the EU region as the default, the other the US region.  Either can be configured as needed, but picking one may bypass the need to change the settings.  Both of these binaries also have the following defaults:  Mode normal, aircraft type glider, transmitter power full, Legacy protocol, Legacy alarm trigger method, NMEA output to Bluetooth.
+Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  When you double-click the mode button the device normally toggles the display backlight on or off.  When the screen that shows various settings is displayed, specifically, if you double-click the mode button, it will instead go into change-settings mode.  It will show one setting at a time on a page, like this:
+    Aircraft Type:
+      Glider
+Touching the "touch" button will change that setting, e.g., you will see:
+    Aircraft Type:
+      Towplane
+A short-press of the mode button will switch to the next setting, e.g.:
+    Frequency Band:
+      EU
+And so forth.  Note that after each "click" or "touch", it will take about 2 seconds for the next setting to appear on the screen.  There are three ways to exit the change-settings mode:
+* single-click the mode button through all the settings until you see this:
+    what to
+    do next:
+      cancel
+  - use the touch button to select "cancel", "review", or "save" and then single-click the mode button, or
+* on any page (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or 
+* press the reset button to reboot without changing the settings.
+The settings accessible via this method are:
+* AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
+* RF PROTOCOL: LEGACY, OGNTP, P3I, FANET.
+* RF BAND (REGION): EU, US, UK, AU, NZ, RU, CN, IN, IL, KR.
+* Collision prediction algorithm: Legacy, Vector, Distance, None.
+* Display units: Metric, Imperial, Mixed.
+* Display orientation: Track Up, North Up.
+Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.
 
 
 Description of the settings:
@@ -174,10 +196,14 @@ LED ring direction: this is for use only if you attach an LED traffic display su
 
 Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).  (Only SPP may work on the T-Beam, I am not sure.)
 
+NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
+
 NMEA sentences: Data is sent to connected devices via text "sentences" in the NMEA format.  You can turn on or off each of the following types of sentences:  GNSS (position data), Private (SoftRF debugging, leave off), 
 Legacy (traffic data in the same format used by FLARM), Sensors (e.g., barometric sensor, if you attach such to the board), and Debug (debugging of my SoftRF version, leave off).
 
-NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
+NMEA secondary output: two output routes are allowed simultaneously, e.g., Bluetooth and USB.
+
+NMEA secondary output sentences: same choices as for the primary NMEA output.  E.g., can send GNSS data to the primary and traffic messages to the secondary.  By default both output get the same sentences: GNSS, traffic and sensors.
 
 Serial Output Baud Rate: the default is 38400, you can choose some other speed if your connected device cannot use 38400.  E.g., the ILEC SN10 wants 19200.
 
@@ -200,7 +226,7 @@ Debug flags: this is for my debugging scheme (mentioned above), leave as 00 norm
 IGC encryption key:  Only shown if compiled so as to enable the encryption option in OGNTP. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 
 
-The settings displayed on the T-Echo
+The settings displayed, and adjusted, within the T-Echo
 
 In the last display screen in the cycle of screens on the T-Echo, you will see something like this:
 
@@ -209,7 +235,8 @@ US TX P:LEG A:LEG      < US region, full power, Legacy protocol, Legacy alarm me
 Device: 60ABCD         < device ID (internal, cannot be changed)
 Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")         
 --A34567 ++A45678      < ignore ID and follow ID
-NMEA:USB  GL           < NMEA output to USB, sends GNSS & Legacy (traffic) data
+NMEA1:BLT GL           < NMEA output to Bluetooth, sends GNSS & Legacy (traffic) data
+NMEA2:USB GL           < NMEA output to USB, sends GNSS & Legacy (traffic) data
 
 
 How to connect external devices
@@ -303,3 +330,5 @@ https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README
 
 
 PART 2: UNDER THE HOOD - see separate document
+
+

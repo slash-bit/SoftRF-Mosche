@@ -19,7 +19,19 @@
 #ifndef EEPROMHELPER_H
 #define EEPROMHELPER_H
 
-#include "../SoftRF.h"
+#include "../../SoftRF.h"
+
+//one of the following needs to be defined in SoftRF.h:
+//#define DEFAULT_REGION_EU
+//#define DEFAULT_REGION_US
+
+#if !defined(DEFAULT_REGION_EU) && !defined(DEFAULT_REGION_US)
+#error No default region defined
+#endif
+
+#if defined(DEFAULT_REGION_EU) && defined(DEFAULT_REGION_US)
+#error Multiple default regions defined
+#endif
 
 #include "../system/SoC.h"
 
@@ -123,12 +135,10 @@ typedef union EEPROM_U {
 #define DEBUG_LEGACY 0x08
 #define DEBUG_RESVD1 0x10
 #define DEBUG_RESVD2 0x20
-	
+
 void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 extern settings_t *settings;
-extern const char *Aircraft_Type[];
-extern const char *Region_Label[];
 
 #endif /* EEPROMHELPER_H */

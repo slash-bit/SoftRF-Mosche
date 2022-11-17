@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated November 14, 2022
+This version last updated November 15, 2022
 to fit software version MB09c based on v1.0 with some parts of v1.2
 
 
@@ -134,7 +134,7 @@ Incorporated mainline v1.2 EPD code.  Baro sensor probing hangs up the booting, 
 
 T-Echo settings via e-paper screen
 
-(under construction)
+Added ability to adjust some settings within the device, using the EPD & buttons.  See the user guide.  New file: Change_Settings_EPD.cpp  Also modified: Conf_EPD.cpp and nRF52.cpp.
 
 Moved settings-via-NMEA code
 
@@ -142,7 +142,7 @@ From GNSS.cpp to NMEA.cpp, following what was done in the mainline.
 
 Second NMEA output destination
 
-(under construction)
+Allow two NMEA output route simultaneously.  For example, BT & USB.  Also allow selection of sentence types to output via each route independently.  Default routes depend on platform.  Main files affected: NMEA.cpp, Web.cpp.
 
 
 KNOWN ISSUES
