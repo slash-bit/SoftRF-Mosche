@@ -21,17 +21,17 @@
 
 #include "../../SoftRF.h"
 
-//one of the following needs to be defined in SoftRF.h:
+//one of the following needs to be defined in SoftRF.h:  (not used any more)
 //#define DEFAULT_REGION_EU
 //#define DEFAULT_REGION_US
 
-#if !defined(DEFAULT_REGION_EU) && !defined(DEFAULT_REGION_US)
-#error No default region defined
-#endif
+//#if !defined(DEFAULT_REGION_EU) && !defined(DEFAULT_REGION_US)
+//#error No default region defined
+//#endif
 
-#if defined(DEFAULT_REGION_EU) && defined(DEFAULT_REGION_US)
-#error Multiple default regions defined
-#endif
+//#if defined(DEFAULT_REGION_EU) && defined(DEFAULT_REGION_US)
+//#error Multiple default regions defined
+//#endif
 
 #include "../system/SoC.h"
 
@@ -51,6 +51,14 @@ enum
 	EEPROM_EXT_LOAD,
 	EEPROM_EXT_DEFAULTS,
 	EEPROM_EXT_STORE
+};
+
+enum
+{
+	STROBE_OFF = 0,
+	STROBE_ALARM,
+	STROBE_AIRBORNE,
+	STROBE_ALWAYS
 };
 
 enum
@@ -106,7 +114,8 @@ typedef struct Settings {
     uint8_t  id_method:2;     /* whether to use device ID, ICAO ID, or random */
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
-    uint8_t  resvd5:8;
+    uint8_t  strobe:2;
+    uint8_t  resvd5:6;
     uint32_t follow_id:24;
 
     bool     nmea2_g:1;

@@ -69,6 +69,8 @@ With my version of SoftRF you have the option of attaching a passive piezo buzze
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
 Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".
 
+You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 33.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.
+
 Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".
 
 One needs to arrange a case for the T-Beam board.  Arranging the case is actually the hardest part of setting it up!  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  Some have used 3D-printed cases.  STL files for that purpose are available, e.g. here:
@@ -139,31 +141,7 @@ On the T-Beam, connect to the SoftRF status web page as described above.  Then c
 On the T-Echo, adjusting the settings is more difficult.  An Android app is available that can display and change the basic settings, see here: https://github.com/lyusupov/SoftRF/wiki/SoftRF-Configuration-Tool
 But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottome will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
 
-Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  When you double-click the mode button the device normally toggles the display backlight on or off.  When the screen that shows various settings is displayed, specifically, if you double-click the mode button, it will instead go into change-settings mode.  It will show one setting at a time on a page, like this:
-    Aircraft Type:
-      Glider
-Touching the "touch" button will change that setting, e.g., you will see:
-    Aircraft Type:
-      Towplane
-A short-press of the mode button will switch to the next setting, e.g.:
-    Frequency Band:
-      EU
-And so forth.  Note that after each "click" or "touch", it will take about 2 seconds for the next setting to appear on the screen.  There are three ways to exit the change-settings mode:
-* single-click the mode button through all the settings until you see this:
-    what to
-    do next:
-      cancel
-  - use the touch button to select "cancel", "review", or "save" and then single-click the mode button, or
-* on any page (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or 
-* press the reset button to reboot without changing the settings.
-The settings accessible via this method are:
-* AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
-* RF PROTOCOL: LEGACY, OGNTP, P3I, FANET.
-* RF BAND (REGION): EU, US, UK, AU, NZ, RU, CN, IN, IL, KR.
-* Collision prediction algorithm: Legacy, Vector, Distance, None.
-* Display units: Metric, Imperial, Mixed.
-* Display orientation: Track Up, North Up.
-Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.
+Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  See below the description of the settings.
 
 
 Description of the settings:
@@ -191,6 +169,13 @@ Alarm trigger: this setting chooses an algorithm to base collision warnings on. 
 Tx Power: transmitter power.  Normally use "Full" (which is less then a tenth of a watt).  Use "Low" (2 mw) for short-range testing, and "Off" if you want to see but not be seen - appropriate when running SoftRF on the ground just to see where other aircraft are.  If you are flying, and want to limit visibility to other aircraft while retaining collision avoidance, use "Stealth mode" instead - see below.
 
 Volume: if a piezo buzzer is attached to the board for audible collision warnings, choose "Loud" here.  (It is not quite loud enough.)  If you get audible warnings via a connected device, e.g., XCsoar, then you can set the buzzer Volume to Low or Off.
+
+Strobe mode: if an LED or strobe are connected to the T-Beam, this setting lets you choose one of 4 modes:
+* Strobe off - never flashes
+* Strobe alarm - flashes only when a collision alarm is given
+* Strobe airborne - flashes whenever airborne, but more frequently if alarm given
+* Strobe always - flashes even if not airborne.
+The "alarm" and "airborne" modes also flash in the first two minutes after turning on the device, alternating between the alarm and non-alarm flash patterns, as a self-test.
 
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 
@@ -237,6 +222,32 @@ Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")
 --A34567 ++A45678      < ignore ID and follow ID
 NMEA1:BLT GL           < NMEA output to Bluetooth, sends GNSS & Legacy (traffic) data
 NMEA2:USB GL           < NMEA output to USB, sends GNSS & Legacy (traffic) data
+
+When you double-click the mode button the device normally toggles the display backlight on or off.  When the screen that shows various settings is displayed, specifically, if you double-click the mode button, it will instead go into change-settings mode.  It will show one setting at a time on a page, like this:
+    Aircraft Type:
+      Glider
+Touching the "touch" button will change that setting, e.g., you will see:
+    Aircraft Type:
+      Towplane
+A short-press of the mode button will switch to the next setting, e.g.:
+    Frequency Band:
+      EU
+And so forth.  Note that after each "click" or "touch", it will take about 2 seconds for the next setting to appear on the screen.  There are three ways to exit the change-settings mode:
+* single-click the mode button through all the settings until you see this:
+    what to
+    do next:
+      cancel
+  - use the touch button to select "cancel", "review", or "save" and then single-click the mode button, or
+* on any page (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or 
+* press the reset button to reboot without changing the settings.
+The settings accessible via this method are:
+* AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
+* RF PROTOCOL: LEGACY, OGNTP, P3I, FANET.
+* RF BAND (REGION): EU, US, UK, AU, NZ, RU, CN, IN, IL, KR.
+* Collision prediction algorithm: Legacy, Vector, Distance, None.
+* Display units: Metric, Imperial, Mixed.
+* Display orientation: Track Up, North Up.
+Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.
 
 
 How to connect external devices

@@ -1266,18 +1266,8 @@ static void nRF52_EEPROM_extension(int cmd)
       break;
   }
 
-//  if (reset_info.reason == REASON_SOFT_RESTART)    // this does not work
-    if (reset_info.reason != REASON_EXT_SYS_RST
-     && reset_info.reason != REASON_DEFAULT_RST) {
+  if (reset_info.reason == REASON_SOFT_RESTART)
       ui->vmode = VIEW_MODE_CONF;     // after software restart show the settings
-Serial.print("reset reason: ");
-Serial.println(reset_info.reason);
-Serial.println("vmode set to CONF");
-    }
-
-//#if defined(DEFAULT_REGION_US)
-//      ui->units = UNITS_IMPERIAL;
-//#endif
 }
 
 static void nRF52_SPI_begin()

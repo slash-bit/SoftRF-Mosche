@@ -77,6 +77,7 @@
 #include "src/driver/GNSS.h"
 #include "src/driver/RF.h"
 #include "src/driver/Sound.h"
+#include "src/driver/Strobe.h"
 #include "src/driver/EEPROM.h"
 #include "src/driver/Battery.h"
 #include "src/protocol/data/MAVLink.h"
@@ -249,6 +250,8 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
 //Serial.println("calling Sound_test()");
   SoC->Sound_test(resetInfo->reason);
 
+  Strobe_setup();
+
   switch (settings->mode)
   {
   case SOFTRF_MODE_TXRX_TEST:
@@ -363,6 +366,7 @@ void reboot()
   SoC->swSer_enableRx(false);
 //  SoC->swSer_enableRx(true);
   Sound_fini();
+  Strobe_fini();
   RF_Shutdown();
   delay(1000);
   SoC->reset();
@@ -377,9 +381,8 @@ void shutdown(int reason)
   SoC->swSer_enableRx(false);
 
   Sound_fini();
-
+  Strobe_fini();
   NMEA_fini();
-
   Web_fini();
 
   if (SoC->Bluetooth_ops) {
@@ -613,6 +616,8 @@ void normal()
 
   Sound_loop();   /* may sound collision alarms */
 
+  Strobe_loop();
+
   if (isTimeToExport()) {
     NMEA_Export();
     GDL90_Export();
@@ -812,6 +817,8 @@ void txrx_test()
 #endif
 
   Sound_loop();
+
+  Strobe_loop();
 
 #if DEBUG_TIMING
   export_start_ms = millis();

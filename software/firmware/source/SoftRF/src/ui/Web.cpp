@@ -363,6 +363,17 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>Strobe</th>\
+<td align=right>\
+<select name='strobe'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Alarm</option>\
+<option %s value='%d'>Airborne</option>\
+<option %s value='%d'>Always</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
 <th align=left>LED ring direction</th>\
 <td align=right>\
 <select name='pointer'>\
@@ -402,6 +413,10 @@ void handleSettings() {
   (settings->volume == BUZZER_VOLUME_FULL ? "selected" : ""), BUZZER_VOLUME_FULL,
   (settings->volume == BUZZER_VOLUME_LOW ? "selected" : ""), BUZZER_VOLUME_LOW,
   (settings->volume == BUZZER_OFF ? "selected" : ""), BUZZER_OFF,
+  (settings->strobe == STROBE_OFF ? "selected" : ""), STROBE_OFF,
+  (settings->strobe == STROBE_ALARM ? "selected" : ""), STROBE_ALARM,
+  (settings->strobe == STROBE_AIRBORNE ? "selected" : ""), STROBE_AIRBORNE,
+  (settings->strobe == STROBE_ALWAYS ? "selected" : ""), STROBE_ALWAYS,
   (settings->pointer == DIRECTION_TRACK_UP ? "selected" : ""), DIRECTION_TRACK_UP,
   (settings->pointer == DIRECTION_NORTH_UP ? "selected" : ""), DIRECTION_NORTH_UP,
   (settings->pointer == LED_OFF ? "selected" : ""), LED_OFF
@@ -944,6 +959,8 @@ void handleInput() {
       settings->txpower = server.arg(i).toInt();
     } else if (server.argName(i).equals("volume")) {
       settings->volume = server.arg(i).toInt();
+    } else if (server.argName(i).equals("strobe")) {
+      settings->strobe = server.arg(i).toInt();
     } else if (server.argName(i).equals("pointer")) {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
@@ -1064,6 +1081,7 @@ PSTR("<html>\
 <tr><th align=left>Alarm trigger</th><td align=right>%d</td></tr>\
 <tr><th align=left>Tx Power</th><td align=right>%d</td></tr>\
 <tr><th align=left>Volume</th><td align=right>%d</td></tr>\
+<tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
 <tr><th align=left>NMEA Out 1</th><td align=right>%d</td></tr>\
@@ -1096,7 +1114,7 @@ PSTR("<html>\
   settings->ignore_id, settings->follow_id,
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
-  settings->volume, settings->pointer, settings->bluetooth,
+  settings->volume, settings->strobe, settings->pointer, settings->bluetooth,
   settings->nmea_out,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
@@ -1126,6 +1144,7 @@ Serial.print(" Aircraft type ");Serial.println(settings->aircraft_type);
 Serial.print(" Alarm trigger ");Serial.println(settings->alarm);
 Serial.print(" Tx Power ");Serial.println(settings->txpower);
 Serial.print(" Volume ");Serial.println(settings->volume);
+Serial.print(" Strobe ");Serial.println(settings->strobe);
 Serial.print(" LED pointer ");Serial.println(settings->pointer);
 Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
 Serial.print(" NMEA Out 1 ");Serial.println(settings->nmea_out);

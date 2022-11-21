@@ -235,7 +235,9 @@ void EPD_status_loop()
     navbox1.value = gnss.satellites.value();
     navbox2.value = (int) (Battery_voltage() * 10.0);
     navbox3.value = Traffic_Count();
-    navbox4.value = max_alarm_level;
+    int alarm_level = max_alarm_level;
+    if (alarm_level > ALARM_LEVEL_NONE)  --alarm_level;   // make CLOSE=NONE, LOW=1 etc
+    navbox4.value = alarm_level;
     navbox5.value = rx_packets_counter % 1000;
     navbox6.value = tx_packets_counter % 1000;
 

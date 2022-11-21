@@ -94,7 +94,7 @@ static unsigned long EPD_anti_ghosting_timer = 0;
 static uint8_t anti_ghosting_minutes = 0;
 
 int EPD_view_mode = 0;
-//int EPD_prev_view = 0;
+int EPD_prev_view = 0;
 bool EPD_vmode_updated = true;
 uint16_t EPD_pages_mask = (1 << VIEW_MODE_STATUS) |
                           (1 << VIEW_MODE_RADAR ) |
@@ -521,6 +521,8 @@ void EPD_loop()
         EPD_status_loop();
         break;
       }
+
+      EPD_prev_view = EPD_view_mode;
 
       bool auto_ag_condition = ui->aghost == ANTI_GHOSTING_AUTO  &&
                                (EPD_view_mode == VIEW_MODE_RADAR ||

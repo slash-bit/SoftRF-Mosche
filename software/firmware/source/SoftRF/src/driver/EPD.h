@@ -275,6 +275,7 @@ extern GxEPD2_GFX *display;
 
 extern unsigned long EPDTimeMarker;
 extern int EPD_view_mode;
+extern int EPD_prev_view;
 extern bool conf_initialized;
 extern bool EPD_vmode_updated;
 extern uint16_t EPD_pages_mask;

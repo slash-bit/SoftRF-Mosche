@@ -206,9 +206,10 @@ void EPD_conf_loop()
 {
   if (isTimeToEPD()) {
     EPDTimeMarker = millis();
-    if (! conf_initialized) {    /* no need to draw same settings repeatedly */
+//  if (! conf_initialized) {
+    if (EPD_prev_view != VIEW_MODE_CONF) {    /* no need to draw same settings repeatedly */
       EPD_Draw_Conf();
-      conf_initialized = true;
+//    conf_initialized = true;
     }
   }
 }

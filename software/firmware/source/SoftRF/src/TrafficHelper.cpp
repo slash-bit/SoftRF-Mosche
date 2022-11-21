@@ -23,6 +23,7 @@
 #include "driver/RF.h"
 #include "driver/GNSS.h"
 #include "driver/Sound.h"
+#include "driver/Strobe.h"
 #include "ui/Web.h"
 #include "protocol/radio/Legacy.h"
 #include "protocol/data/NMEA.h"
@@ -687,8 +688,9 @@ void Traffic_loop()
   if (isTimeToUpdateTraffic()) {
 
     ufo_t *mfop = NULL;
-    max_alarm_level = ALARM_LEVEL_NONE;
-        
+    max_alarm_level = ALARM_LEVEL_NONE;          /* global, used for visual displays */
+    int sound_alarm_level = ALARM_LEVEL_NONE;    /* local, used for sound alerts */
+
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
       ufo_t *fop = &Container[i];
@@ -701,11 +703,15 @@ void Traffic_loop()
               Traffic_Update(fop);
           /* else Traffic_Update(fop) was called last time a radio packet came in */
 
+          /* determine the highest alarm level seen at the moment */
+          if (fop->alarm_level > max_alarm_level)
+              max_alarm_level = fop->alarm_level;
+
           /* figure out what is the highest alarm level needing a sound alert */
           if (fop->alarm_level > fop->alert_level
                    && fop->alarm_level > ALARM_LEVEL_CLOSE) {
-              if (fop->alarm_level > max_alarm_level) {
-                  max_alarm_level = fop->alarm_level;
+              if (fop->alarm_level > sound_alarm_level) {
+                  sound_alarm_level = fop->alarm_level;
                   mfop = fop;
               }
           }
@@ -733,8 +739,8 @@ void Traffic_loop()
     /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
     /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
-    if (max_alarm_level > ALARM_LEVEL_CLOSE) {
-      Sound_Notify(max_alarm_level);
+    if (sound_alarm_level > ALARM_LEVEL_CLOSE) {
+      Sound_Notify(sound_alarm_level);
       if (mfop != NULL) {
         mfop->alert_level = mfop->alarm_level + 1;
         mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */

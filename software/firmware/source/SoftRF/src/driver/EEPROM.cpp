@@ -106,12 +106,15 @@ void EEPROM_defaults()
   if (hw_info.model == SOFTRF_MODEL_STANDALONE
    || hw_info.model == SOFTRF_MODEL_PRIME) {
     eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
+    eeprom_block.field.settings.strobe      = STROBE_OFF;
     eeprom_block.field.settings.pointer     = DIRECTION_NORTH_UP;
   } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
+    eeprom_block.field.settings.strobe      = STROBE_ALARM;
     eeprom_block.field.settings.pointer     = LED_OFF;
   } else {
     eeprom_block.field.settings.volume      = BUZZER_OFF;
+    eeprom_block.field.settings.strobe      = STROBE_OFF;
     eeprom_block.field.settings.pointer     = LED_OFF;
   }
 

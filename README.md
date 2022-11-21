@@ -5,13 +5,15 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 Beyond Lyusupov's version 1.0:
 
-* Corrected frequency hopping and time slots
 * Collision prediction for circling aircraft
-* Estimates wind while circling, uses for collision prediction
-* Support 3-level collision alarms via buzzer
 * Can set aircraft ID for self, ID to ignore, and ID to follow
+* New: Includes strobe-control logic
+* New: Can adjust settings within T-Echo
 * Can configure two simultaneous NMEA output destinations
 * Settable baud rate for serial output
+* Support 3-level collision alarms via buzzer
+* Estimates wind while circling, uses for collision prediction
+* Corrected frequency hopping and time slots
 
 Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
 <br>

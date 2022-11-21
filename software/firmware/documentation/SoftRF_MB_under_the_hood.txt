@@ -80,7 +80,7 @@ Rewrote determination of time slots for frequency hopping
 
 Wrote new code to compute the frequency hopping time slots for the "Legacy" (FLARM-compatible) protocol. (And also for OGNTP, which uses the same general scheme, but set up to use a different frequency than FLARM at any given moment.)  The original SoftRF code is buggy (and incomprehensible).  The second time slot, 800 to 1200 ms after the seconds tick, spans the next second tick (PPS).  The original SoftRF code switches to a new frequency at 1000 ms, due to passing the new Time (seconds UTC) to the frequency hashing function. T his is incorrect.  The full "Slot 1" should use the frequency based on the previous second's Time.  The new Time is adopted later, around 1300 ms, during the 200 ms dead time between Slot 1 and Slot 0.  The new code also computes the slot & channel once for the 400 ms duration of the Slot, for efficiency, instead of over and over in the general loop.  Variables keep track of when a new computation is later needed.  The random time to transmit within each time slot is also computed in advance at that time.  The time slots and channels for Legacy/OGNTP protocols are computed in driver/RF.cpp - RF_loop().  For other protocols (P3I, FANET, UAT) the original code is still in place.
 
-Sound alarms
+Audio alarms
 
 When a collision warning is given, at one of the three levels of urgency (following what FLARM does), besides sending the warning out as NMEA sentences, also use the piezo buzzer (if present) to produce beeps.  One beep for low level warning, two (at higher pitch) for medium level, and 5 beeps for urgent warnings.  Main files affected: driver/Sound, and platform/ESP32.
 
@@ -134,7 +134,7 @@ Incorporated mainline v1.2 EPD code.  Baro sensor probing hangs up the booting, 
 
 T-Echo settings via e-paper screen
 
-Added ability to adjust some settings within the device, using the EPD & buttons.  See the user guide.  New file: Change_Settings_EPD.cpp  Also modified: Conf_EPD.cpp and nRF52.cpp.
+Added ability to adjust some settings within the device, using the EPD & buttons.  New file: Change_Settings_EPD.cpp  Also modified: Conf_EPD.cpp and nRF52.cpp etc.
 
 Moved settings-via-NMEA code
 
@@ -143,6 +143,10 @@ From GNSS.cpp to NMEA.cpp, following what was done in the mainline.
 Second NMEA output destination
 
 Allow two NMEA output route simultaneously.  For example, BT & USB.  Also allow selection of sentence types to output via each route independently.  Default routes depend on platform.  Main files affected: NMEA.cpp, Web.cpp.
+
+Visual alarms and strobe driver
+
+Added a "strobe control" MODULE.  This cAN be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection to pin 33 on the T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  New files: driver/Strobe.h and .cpp.
 
 
 KNOWN ISSUES

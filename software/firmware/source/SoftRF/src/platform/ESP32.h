@@ -110,6 +110,9 @@ extern Adafruit_NeoPixel strip;
 #define SOC_GPIO_PIN_BUZZER   (hw_info.model != SOFTRF_MODEL_PRIME_MK2 ?\
                                 13 : 14)
 
+/* MB: seems available, not tested */
+#define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 33 : SOC_UNUSED_PIN)
+
 /* SPI (does match Heltec & TTGO LoRa32 pins mapping) */
 #define SOC_GPIO_PIN_MOSI       27
 #define SOC_GPIO_PIN_MISO       19
