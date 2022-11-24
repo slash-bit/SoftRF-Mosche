@@ -24,35 +24,21 @@
 #endif /* ARDUINO */
 
 
-#define SKYVIEW_EEPROM_MAGIC   0xABBAFACE
-#define SKYVIEW_EEPROM_VERSION 0x00000BA1
+#define SKYSTROBE_EEPROM_MAGIC   0xABBAFACE
+#define SKYSTROBE_EEPROM_VERSION 0x00000BB1
 
 typedef struct Settings {
 
-    uint8_t  adapter;
-    uint8_t  connection:4;
-    uint8_t  units:2;
-    uint8_t  zoom:2;
-
+    uint8_t  connection;
     uint8_t  protocol;
     uint8_t  baudrate;
-    uint8_t  power_save:4;
-    uint8_t  resvd2;
+    uint8_t  resvd1;
 
     char     server  [18];
     char     key     [18];
 
-    uint8_t  resvd1:2;
-    uint8_t  orientation:1;
-    uint8_t  adb:3;
-    uint8_t  idpref:2;
-
-    uint8_t  vmode:2;
-    uint8_t  voice:3;
-    uint8_t  aghost:3;
-    uint8_t  filter:4;
-
-    uint32_t team;
+    uint8_t  strobe;
+    uint8_t  sound;
 
     uint8_t  resvd3;
     uint8_t  resvd4;
@@ -73,6 +59,20 @@ typedef union EEPROM_U {
    eeprom_struct_t field;
    uint8_t raw[sizeof(eeprom_struct_t)];
 } eeprom_t;
+
+enum
+{
+	STROBE_OFF = 0,
+	STROBE_ALARM,
+	STROBE_AIRBORNE,
+	STROBE_ALWAYS
+};
+
+enum
+{
+	SOUND_OFF = 0,
+	SOUND_ON
+};
 
 void EEPROM_setup(void);
 void EEPROM_defaults(void);

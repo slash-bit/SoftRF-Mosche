@@ -1,0 +1,100 @@
+/*
+ * TrafficHelper.h
+ * Copyright (C) 2019-2022 Linar Yusupov
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef TRAFFICHELPER_H
+#define TRAFFICHELPER_H
+
+#include "SoCHelper.h"
+
+extern "C" {
+#include <gdl90.h>
+}
+
+typedef struct traffic_struct {
+    time_t    timestamp;
+
+/* -------------------------------+------------------------------ */
+/*            FLARM FTD-12        |      GDL90 equivalent         */
+/* -------------------------------+------------------------------ */
+    int8_t    alarm_level;        // trafficAlertStatus
+                                  //
+    int8_t    IDType;             // addressType
+    uint32_t  ID;                 // address
+    uint16_t  Track;              // trackOrHeading
+    int16_t   TurnRate;
+    uint16_t  GroundSpeed;        // horizontalVelocity
+    float     ClimbRate;          // verticalVelocity
+    int8_t    AcftType;           // emitterCategory
+
+    uint8_t   alert_level;        // minimum alarm level to generate sound warning
+
+/*            Legacy              */
+    float     RelativeNorth;
+    float     RelativeEast;
+    float     RelativeVertical;
+    int       RelativeBearing;    // PFLAU only
+
+    float     distance;
+    float     adj_dist;
+
+/*            GDL90      */
+    float     latitude;
+    float     longitude;
+    float     altitude;
+    uint8_t   callsign [GDL90_TRAFFICREPORT_MSG_CALLSIGN_SIZE];
+
+    uint8_t   alert;              // bitmap of issued voice/tone/ble/... alerts
+    uint8_t   airborne;
+} traffic_t;
+
+typedef struct traffic_by_dist_struct {
+  traffic_t *fop;
+  float     distance;
+} traffic_by_dist_t;
+
+#define ALARM_ZONE_NONE         10000 /* zone range is 1000m <-> 10000m */
+
+#define VERTICAL_SLOPE          5  /* slope effect for alerts */
+
+/* alarm levels are defined in NMEAHelper.h */
+
+#define ENTRY_EXPIRATION_TIME   5 /* seconds */
+#define TRAFFIC_VECTOR_UPDATE_INTERVAL 2 /* seconds */
+#define TRAFFIC_UPDATE_INTERVAL_MS (TRAFFIC_VECTOR_UPDATE_INTERVAL * 1000)
+#define isTimeToUpdateTraffic() (millis() - UpdateTrafficTimeMarker > \
+                                  TRAFFIC_UPDATE_INTERVAL_MS)
+
+#define isTimeToSound()         (millis() - Traffic_Sound_TimeMarker > 2000)
+#define SOUND_EXPIRATION_TIME   5 /* seconds */
+
+#define TRAFFIC_ALERT_SOUND     1
+
+void Traffic_setup        (void);
+void Traffic_loop         (void);
+void Traffic_Add          (void);
+void Traffic_Update       (traffic_t *);
+void Traffic_ClearExpired (void);
+int  Traffic_Count        (void);
+
+int  traffic_cmp_by_distance(const void *, const void *);
+
+extern traffic_t ThisAircraft, Container[MAX_TRACKING_OBJECTS], fo, EmptyFO;
+extern traffic_by_dist_t traffic[MAX_TRACKING_OBJECTS];
+extern int max_alarm_level;
+
+#endif /* TRAFFICHELPER_H */

@@ -19,6 +19,10 @@
 #ifndef SKYVIEW_H
 #define SKYVIEW_H
 
+#if defined(ARDUINO)
+#include <Arduino.h>
+#endif /* ARDUINO */
+
 #define SKYVIEW_FIRMWARE_VERSION  "0.12"
 #define SKYVIEW_IDENT     "SkyView-"
 

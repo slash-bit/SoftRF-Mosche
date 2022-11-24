@@ -1,6 +1,6 @@
 /*
  * NMEAHelper.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,8 +91,8 @@ static void NMEA_Parse_Character(char c)
         if (T_AlarmLevel.isUpdated())
         {
 //          Serial.print(F(" AlarmLevel=")); Serial.print(T_AlarmLevel.value());
-          fo.AlarmLevel = atoi(T_AlarmLevel.value());
-//          Serial.print(F(" AlarmLevel=")); Serial.println(fo.AlarmLevel);
+          fo.alarm_level = atoi(T_AlarmLevel.value());
+//          Serial.print(F(" AlarmLevel=")); Serial.println(fo.alarm_level);
         }
         if (T_RelativeNorth.isUpdated())
         {
@@ -150,9 +150,12 @@ static void NMEA_Parse_Character(char c)
 
         fo.timestamp = now();
 
+        Traffic_Update(&fo);
         Traffic_Add();
 
       } else if (S_RX.isUpdated()) {
+
+        fo = EmptyFO;    // treat PFLAU too as traffic
 
         NMEA_Status.timestamp = now();
         NMEA_Status.RX = atoi(S_RX.value());
@@ -178,37 +181,44 @@ static void NMEA_Parse_Character(char c)
         if (S_AlarmLevel.isUpdated())
         {
 //          Serial.print(F(" AlarmLevel=")); Serial.print(S_AlarmLevel.value());
-          NMEA_Status.AlarmLevel = atoi(S_AlarmLevel.value());
-//          Serial.print(F(" AlarmLevel=")); Serial.println(NMEA_Status.AlarmLevel);
+          NMEA_Status.alarm_level = atoi(S_AlarmLevel.value());
+          fo.alarm_level = NMEA_Status.alarm_level;
+//          Serial.print(F(" AlarmLevel=")); Serial.println(NMEA_Status.alarm_level);
         }
         if (S_RelativeBearing.isUpdated())
         {
 //          Serial.print(F(" RelativeBearing=")); Serial.print(S_RelativeBearing.value());
           NMEA_Status.RelativeBearing = atoi(S_RelativeBearing.value());
+          fo.RelativeBearing = NMEA_Status.RelativeBearing;   // -180..180
 //          Serial.print(F(" RelativeBearing=")); Serial.println(NMEA_Status.RelativeBearing);
         }
         if (S_AlarmType.isUpdated())
         {
 //          Serial.print(F(" AlarmType=")); Serial.print(S_AlarmType.value());
           NMEA_Status.AlarmType = atoi(S_AlarmType.value());
+          if (NMEA_Status.AlarmType == 4)          // traffic "advisory"
+              fo.alarm_level = ALARM_LEVEL_NONE;   // does not ignore obstacle warnings
 //          Serial.print(F(" AlarmType=")); Serial.println(NMEA_Status.AlarmType);
         }
         if (S_RelativeVertical.isUpdated())
         {
 //          Serial.print(F(" RelativeVertical=")); Serial.print(S_RelativeVertical.value());
           NMEA_Status.RelativeVertical = atoi(S_RelativeVertical.value());
+          fo.RelativeVertical = NMEA_Status.RelativeVertical;     // meters
 //          Serial.print(F(" RelativeVertical=")); Serial.println(NMEA_Status.RelativeVertical);
         }
         if (S_RelativeDistance.isUpdated())
         {
 //          Serial.print(F(" RelativeDistance=")); Serial.print(S_RelativeDistance.value());
           NMEA_Status.RelativeDistance = strtol(S_RelativeDistance.value(), NULL, 10);
+          fo.distance = NMEA_Status.RelativeDistance;     // meters
 //          Serial.print(F(" RelativeDistance=")); Serial.println(NMEA_Status.RelativeDistance);
         }
         if (S_ID.isUpdated())
         {
 //          Serial.print(F(" ID=")); Serial.print(S_ID.value());
           NMEA_Status.ID = strtol(S_ID.value(), NULL, 16);
+          fo.ID = NMEA_Status.ID;
 #if 0
           Serial.print(F(" ID="));
           Serial.print((NMEA_Status.ID >> 16) & 0xFF, HEX);
@@ -216,7 +226,13 @@ static void NMEA_Parse_Character(char c)
           Serial.print((NMEA_Status.ID      ) & 0xFF, HEX);
           Serial.println();
 #endif
+        } else {    // very old FLARMs don't send the ID
+          fo.ID = 0x123456;
         }
+
+        fo.timestamp = now();
+        Traffic_Update(&fo);
+        Traffic_Add();
       }
     }
 }

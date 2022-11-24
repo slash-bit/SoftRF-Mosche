@@ -1,6 +1,6 @@
 /*
  * TrafficHelper.h
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ typedef struct traffic_struct {
 /* -------------------------------+------------------------------ */
 /*            FLARM FTD-12        |      GDL90 equivalent         */
 /* -------------------------------+------------------------------ */
-    int8_t    AlarmLevel;         // trafficAlertStatus
+    int8_t    alarm_level;        // trafficAlertStatus
                                   //
     int8_t    IDType;             // addressType
     uint32_t  ID;                 // address
@@ -41,10 +41,16 @@ typedef struct traffic_struct {
     float     ClimbRate;          // verticalVelocity
     int8_t    AcftType;           // emitterCategory
 
+    uint8_t   alert_level;        // minimum alarm level to generate voice warning
+
 /*            Legacy              */
     float     RelativeNorth;
     float     RelativeEast;
     float     RelativeVertical;
+    int       RelativeBearing;    // PFLAU only
+
+    float     distance;
+    float     adj_dist;
 
 /*            GDL90      */
     float     latitude;
@@ -61,6 +67,10 @@ typedef struct traffic_by_dist_struct {
 } traffic_by_dist_t;
 
 #define ALARM_ZONE_NONE         10000 /* zone range is 1000m <-> 10000m */
+
+#define VERTICAL_SLOPE          5  /* slope effect for alerts */
+
+/* alarm levels are defined in NMEAHelper.h */
 
 #define ENTRY_EXPIRATION_TIME   5 /* seconds */
 #define TRAFFIC_VECTOR_UPDATE_INTERVAL 2 /* seconds */

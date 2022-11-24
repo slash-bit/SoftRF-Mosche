@@ -1,6 +1,6 @@
 /*
  * View_Text_EPD.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,8 +43,7 @@ static void EPD_Draw_Text()
     if (Container[i].ID && (now() - Container[i].timestamp) <= EPD_EXPIRATION_TIME) {
 
       traffic[j].fop = &Container[i];
-      traffic[j].distance = sqrtf(Container[i].RelativeNorth * Container[i].RelativeNorth +
-                                  Container[i].RelativeEast  * Container[i].RelativeEast);
+      traffic[j].distance = Container[i].distance;
       j++;
     }
   }
