@@ -34,12 +34,14 @@
 #define STROBE_MS_NOALARM         50
 #define STROBE_MS_PAUSE_NOALARM (2500-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
-/* even if not airborne, flash the strobe for the first 120 seconds as a test */
-#define STROBE_INITIAL_RUN       120
+/* even if not airborne, flash the strobe for the first xx seconds as a test */
+#define STROBE_INITIAL_RUN        90
 
 void Strobe_setup(void);
 void Strobe_loop(void);
 void Strobe_fini(void);
+
+extern uint32_t StrobeSetupMarker;
 
 #if defined(ESP32)
 #define STROBEPIN SOC_GPIO_PIN_STROBE

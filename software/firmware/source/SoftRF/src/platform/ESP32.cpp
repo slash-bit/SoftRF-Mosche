@@ -277,10 +277,27 @@ static void ESP32_post_init()
 //Serial.printf("...axp.begin returned %d\r\n", axp_begin_rval);
 
   Serial.println();
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+    Serial.println("Detected MODEL_PRIME_MK2");
+  else
+    { Serial.print("Detected model "); Serial.println(hw_info.model); }
+  Serial.print("hw_info.revision: "); Serial.println(hw_info.revision);
+
+  Serial.println();
   Serial.println(F("Data output device(s):"));
 
   Serial.print(F("NMEA   - "));
   switch (settings->nmea_out)
+  {
+    case NMEA_UART       :  Serial.println(F("UART"));      break;
+    case NMEA_UDP        :  Serial.println(F("UDP"));       break;
+    case NMEA_TCP        :  Serial.println(F("TCP"));       break;
+    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
+    case NMEA_OFF        :
+    default              :  Serial.println(F("NULL"));      break;
+  }
+  Serial.print(F("NMEA2  - "));
+  switch (settings->nmea_out2)
   {
     case NMEA_UART       :  Serial.println(F("UART"));      break;
     case NMEA_UDP        :  Serial.println(F("UDP"));       break;
@@ -602,6 +619,7 @@ static long ESP32_random(long howsmall, long howBig)
   return random(howsmall, howBig);
 }
 
+#if EXCLUDE_TONEAC
 static void ESP32_Sound_test(int var)
 {
 //Serial.println("Sound_test()...");
@@ -666,6 +684,61 @@ static void ESP32_Sound_tone(int hz, uint8_t volume)
     }
   }
 }
+
+#else
+/* now using the ToneAC library instead */
+
+#include <toneAC.h>
+
+static void Sound_tone(int hz, int duration)
+{
+    int volume = (settings->volume == BUZZER_VOLUME_LOW ? 2 : 10);
+    toneAC(hz, volume, duration, false);
+}
+
+/* dummy function to fit the SoC_ops structure */
+static void ESP32_Sound_tone(int hz, uint8_t volume)
+{
+    Sound_tone(hz, 500);
+}
+
+void ESP32_Sound_test(int reason)
+{
+Serial.println("Sound_test() using ToneAC...");
+
+    if (settings->volume == BUZZER_OFF)
+        return;
+    if (settings->volume == BUZZER_EXT)
+        return;
+
+    if (reason == REASON_DEFAULT_RST ||
+        reason == REASON_EXT_SYS_RST ||
+        reason == REASON_SOFT_RESTART) {
+Serial.println("... tone 1:");
+      Sound_tone(440, 500);
+Serial.println("... tone 2:");
+      Sound_tone(640, 500);
+Serial.println("... tone 3:");
+      Sound_tone(840, 500);
+Serial.println("... tone 4:");
+      Sound_tone(1040, 600);
+    } else if (reason == REASON_WDT_RST) {
+      Sound_tone(440,  500);
+      Sound_tone(1040, 500);
+      Sound_tone(440,  500);
+      Sound_tone(1040, 600);
+    } else {
+      Sound_tone(1040, 500);
+      Sound_tone(840,  500);
+      Sound_tone(640,  500);
+      Sound_tone(440,  600);
+    }
+
+    noToneAC();
+//Serial.println("... done tones");
+}
+
+#endif  /* TONEAC */
 
 static uint32_t ESP32_maxSketchSpace()
 {

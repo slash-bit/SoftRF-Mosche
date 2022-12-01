@@ -21,9 +21,10 @@
 #include "Baro.h"
 
 // including BMP180 & MPL3115A2 still hangs at probe() even with ESP32 Core 2.0.3
+// #define EXCLUDE_BMP280
 #define EXCLUDE_BMP180
 #define EXCLUDE_MPL3115A2
-// including BMP280 hangs the nRF52 version
+// even the BMP280 probe hangs the nRF52 version
 #if defined(ARDUINO_ARCH_NRF52)
 #define EXCLUDE_BMP280
 #endif

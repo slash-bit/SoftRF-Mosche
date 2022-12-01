@@ -146,7 +146,11 @@ Allow two NMEA output route simultaneously.  For example, BT & USB.  Also allow 
 
 Visual alarms and strobe driver
 
-Added a "strobe control" MODULE.  This cAN be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection to pin 33 on the T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  New files: driver/Strobe.h and .cpp.
+Added a "strobe control" MODULE.  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection to pin 25 on the T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  New files: driver/Strobe.h and .cpp.
+
+Improved audio alarms
+
+Incorporated the ToneAC library to get the beeping signal to appear in opposite phases on 2 GPIO pins (14&15) on the T-Beam.  Attaching a passive piezo buzzer between those 2 pins results in higher volume than when attaching between one pin and ground.  Also added a settings option for DC (+3V) output on one pin (14) to trigger an external active buzzer powered by higher voltage.
 
 
 KNOWN ISSUES

@@ -24,8 +24,8 @@
 
 /* 3 different sounds for different alarm levels: */
 #define ALARM_TONE_HZ_LOW        2000
-#define ALARM_TONE_HZ_IMPORTANT  2400
-#define ALARM_TONE_HZ_URGENT     3000
+#define ALARM_TONE_HZ_IMPORTANT  2700
+#define ALARM_TONE_HZ_URGENT     3300
 #define ALARM_BEEPS_LOW        1
 #define ALARM_BEEPS_IMPORTANT  2
 #define ALARM_BEEPS_URGENT     5
@@ -37,11 +37,12 @@ enum
 {
 	BUZZER_VOLUME_FULL,
 	BUZZER_VOLUME_LOW,
-	BUZZER_OFF
+	BUZZER_OFF,
+	BUZZER_EXT
 };
 
 void Sound_setup(void);
-bool Sound_Notify(int8_t);
+void Sound_Notify(int8_t);
 void Sound_loop(void);
 void Sound_fini(void);
 

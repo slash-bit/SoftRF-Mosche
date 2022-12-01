@@ -104,14 +104,17 @@ extern Adafruit_NeoPixel strip;
                                   SOC_GPIO_PIN_TBEAM_V08_PPS :          \
                                   SOC_UNUSED_PIN))
 
-/* Linar: #define SOC_GPIO_PIN_BUZZER   (hw_info.model != SOFTRF_MODEL_PRIME_MK2 ?\
-                                13 : SOC_UNUSED_PIN) */
-/* Caz: */
-#define SOC_GPIO_PIN_BUZZER   (hw_info.model != SOFTRF_MODEL_PRIME_MK2 ?\
-                                13 : 14)
+//  #define SOC_GPIO_PIN_BUZZER   (hw_info.model != SOFTRF_MODEL_PRIME_MK2 ?\
+//                                13 : SOC_UNUSED_PIN) */
+
+#define SOC_GPIO_PIN_BUZZER   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
+                                14 : 13)
+
+#define SOC_GPIO_PIN_BUZZER2  (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
+                                15 : SOC_UNUSED_PIN)
 
 /* MB: seems available, not tested */
-#define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 33 : SOC_UNUSED_PIN)
+#define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 25 : SOC_UNUSED_PIN)
 
 /* SPI (does match Heltec & TTGO LoRa32 pins mapping) */
 #define SOC_GPIO_PIN_MOSI       27

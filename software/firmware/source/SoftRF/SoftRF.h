@@ -21,6 +21,8 @@
 #ifndef SOFTRF_H
 #define SOFTRF_H
 
+#define SOFTRF
+
 #if defined(ARDUINO) || defined(HACKRF_ONE)
 #include <Arduino.h>
 #endif /* ARDUINO */
@@ -37,7 +39,7 @@
 //#define DEFAULT_REGION_EU
 //#define DEFAULT_REGION_US
 
-#define SOFTRF_FIRMWARE_VERSION "MB09d"
+#define SOFTRF_FIRMWARE_VERSION "MB09e"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101
 

@@ -9,9 +9,10 @@ Beyond Lyusupov's version 1.0:
 * Can set aircraft ID for self, ID to ignore, and ID to follow
 * New: Includes strobe-control logic
 * New: Can adjust settings within T-Echo
+* Support 3-level collision alarms via buzzer
+* New: louder buzzer via 2-pin differential drive, or external
 * Can configure two simultaneous NMEA output destinations
 * Settable baud rate for serial output
-* Support 3-level collision alarms via buzzer
 * Estimates wind while circling, uses for collision prediction
 * Corrected frequency hopping and time slots
 

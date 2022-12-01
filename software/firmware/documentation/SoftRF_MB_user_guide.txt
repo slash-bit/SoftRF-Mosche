@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated November 17, 2022
-to fit software version MB09c based on v1.0 with some parts of v1.2
+This version last updated December 1, 2022
+to fit software version MB09e based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -65,11 +65,11 @@ I've bought T-Beam boards from LilyGo's "store" on Amazon:
     https://www.amazon.com/dp/B09VLFQQG4
 or from banggood.com (they accept Paypal).
 
-With my version of SoftRF you have the option of attaching a passive piezo buzzer to the T-Beam, between GPIO Pin 14 and ground, to get audible indications of collision warnings.  A suitable buzzer is this one:
+With my version of SoftRF you have the option of attaching a passive piezo buzzer (through a 100-ohm resistor) to the T-Beam, between GPIO pins 14 and 15, to get audible indications of collision warnings.  A suitable buzzer is this one:
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
-Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".
+The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external amplifier, or, select "external" in the buzzer volume setting to get +3v DC output on pin 14, and drive an external (12V) *active* buzzer via a transistor.  Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm happens (or could happen).
 
-You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 33.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.
+You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 25.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.
 
 Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".
 
@@ -175,7 +175,7 @@ Strobe mode: if an LED or strobe are connected to the T-Beam, this setting lets 
 * Strobe alarm - flashes only when a collision alarm is given
 * Strobe airborne - flashes whenever airborne, but more frequently if alarm given
 * Strobe always - flashes even if not airborne.
-The "alarm" and "airborne" modes also flash in the first two minutes after turning on the device, alternating between the alarm and non-alarm flash patterns, as a self-test.
+The "alarm" and "airborne" modes also flash in the first 90 seconds after turning on the device, alternating between the alarm and non-alarm flash patterns, and occasionally beeping, as a self-test.
 
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 

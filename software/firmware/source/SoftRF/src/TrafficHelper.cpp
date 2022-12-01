@@ -401,8 +401,6 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
       vxmin = vx;
       vymin = vy;
       mintime = t;
-      if (mintime < ALARM_TIME_EXTREME)
-          --fop->alert_level;     /* may sound new alarm even if previous one was IMPORTANT */
     }
     ++i;
     ++j;
@@ -438,6 +436,8 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
         if (sqspeed < 4*4*4*4)  /* relative speed < 4 mps */
            --rval;
   }
+  if (mintime < ALARM_TIME_EXTREME)
+      --fop->alert_level;     /* may sound new alarm even if previous one was IMPORTANT */
 
   /* send data out via NMEA for debugging */
   if (rval > ALARM_LEVEL_CLOSE || fop->distance < ALARM_ZONE_IMPORTANT) {

@@ -193,6 +193,7 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
   delay(100);
 
   hw_info.baro = Baro_setup();
+Serial.println("... Baro_setup() returned");
 
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();
@@ -246,6 +247,7 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
     LED_test();
   }
 
+Serial.println("calling Sound_setup()");
   Sound_setup();
 //Serial.println("calling Sound_test()");
   SoC->Sound_test(resetInfo->reason);

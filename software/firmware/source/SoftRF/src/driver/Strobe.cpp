@@ -36,7 +36,7 @@ void  Strobe_fini()        {}
 #include "../protocol/data/NMEA.h"
 
 static int StrobePin = SOC_UNUSED_PIN;
-static uint32_t StrobeSetupMarker = 0;
+uint32_t StrobeSetupMarker = 0;
 static uint32_t StrobeTimeMarker = 0;
 static uint32_t StrobePauseMarker = 0;
 static int StrobeFlashes = 0;      /* how many flashes */
@@ -82,12 +82,12 @@ void Strobe_Start()
         StrobePauseMarker = millis();
     }
 
-    Serial.print("Strobe flash at alarm level: ");
-    Serial.println(alarm_level);
+    //Serial.print("Strobe flash at alarm level: ");
+    //Serial.println(alarm_level);
 
     if (settings->nmea_l || settings->nmea2_l) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-          PSTR("$PSKSF,%d\r\n"), alarm_level);
+          PSTR("$PSRSF,%d\r\n"), alarm_level);
         NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 }

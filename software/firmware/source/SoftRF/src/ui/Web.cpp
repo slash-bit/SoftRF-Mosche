@@ -78,13 +78,14 @@ static const char about_html[] PROGMEM = "<html>\
     <title>About</title>\
   </head>\
 <body>\
-<h1 align=center>About</h1>\
-<p>This firmware is a part of open SoftRF project</p>\
-<p>URL: http://github.com/lyusupov/SoftRF</p>\
-<p>Author: <b>Linar Yusupov</b></p>\
-<p>E-mail: linar.r.yusupov@gmail.com</p>\
-<h2 align=center>Credits</h2>\
-<p align=center>(in historical order)</p>\
+<h1>About</h1>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;This version of SoftRF by Moshe Braner</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/moshe-braner/SoftRF</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;Based on the SoftRF project by Linar Yusupov</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/lyusupov/SoftRF</h4>\
+<br>\
+<h2>Credits</h2>\
+<p>(in historical order)</p>\
 <table width=100%%>\
 <tr><th align=left>Ivan Grokhotkov</th><td align=left>Arduino core for ESP8266</td></tr>\
 <tr><th align=left>Zak Kemble</th><td align=left>nRF905 library</td></tr>\
@@ -120,8 +121,7 @@ static const char about_html[] PROGMEM = "<html>\
 <tr><th align=left>Lewis He</th><td align=left>AXP20X library</td></tr>\
 <tr><th align=left>Bodmer</th><td align=left>TFT library</td></tr>\
 <tr><th align=left>Michael Kuyper</th><td align=left>Basic MAC library</td></tr>\
-<tr><th align=left>Moshe Braner</th><td align=left>Fast approx math</td></tr>\
-<tr><th align=left>Moshe Braner</th><td align=left>Wind estimation</td></tr>\
+<tr><th align=left>Tim Eckel and Horst Reiterer</th><td align=left>ToneAC library</td></tr>\
 <tr><th align=left>Moshe Braner</th><td align=left>Collision algorithm for circling aircraft</td></tr>\
 </table>\
 <hr>\
@@ -353,12 +353,13 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
-<th align=left>Volume</th>\
+<th align=left>Buzzer</th>\
 <td align=right>\
 <select name='volume'>\
-<option %s value='%d'>Loud</option>\
-<option %s value='%d'>Low</option>\
 <option %s value='%d'>Off</option>\
+<option %s value='%d'>Soft</option>\
+<option %s value='%d'>Loud</option>\
+<option %s value='%d'>External</option>\
 </select>\
 </td>\
 </tr>\
@@ -410,9 +411,10 @@ void handleSettings() {
   (settings->txpower == RF_TX_POWER_FULL ? "selected" : ""),  RF_TX_POWER_FULL,
   (settings->txpower == RF_TX_POWER_LOW ? "selected" : ""),  RF_TX_POWER_LOW,
   (settings->txpower == RF_TX_POWER_OFF ? "selected" : ""),  RF_TX_POWER_OFF,
-  (settings->volume == BUZZER_VOLUME_FULL ? "selected" : ""), BUZZER_VOLUME_FULL,
-  (settings->volume == BUZZER_VOLUME_LOW ? "selected" : ""), BUZZER_VOLUME_LOW,
   (settings->volume == BUZZER_OFF ? "selected" : ""), BUZZER_OFF,
+  (settings->volume == BUZZER_VOLUME_LOW ? "selected" : ""), BUZZER_VOLUME_LOW,
+  (settings->volume == BUZZER_VOLUME_FULL ? "selected" : ""), BUZZER_VOLUME_FULL,
+  (settings->volume == BUZZER_EXT ? "selected" : ""), BUZZER_EXT,
   (settings->strobe == STROBE_OFF ? "selected" : ""), STROBE_OFF,
   (settings->strobe == STROBE_ALARM ? "selected" : ""), STROBE_ALARM,
   (settings->strobe == STROBE_AIRBORNE ? "selected" : ""), STROBE_AIRBORNE,
