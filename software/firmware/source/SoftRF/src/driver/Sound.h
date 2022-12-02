@@ -22,9 +22,9 @@
 #define ALARM_TONE_HZ     1040
 #define ALARM_TONE_MS     1000
 
-/* 3 different sounds for different alarm levels: */
-#define ALARM_TONE_HZ_LOW        2000
-#define ALARM_TONE_HZ_IMPORTANT  2700
+/* different sounds for different alarm levels: */
+#define ALARM_TONE_HZ_LOW        2700
+#define ALARM_TONE_HZ_IMPORTANT  3000
 #define ALARM_TONE_HZ_URGENT     3300
 #define ALARM_BEEPS_LOW        1
 #define ALARM_BEEPS_IMPORTANT  2

@@ -123,7 +123,9 @@ void setup()
 
   SoC->DB_init();
 
-  SoC->TTS("POST");
+  char buf[8];
+  strcpy(buf,"POST");
+  SoC->TTS(buf);
 
   Web_setup();
   Traffic_setup();

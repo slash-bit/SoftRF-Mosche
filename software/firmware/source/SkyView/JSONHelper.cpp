@@ -1,6 +1,6 @@
 /*
  * JSONHelper.cpp
- * Copyright (C) 2018-2021 Linar Yusupov
+ * Copyright (C) 2018-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -208,8 +208,8 @@ void parseSettings(JsonObject& root)
       eeprom_block.field.settings.filter = TRAFFIC_FILTER_OFF;
     } else if (!strcmp(filter_s,"500M")) {
       eeprom_block.field.settings.filter = TRAFFIC_FILTER_500M;
-    } else if (!strcmp(filter_s,"1500M")) {
-      eeprom_block.field.settings.filter = TRAFFIC_FILTER_1500M;
+    } else if (!strcmp(filter_s,"ALARM")) {
+      eeprom_block.field.settings.filter = TRAFFIC_FILTER_ALARM;
     }
   }
 

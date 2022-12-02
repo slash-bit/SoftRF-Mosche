@@ -1,6 +1,6 @@
 /*
  * EEPROMHelper.cpp
- * Copyright (C) 2019-2021 Linar Yusupov
+ * Copyright (C) 2019-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,7 +91,7 @@ void EEPROM_defaults()
   eeprom_block.field.settings.voice           = VOICE_1;
   eeprom_block.field.settings.aghost          = ANTI_GHOSTING_OFF;
 
-  eeprom_block.field.settings.filter          = TRAFFIC_FILTER_OFF;
+  eeprom_block.field.settings.filter          = TRAFFIC_FILTER_500M;
   eeprom_block.field.settings.power_save      = POWER_SAVE_NONE;
   eeprom_block.field.settings.team            = 0;
 }

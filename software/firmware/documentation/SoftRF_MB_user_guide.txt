@@ -150,7 +150,7 @@ Mode: normally select "Normal".
 
 Device ID: this is unique to each device.  You cannot change it.
 
-ICAO ID: you can enter any ID you want (6 HEX digits), but normally this would be the ICAO ID of your aircraft (which you can obtain from the authorities in your country, the FAA in the USA).  If you also have a transponder or some other device, setting all of them to the same ID will avoid duplicate reporting of the aircraft if the data is later mixed together in OGN.
+ICAO ID: you can enter any ID you want (6 HEX digits), but normally this would be the ICAO ID of your aircraft, which you can obtain from the authorities in your country.  In the USA go here: https://registry.faa.gov/aircraftinquiry/Search/NNumberInquiry and in the search results look for "Mode S Code (Base 16 / Hex)".  If you also have a transponder or some other device, setting all of them to the same ID will avoid duplicate reporting of the aircraft in OGN.
 
 ID type to use: You can choose Random, ICAO (the ID entered above), Device (the fixed device ID), or Anonymous.  The latter is random but is fixed for the flight, while Random changes during the flight.  If you choose ICAO (best), or device ID, you can register your chosen ID on http://ddb.glidernet.org/ as your aircraft.  If you don't register it then only the cryptic ID will show up on OGN viewers such as https://glidertracker.org/ instead of your N number or tail number.
 
@@ -175,7 +175,7 @@ Strobe mode: if an LED or strobe are connected to the T-Beam, this setting lets 
 * Strobe alarm - flashes only when a collision alarm is given
 * Strobe airborne - flashes whenever airborne, but more frequently if alarm given
 * Strobe always - flashes even if not airborne.
-The "alarm" and "airborne" modes also flash in the first 90 seconds after turning on the device, alternating between the alarm and non-alarm flash patterns, and occasionally beeping, as a self-test.
+The "alarm" and "airborne" modes also flash in the first 2 minutes after turning on the device, alternating between the alarm and non-alarm flash patterns, and occasionally beeping, as a self-test.
 
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 

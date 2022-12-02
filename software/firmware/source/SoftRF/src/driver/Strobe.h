@@ -35,7 +35,7 @@
 #define STROBE_MS_PAUSE_NOALARM (2500-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
 /* even if not airborne, flash the strobe for the first xx seconds as a test */
-#define STROBE_INITIAL_RUN        90
+#define STROBE_INITIAL_RUN       110
 
 void Strobe_setup(void);
 void Strobe_loop(void);

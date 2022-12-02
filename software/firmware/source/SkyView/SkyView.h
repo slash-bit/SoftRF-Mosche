@@ -19,11 +19,13 @@
 #ifndef SKYVIEW_H
 #define SKYVIEW_H
 
+#define SKYVIEW
+
 #if defined(ARDUINO)
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#define SKYVIEW_FIRMWARE_VERSION  "0.12"
+#define SKYVIEW_FIRMWARE_VERSION  "MB01"
 #define SKYVIEW_IDENT     "SkyView-"
 
 #define DEFAULT_AP_SSID   "SoftRF-abc123"
@@ -189,6 +191,8 @@ enum
 	VOICE_3
 };
 
+#define VOICE_ON VOICE_1
+
 enum
 {
 	ANTI_GHOSTING_OFF,
@@ -209,7 +213,7 @@ enum
 {
 	TRAFFIC_FILTER_OFF,
 	TRAFFIC_FILTER_500M,
-	TRAFFIC_FILTER_1500M
+	TRAFFIC_FILTER_ALARM
 };
 
 enum

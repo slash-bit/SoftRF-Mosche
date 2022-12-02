@@ -66,7 +66,8 @@ typedef struct traffic_by_dist_struct {
   float     distance;
 } traffic_by_dist_t;
 
-#define ALARM_ZONE_NONE         10000 /* zone range is 1000m <-> 10000m */
+#define ALARM_ZONE_NONE         10000  // meters
+#define ALARM_ZONE_CLOSE        6000
 
 #define VERTICAL_SLOPE          5  /* slope effect for alerts */
 
@@ -81,7 +82,13 @@ typedef struct traffic_by_dist_struct {
 #define isTimeToVoice()         (millis() - Traffic_Voice_TimeMarker > 2000)
 #define VOICE_EXPIRATION_TIME   5 /* seconds */
 
-#define TRAFFIC_ALERT_VOICE     1
+#define TRAFFIC_ALERT_VOICE     1    // bit within the .alert field
+
+// wordings for voice warnings and notifications:
+#define WARNING_WORDS "traffic"
+// also available: "warning", "danger"
+#define ADVISORY_WORDS "traffic"
+// also available: "notice"
 
 void Traffic_setup        (void);
 void Traffic_loop         (void);

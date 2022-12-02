@@ -1,6 +1,6 @@
 /*
  * WebHelper.cpp
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,7 +66,7 @@ static const char about_html[] PROGMEM = "<html>\
   </head>\
 <body>\
 <h1 align=center>About</h1>\
-<p>This firmware is a part of open SoftRF project</p>\
+<p>This firmware is a part of SoftRF project</p>\
 <p>URL: http://github.com/lyusupov/SoftRF</p>\
 <p>Author: <b>Linar Yusupov</b></p>\
 <p>E-mail: linar.r.yusupov@gmail.com</p>\
@@ -91,7 +91,7 @@ static const char about_html[] PROGMEM = "<html>\
 <tr><th align=left>Evandro Copercini</th><td align=left>ESP32 BT SPP library</td></tr>\
 </table>\
 <hr>\
-Copyright (C) 2019-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
+Copyright (C) 2019-2022 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 </body>\
 </html>";
 
@@ -342,17 +342,19 @@ void handleSettings() {
 <th align=left>Voice</th>\
 <td align=right>\
 <select name='voice'>\
-<option %s value='%d'>off</option>\
-<option %s value='%d'>voice 1</option>\
-<option %s value='%d'>voice 2</option>\
-<option %s value='%d'>voice 3</option>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>On</option>\
 </select>\
 </td>\
 </tr>"),
+//<option %s value='%d'>voice 1</option>\
+//<option %s value='%d'>voice 2</option>\
+//<option %s value='%d'>voice 3</option>
     (settings->voice == VOICE_OFF  ? "selected" : ""), VOICE_OFF,
-    (settings->voice == VOICE_1    ? "selected" : ""), VOICE_1,
-    (settings->voice == VOICE_2    ? "selected" : ""), VOICE_2,
-    (settings->voice == VOICE_3    ? "selected" : ""), VOICE_3
+    (settings->voice == VOICE_1    ? "selected" : ""), VOICE_ON
+//    (settings->voice == VOICE_1    ? "selected" : ""), VOICE_1,
+//    (settings->voice == VOICE_2    ? "selected" : ""), VOICE_2,
+//    (settings->voice == VOICE_3    ? "selected" : ""), VOICE_3
     );
 
     len = strlen(offset);
@@ -376,11 +378,12 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
-<th align=left>Traffic filter</th>\
+<th align=left>Traffic advisories filter</th>\
 <td align=right>\
 <select name='filter'>\
-<option %s value='%d'>off</option>\
-<option %s value='%d'>by Altitude (&#177; 500 m)</option>\
+<option %s value='%d'>Unfiltered</option>\
+<option %s value='%d'>Altitude (&#177; 500 m)</option>\
+<option %s value='%d'>Alarm Only</option>\
 </select>\
 </td>\
 </tr>\
@@ -411,6 +414,7 @@ void handleSettings() {
     (settings->aghost     == ANTI_GHOSTING_10MIN ? "selected" : ""), ANTI_GHOSTING_10MIN,
     (settings->filter     == TRAFFIC_FILTER_OFF  ? "selected" : ""), TRAFFIC_FILTER_OFF,
     (settings->filter     == TRAFFIC_FILTER_500M ? "selected" : ""), TRAFFIC_FILTER_500M,
+    (settings->filter     == TRAFFIC_FILTER_ALARM ? "selected" : ""), TRAFFIC_FILTER_ALARM,
     (settings->power_save == POWER_SAVE_NONE     ? "selected" : ""), POWER_SAVE_NONE,
     (settings->power_save == POWER_SAVE_WIFI     ? "selected" : ""), POWER_SAVE_WIFI,
      settings->team
