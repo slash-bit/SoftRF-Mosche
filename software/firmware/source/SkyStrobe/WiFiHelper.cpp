@@ -27,6 +27,7 @@
 #include "NMEAHelper.h"
 #include "GDL90Helper.h"
 #include "WebHelper.h"
+#include "Sound.h"
 
 #include "SkyStrobe.h"
 
@@ -82,11 +83,21 @@ size_t WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   }
 }
 
+void WiFi_Transmit_UDP(char *buf, size_t size)
+{
+    SoC->WiFi_Transmit_UDP(RELAY_DST_PORT, (byte *)buf, size);
+}
+
 /**
  * @brief Arduino setup function.
  */
 void WiFi_setup()
 {
+  if (settings->connection != CON_WIFI_UDP
+   && settings->connection != CON_WIFI_TCP
+   && settings->bridge != BRIDGE_UDP
+   && settings->bridge != BRIDGE_TCP)
+        return;
 
   // Set Hostname.
   host_name += String((SoC->getChipId() & 0xFFFFFF), HEX);
@@ -99,29 +110,92 @@ void WiFi_setup()
                      settings->connection == CON_WIFI_TCP ) ?
                      WIFI_AP_STA : WIFI_AP;
   WiFi.mode(mode);
-
   SoC->WiFi_setOutputPower(WIFI_TX_POWER_MED); // 10 dB
   // WiFi.setOutputPower(0); // 0 dB
   //system_phy_set_max_tpw(4 * 0); // 0 dB
-  delay(10);
+  delay(1000);
 
-  Serial.print(F("Setting soft-AP configuration ... "));
-  Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ?
-    F("Ready") : F("Failed!"));
+  if (mode == WIFI_STA) {
+    if (strnlen(settings->server, sizeof(settings->server)) > 0 &&
+        strnlen(settings->key,  sizeof(settings->key))  > 0) {
+      WiFi.begin(settings->server, settings->key);
+      Serial.print(F("Wait for WiFi connection to "));
+      Serial.print(settings->server);
+      Serial.println(F(" AP..."));
+    } else {
+      Serial.println(F("Missing WiFi SSID or PSK"));
+    }
+  }
+  //delay(10);
+  // ... Give ESP 10 seconds to connect to station.
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)
+  {
+    Serial.write('.');
+    toggle_green_LED();
+    delay(500);
+  }
+  Serial.println();
 
-  Serial.print(F("Setting soft-AP ... "));
-  Serial.println(WiFi.softAP(host_name.c_str(), ap_default_psk) ?
-    F("Ready") : F("Failed!"));
+  // Check connection
+  if(WiFi.status() == WL_CONNECTED)
+  {
+    // ... print IP Address
+    Serial.print(F("IP address: "));
+    Serial.println(WiFi.localIP());
+    green_LED(true);
+  }
+  else
+  {
+    red_LED(true);
+    Serial.println(F("Can not connect to WiFi..."));
+    if (mode == WIFI_AP)
+        return;
+    Serial.println(F("...Go into AP mode..."));
+    // Go into software AP mode.
+    WiFi.mode(WIFI_AP);
+    SoC->WiFi_set_param(WIFI_PARAM_TX_POWER, WIFI_TX_POWER_MED); // 10 dBm
+    SoC->WiFi_set_param(WIFI_PARAM_DHCP_LEASE_TIME, WIFI_DHCP_LEASE_HRS);
+    startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)
+    {
+      Serial.write('.');
+      toggle_red_LED();
+      delay(500);
+    }
+    Serial.println();
+
+    Serial.print(F("Setting soft-AP configuration ... "));
+    Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ?
+      F("Ready") : F("Failed!"));
+
+    Serial.print(F("Setting soft-AP ... "));
+    Serial.println(WiFi.softAP(host_name.c_str(), ap_default_psk) ?
+      F("Ready") : F("Failed!"));
 #if defined(USE_DNS_SERVER)
-  // if DNSServer is started with "*" for domain name, it will reply with
-  // provided IP to all DNS request
-  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-  dns_active = true;
+    // if DNSServer is started with "*" for domain name, it will reply with
+    // provided IP to all DNS request
+    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+    dns_active = true;
 #endif
-  Serial.print(F("IP address: "));
-  Serial.println(WiFi.softAPIP());
+    delay(500);
+    if(WiFi.status() == WL_CONNECTED)
+    {
+      Serial.print(F("IP address: "));
+      Serial.println(WiFi.softAPIP());
+      green_LED(true);
+    }
+    else
+    {
+      Serial.println(F("... Cannot start WiFi AP!"));
+      red_LED(true);
+      return;
+    }
+  }
 
-  if (settings->connection == CON_WIFI_UDP) {
+  if (settings->connection == CON_WIFI_UDP
+         || settings->bridge == BRIDGE_UDP) {
+
     switch (settings->protocol)
     {
     case PROTOCOL_NMEA:
@@ -139,23 +213,13 @@ void WiFi_setup()
       Uni_Udp.begin(UDP_Data_Port);
       Serial.print(F("UDP server has started at port: "));
       Serial.println(UDP_Data_Port);
-    }
-  }
-
-  if (settings->connection == CON_WIFI_UDP ||
-      settings->connection == CON_WIFI_TCP ) {
-    if (strnlen(settings->server, sizeof(settings->server)) > 0 &&
-        strnlen(settings->key,  sizeof(settings->key))  > 0) {
-      WiFi.begin(settings->server, settings->key);
-
-      Serial.print(F("Wait for WiFi connection to "));
-      Serial.print(settings->server);
-      Serial.println(F(" AP..."));
+      blue_LED(true);
     }
 
-    WiFi_STA_TimeMarker = millis();
   }
 
+  delay(1000);
+  WiFi_STA_TimeMarker = millis();
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
   WiFi_No_Clients_Time_ms = millis();
 #endif
@@ -163,31 +227,39 @@ void WiFi_setup()
 
 void WiFi_loop()
 {
+  static uint32_t sincewhen = 0;
+
   if (settings->connection == CON_WIFI_UDP ||
       settings->connection == CON_WIFI_TCP ) {
-    if (WiFi.status() != WL_CONNECTED) {
-#if 0
-      if (millis() - WiFi_STA_TimeMarker > 2000) {
-        Serial.print(".");
-        WiFi_STA_TimeMarker = millis();
-      }
-#endif
-      if (WiFi_STA_connected == true) {
+//    if (millis() - WiFi_STA_TimeMarker < 25000)  // give the other device time to set up
+//        return;
+    if (WiFi.status() != WL_CONNECTED) {   // disconnected
+      if (WiFi_STA_connected == true) {    // was connected
         WiFi_STA_connected = false;
         Serial.print(F("Disconnected from WiFi AP "));
         Serial.println(settings->server);
+        sincewhen = millis();              // will cause blinking red below
       }
-    } else {
-      if (WiFi_STA_connected == false) {
+    } else {                              // connected
+      if (WiFi_STA_connected == false) {  // was not connected
+        WiFi_STA_connected = true;
         Serial.println("");
         Serial.print(F("Connected to WiFi AP "));
         Serial.println(settings->server);
         Serial.print(F("IP address: "));
         Serial.println(WiFi.localIP());
-        WiFi_STA_connected = true;
+        red_LED(false);
+        blue_LED(true);
+        sincewhen = 0;
       }
     }
   }
+
+  if (sincewhen > 0 && millis() > sincewhen + 500) {
+      toggle_red_LED();
+      sincewhen = millis();              // keep blinking as long as not connected
+  }
+
 #if defined(USE_DNS_SERVER)
   if (dns_active) {
     dnsServer.processNextRequest();
@@ -196,28 +268,24 @@ void WiFi_loop()
 
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
 //  if ((settings->power_save & POWER_SAVE_WIFI) && WiFi.getMode() == WIFI_AP) {
-  if (WiFi.getMode() == WIFI_AP) {
+  if (WiFi.getMode() == WIFI_AP && settings->bridge == BRIDGE_NONE) {
     if (SoC->WiFi_clients_count() == 0) {
       if ((millis() - WiFi_No_Clients_Time_ms) > POWER_SAVING_WIFI_TIMEOUT) {
         Web_fini();
         WiFi_fini();
-
-        if (settings->protocol == PROTOCOL_NMEA) {
-          Serial.println(F("$PSRFS,WIFI_OFF"));
+        Serial.println(F("WIFI OFF"));
         }
       }
     } else {
       WiFi_No_Clients_Time_ms = millis();
     }
-  }
 #endif
 }
 
 void WiFi_fini()
 {
-  if (settings->connection == CON_WIFI_UDP && UDP_Data_Port) {
+  if (UDP_Data_Port)
     Uni_Udp.stop();
-  }
 
   WiFi.mode(WIFI_OFF);
 }

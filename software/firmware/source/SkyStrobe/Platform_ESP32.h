@@ -41,46 +41,30 @@
 #define SOC_GPIO_PIN_GNSS_RX  21
 #define SOC_GPIO_PIN_GNSS_TX  22
 
-#define SOC_GPIO_PIN_BUZZER   14
-#define SOC_GPIO_PIN_STROBE   33
+//#define SOC_GPIO_PIN_BUZZER   14   // used this on the T-Beam
 
-#define SOC_BUTTON_MODE_DEF   0
+/* should be OK for most ESP32 boards: */
+#define SOC_GPIO_PIN_STROBE    25
+#define SOC_GPIO_PIN_BUZZER    26
+#define SOC_GPIO_PIN_BUZZER2   27
+#define SOC_GPIO_PIN_DCBUZZ    33
 
-/* TTGO T5 and T5S SPI pins mapping */
-#define SOC_GPIO_PIN_MOSI_T5S 23
-#define SOC_GPIO_PIN_MISO_T5S 12
-#define SOC_GPIO_PIN_SCK_T5S  18
-#define SOC_GPIO_PIN_SS_T5S   5
+#define SOC_BUTTON_MODE_DEF     0
 
-/* Waveshare ESP32 SPI pins mapping */
-#define SOC_GPIO_PIN_MOSI_WS  14
-#define SOC_GPIO_PIN_MISO_WS  12
-#define SOC_GPIO_PIN_SCK_WS   13
-#define SOC_GPIO_PIN_SS_WS    15
-
-/* TTGO T5S EPD pins mapping */
-#define SOC_EPD_PIN_DC_T5S    17
-#define SOC_EPD_PIN_RST_T5S   16
-#define SOC_EPD_PIN_BUSY_T5S  4
-
-/* TTGO T5S microSD pins mapping */
-#define SOC_SD_PIN_MOSI_T5S   15
-#define SOC_SD_PIN_MISO_T5S   2
-#define SOC_SD_PIN_SCK_T5S    14
-#define SOC_SD_PIN_SS_T5S     13
-
-/* TTGO T5S I2S-out pins mapping */
-#define SOC_GPIO_PIN_BCLK     26
-#define SOC_GPIO_PIN_LRCLK    25
-#define SOC_GPIO_PIN_DOUT     19
-
-/* TTGO T5S buttons mapping */
-#define SOC_BUTTON_MODE_T5S   37
-#define SOC_BUTTON_UP_T5S     38
-#define SOC_BUTTON_DOWN_T5S   39
-
-/* TTGO T5S green LED mapping */
-#define SOC_GPIO_PIN_LED_T5S  22
+/* The EZSBC ESP32_SW board has LEDs on these pins */
+/* On other boards using these pins is probably harmless */
+#define EZSBC
+#ifdef EZSBC
+#define SOC_GPIO_PIN_LED_RED   16   // independent RGB LED
+#define SOC_GPIO_PIN_LED_GREEN 17
+#define SOC_GPIO_PIN_LED_BLUE  18
+#define SOC_GPIO_PIN_LED_BLUE2 19   // part of the USB RGB LED
+#else
+#define SOC_GPIO_PIN_LED_RED   SOC_UNUSED_PIN
+#define SOC_GPIO_PIN_LED_GREEN SOC_UNUSED_PIN
+#define SOC_GPIO_PIN_LED_BLUE  SOC_UNUSED_PIN
+#define SOC_GPIO_PIN_LED_BLUE2 SOC_UNUSED_PIN
+#endif
 
 /* Boya Microelectronics Inc. */
 #define BOYA_ID               0x68

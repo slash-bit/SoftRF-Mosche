@@ -25,6 +25,21 @@
 #include "Platform_ESP32.h"
 #include "BluetoothHelper.h"
 
+/* assume no useful buttons on the board used for SkyStrobe */
+#define EXCLUDE_BUTTONS
+
+#if defined(ESP32)
+#define STROBEPIN   SOC_GPIO_PIN_STROBE
+#define REDLEDPIN   SOC_GPIO_PIN_LED_RED
+#define GREENLEDPIN SOC_GPIO_PIN_LED_GREEN
+#define BLUELEDPIN  SOC_GPIO_PIN_LED_BLUE
+#else
+#define STROBEPIN   SOC_UNUSED_PIN
+#define REDLEDPIN   SOC_UNUSED_PIN
+#define GREENLEDPIN SOC_UNUSED_PIN
+#define BLUELEDPIN  SOC_UNUSED_PIN
+#endif
+
 typedef struct SoC_ops_struct {
   uint8_t id;
   const char name[16];
@@ -40,14 +55,15 @@ typedef struct SoC_ops_struct {
   void (*WiFiUDP_stopAll)();
   void (*Battery_setup)();
   float (*Battery_voltage)();
+  void (*WiFi_set_param)(int, int);
   size_t (*WiFi_Receive_UDP)(uint8_t *, size_t);
+  void (*WiFi_Transmit_UDP)(int, byte *, size_t);
   int  (*WiFi_clients_count)();
   void (*Button_setup)();
   void (*Button_loop)();
   void (*Button_fini)();
   void (*WDT_setup)();
   void (*WDT_fini)();
-  void (*Sound_tone)(int, uint8_t);
   Bluetooth_ops_t *Bluetooth;
 } SoC_ops_t;
 

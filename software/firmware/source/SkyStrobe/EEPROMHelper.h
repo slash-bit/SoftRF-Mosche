@@ -30,12 +30,12 @@
 typedef struct Settings {
 
     uint8_t  connection;
+    uint8_t  bridge;
     uint8_t  protocol;
     uint8_t  baudrate;
-    uint8_t  resvd1;
 
-    char     server  [18];
-    char     key     [18];
+    char     server  [21+1];
+    char     key     [17+1];
 
     uint8_t  strobe;
     uint8_t  sound;

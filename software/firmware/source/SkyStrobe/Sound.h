@@ -1,6 +1,6 @@
 /*
  * SoundHelper.h
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2022 Moshe Braner
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,13 +19,10 @@
 #ifndef SOUNDHELPER_H
 #define SOUNDHELPER_H
 
-#define ALARM_TONE_HZ     1040
-#define ALARM_TONE_MS     1000
-
 /* 3 different sounds for different alarm levels: */
-#define ALARM_TONE_HZ_LOW        2000
-#define ALARM_TONE_HZ_IMPORTANT  2400
-#define ALARM_TONE_HZ_URGENT     3000
+#define ALARM_TONE_HZ_LOW        2700
+#define ALARM_TONE_HZ_IMPORTANT  3000
+#define ALARM_TONE_HZ_URGENT     3300
 #define ALARM_BEEPS_LOW        1
 #define ALARM_BEEPS_IMPORTANT  2
 #define ALARM_BEEPS_URGENT     5
@@ -33,16 +30,16 @@
 #define ALARM_TONE_MS_IMPORTANT 250
 #define ALARM_TONE_MS_URGENT    140
 
-enum
-{
-	BUZZER_VOLUME_FULL,
-	BUZZER_VOLUME_LOW,
-	BUZZER_OFF
-};
-
 void Sound_setup(void);
-void Sound_Notify(int);
+void Sound_Notify(int8_t);
 void Sound_loop(void);
 void Sound_fini(void);
+
+void red_LED(bool);
+void green_LED(bool);
+void blue_LED(bool);
+void toggle_green_LED(void);
+void toggle_red_LED(void);
+void LED_notify(void);
 
 #endif /* SOUNDHELPER_H */

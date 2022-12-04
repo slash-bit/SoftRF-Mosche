@@ -58,8 +58,13 @@ static unsigned long NMEA_TimeMarker = 0;
 
 static void NMEA_Parse_Character(char c)
 {
+    static uint32_t old_id;
+    static int old_level;
+
     bool isValidSentence = nmea.encode(c);
-    if (isValidSentence) {
+    if (! isValidSentence)
+        return;
+
       if (nmea.location.isUpdated()) {
         ThisAircraft.latitude  = nmea.location.lat();
         ThisAircraft.longitude = nmea.location.lng();
@@ -73,13 +78,13 @@ static void NMEA_Parse_Character(char c)
       if (nmea.speed.isUpdated()) {
         ThisAircraft.GroundSpeed = nmea.speed.knots();
       }
+
       if (T_ID.isUpdated()) {
         fo = EmptyFO;
 
 //        Serial.print(F(" ID=")); Serial.print(ID.value());
 
         fo.ID = strtol(T_ID.value(), NULL, 16);
-
 #if 0
         Serial.print(F(" ID="));
         Serial.print((fo.ID >> 16) & 0xFF, HEX);
@@ -149,6 +154,12 @@ static void NMEA_Parse_Character(char c)
         }
 
         fo.timestamp = now();
+
+        old_level = ALARM_LEVEL_NONE;
+        if (fo.alarm_level > ALARM_LEVEL_NONE) {
+            old_id = fo.ID;
+            old_level = fo.alarm_level;
+        }
 
         Traffic_Update(&fo);
         Traffic_Add();
@@ -227,14 +238,16 @@ static void NMEA_Parse_Character(char c)
           Serial.println();
 #endif
         } else {    // very old FLARMs don't send the ID
-          fo.ID = 0x123456;
+          if (old_level > ALARM_LEVEL_NONE && fo.alarm_level == old_level)
+              fo.ID = old_id;
+          else
+              fo.ID = 0x123456;
         }
 
         fo.timestamp = now();
         Traffic_Update(&fo);
         Traffic_Add();
       }
-    }
 }
 
 void NMEA_setup()
@@ -289,6 +302,50 @@ void NMEA_setup()
   }
 }
 
+void NMEA_bridge_send(char *buf, int len)
+{
+    if (settings->bridge == BRIDGE_UDP) {
+        WiFi_Transmit_UDP(buf, (size_t) len);
+    } else if (settings->bridge == BRIDGE_TCP) {
+        // tbd
+    } else if (settings->bridge == BRIDGE_BT_SPP
+            || settings->bridge == BRIDGE_BT_LE) {
+        if (SoC->Bluetooth) {
+            SoC->Bluetooth->write((uint8_t *) buf, (size_t) len);
+        }
+    }
+}
+
+void NMEA_bridge_buffer(char c)
+{
+    static char buf[128+2];
+    static int n = 0;
+
+    if (settings->bridge == BRIDGE_NONE)
+        return;
+
+    if (c=='\r' || c=='\n')
+        return;
+
+    if (n == 0 && c != '$')
+        return;
+
+    buf[n++] = c;
+
+    if (n < 5)
+        return;
+
+    if (buf[n-3] == '*') {
+        buf[n++] = '\n';
+        buf[n]   = '\0';
+        NMEA_bridge_send(buf, n);
+        n = 0;
+    }
+
+    if (n >= 128)
+        n = 0;
+}
+
 void NMEA_loop()
 {
   size_t size;
@@ -296,20 +353,21 @@ void NMEA_loop()
   switch (settings->connection)
   {
   case CON_SERIAL:
-    while (SerialInput.available() > 0) {
+    while (SerialInput.available() > 0) {    // == Serial1, SOC_GPIO_PIN_GNSS_TX
       char c = SerialInput.read();
       Serial.print(c);
+      NMEA_bridge_buffer(c);
       NMEA_Parse_Character(c);
       NMEA_TimeMarker = millis();
     }
-    /* read data from microUSB port */
+    /* read data from microUSB port */        // presumably tied to RXD0
 #if !defined(RASPBERRY_PI)
     if ((void *) &Serial != (void *) &SerialInput)
 #endif
     {
       while (Serial.available() > 0) {
         char c = Serial.read();
-//        Serial.print(c);
+        NMEA_bridge_buffer(c);
         NMEA_Parse_Character(c);
         NMEA_TimeMarker = millis();
       }

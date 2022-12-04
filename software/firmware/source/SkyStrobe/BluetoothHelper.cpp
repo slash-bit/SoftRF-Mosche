@@ -23,6 +23,7 @@
 #include "BluetoothHelper.h"
 #include "NMEAHelper.h"
 #include "GDL90Helper.h"
+#include "Sound.h"
 
 #include "SkyStrobe.h"
 
@@ -77,6 +78,7 @@ class AppClientCallback : public BLEClientCallbacks {
     ESP32_BT_ctl.status = BT_STATUS_NC;
 
     Serial.println(F("BLE: disconnected from Server."));
+    red_LED(true);
   }
 };
 
@@ -132,13 +134,13 @@ static void ESP32_BT_SPP_Connection_Manager(void *parameter)
           ESP32_BT_ctl.status = BT_STATUS_CON;
           ESP32_BT_ctl.command = BT_CMD_NONE;
           portEXIT_CRITICAL(&ESP32_BT_ctl.mutex);
-
+          blue_LED(true);
           Serial.print(F("BT SPP: Connected to "));
         } else {
           portENTER_CRITICAL(&ESP32_BT_ctl.mutex);
           ESP32_BT_ctl.status = BT_STATUS_NC;
           portEXIT_CRITICAL(&ESP32_BT_ctl.mutex);
-
+          red_LED(true);
           Serial.print(F("BT SPP: Unable to connect to "));
         }
         Serial.println(settings->server);
@@ -300,6 +302,7 @@ static void ESP32_Bluetooth_loop()
       if (ESP32_BT_ctl.command == BT_CMD_CONNECT) {
         if (ESP32_BLEConnectToServer()) {
           Serial.println(F("BLE: connected to Server."));
+          blue_LED(true);
         }
         ESP32_BT_ctl.command = BT_CMD_NONE;
       }
@@ -320,6 +323,7 @@ static void ESP32_Bluetooth_loop()
       } else if (millis() - BT_TimeMarker > BT_NODATA_TIMEOUT) {
 
         Serial.println(F("BLE: attempt to (re)connect..."));
+        red_LED(true);
 
         if (pClient) {
           if (pClient->isConnected()) {
@@ -487,3 +491,4 @@ Bluetooth_ops_t ESP32_Bluetooth_ops = {
 };
 
 #endif /* ESP32 */
+

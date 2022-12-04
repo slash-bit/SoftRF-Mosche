@@ -19,6 +19,8 @@
 #ifndef SKYSTROBE_H
 #define SKYSTROBE_H
 
+#define SKYSTROBE
+
 #if defined(ARDUINO)
 #include <Arduino.h>
 #endif /* ARDUINO */
@@ -95,6 +97,15 @@ enum
 	CON_WIFI_TCP,
 	CON_BLUETOOTH_SPP,
 	CON_BLUETOOTH_LE
+};
+
+enum
+{
+	BRIDGE_NONE,
+	BRIDGE_UDP,
+	BRIDGE_TCP,
+	BRIDGE_BT_SPP,
+	BRIDGE_BT_LE
 };
 
 enum

@@ -25,6 +25,13 @@
 
 #define HOSTNAME            "SkyStrobe-"
 #define UDP_PACKET_BUFSIZE  256
+#define WIFI_DHCP_LEASE_HRS 8
+
+enum
+{
+    WIFI_PARAM_TX_POWER,
+    WIFI_PARAM_DHCP_LEASE_TIME
+};
 
 enum
 {
@@ -36,7 +43,9 @@ enum
 void    WiFi_setup(void);
 void    WiFi_loop(void);
 size_t  WiFi_Receive_UDP(uint8_t *, size_t);
+void    WiFi_Transmit_UDP(char *, size_t);
 void    WiFi_fini(void);
+
 
 extern String host_name;
 #if defined(ARDUINO) && !defined(ENERGIA_ARCH_CC13XX) && !defined(RASPBERRY_PI)

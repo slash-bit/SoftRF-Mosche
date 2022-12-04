@@ -67,8 +67,8 @@ typedef struct traffic_by_dist_struct {
   float     distance;
 } traffic_by_dist_t;
 
-#define ALARM_ZONE_NONE         10000 /* zone range is 1000m <-> 10000m */
-
+#define ALARM_ZONE_CLOSE        3000   /* meters */
+#define VERTICAL_SEPARATION     500
 #define VERTICAL_SLOPE          5  /* slope effect for alerts */
 
 /* alarm levels are defined in NMEAHelper.h */

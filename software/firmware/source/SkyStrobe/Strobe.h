@@ -35,7 +35,7 @@
 #define STROBE_MS_PAUSE_NOALARM (2500-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
 /* even if not airborne, flash the strobe for the first 120 seconds as a test */
-#define STROBE_INITIAL_RUN       120
+#define STROBE_INITIAL_RUN        90
 
 void Strobe_setup(void);
 void Strobe_loop(void);
@@ -43,10 +43,6 @@ void Strobe_fini(void);
 
 bool hasGNSS(void);
 
-#if defined(ESP32)
-#define STROBEPIN SOC_GPIO_PIN_STROBE
-#else
-#define STROBEPIN SOC_UNUSED_PIN
-#endif
+extern uint32_t StrobeSetupMarker;
 
 #endif /* STROBEHELPER_H */

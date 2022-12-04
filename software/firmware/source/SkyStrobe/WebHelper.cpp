@@ -58,33 +58,26 @@ static const char about_html[] PROGMEM = "<html>\
     <title>About</title>\
   </head>\
 <body>\
-<h1 align=center>About</h1>\
-<p>This firmware is a part of SoftRF project</p>\
-<p>URL: http://github.com/lyusupov/SoftRF</p>\
-<p>Author: <b>Linar Yusupov</b></p>\
-<p>E-mail: linar.r.yusupov@gmail.com</p>\
-<h2 align=center>Credits</h2>\
+<h1>About</h1>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;SkyStrobe by Moshe Braner</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/moshe-braner/SoftRF</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;Based on SkyView by Linar Yusupov</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/lyusupov/SoftRF</h4>\
+<br>\
+<h2>Credits</h2>\
 <p align=center>(in historical order)</p>\
 <table width=100%%>\
 <tr><th align=left>Ivan Grokhotkov</th><td align=left>Arduino core for ESP8266</td></tr>\
 <tr><th align=left>Paul Stoffregen</th><td align=left>Arduino Time library</td></tr>\
 <tr><th align=left>Mikal Hart</th><td align=left>TinyGPS++ and PString libraries</td></tr>\
 <tr><th align=left>Hristo Gochkov</th><td align=left>Arduino core for ESP32</td></tr>\
-<tr><th align=left>JS Foundation</th><td align=left>jQuery library</td></tr>\
-<tr><th align=left>Mike McCauley</th><td align=left>BCM2835 C library</td></tr>\
-<tr><th align=left>Jean-Marc Zingg</th><td align=left>GxEPD2 library</td></tr>\
-<tr><th align=left>Adafruit Industries</th><td align=left>SSD1306 and GFX libraries</td></tr>\
 <tr><th align=left>Ryan David</th><td align=left>GDL90 decoder</td></tr>\
-<tr><th align=left>Arundale Ramanathan</th><td align=left>Sqlite3 Arduino library</td></tr>\
-<tr><th align=left>FlarmNet<br>GliderNet</th><td align=left>aircrafts data</td></tr>\
-<tr><th align=left>Shenzhen Xin Yuan<br>(LilyGO) ET company</th><td align=left>TTGO T5S V1.9 board</td></tr>\
-<tr><th align=left>Tuan Nha</th><td align=left>ESP32 I2S WAV player</td></tr>\
-<tr><th align=left>Brian Park</th><td align=left>AceButton library</td></tr>\
 <tr><th align=left>flashrom.org project</th><td align=left>Flashrom library</td></tr>\
 <tr><th align=left>Evandro Copercini</th><td align=left>ESP32 BT SPP library</td></tr>\
+<tr><th align=left>Tim Eckel and Horst Reiterer</th><td align=left>ToneAC library</td></tr>\
 </table>\
 <hr>\
-Copyright (C) 2019-2022 &nbsp;&nbsp;&nbsp; Linar Yusupov\
+Copyright (C) 2022 &nbsp;&nbsp;&nbsp; Moshe Braner\
 </body>\
 </html>";
 
@@ -132,6 +125,17 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>Wireless Bridge</th>\
+<td align=right>\
+<select name='bridge'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>WiFi UDP</option>\
+<option %s value='%d'>Bluetooth SPP</option>\
+<option %s value='%d'>Bluetooth LE</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
 <th align=left>Protocol</th>\
 <td align=right>\
 <select name='protocol'>\
@@ -153,6 +157,10 @@ void handleSettings() {
   (settings->connection == CON_WIFI_UDP      ? "selected" : ""), CON_WIFI_UDP,
   (settings->connection == CON_BLUETOOTH_SPP ? "selected" : ""), CON_BLUETOOTH_SPP,
   (settings->connection == CON_BLUETOOTH_LE  ? "selected" : ""), CON_BLUETOOTH_LE,
+  (settings->bridge == BRIDGE_NONE           ? "selected" : ""), BRIDGE_NONE,
+  (settings->bridge == BRIDGE_UDP            ? "selected" : ""), BRIDGE_UDP,
+  (settings->bridge == BRIDGE_BT_SPP         ? "selected" : ""), BRIDGE_BT_SPP,
+  (settings->bridge == BRIDGE_BT_LE          ? "selected" : ""), BRIDGE_BT_LE,
   (settings->protocol   == PROTOCOL_NMEA     ? "selected" : ""), PROTOCOL_NMEA,
   (settings->protocol   == PROTOCOL_GDL90    ? "selected" : ""), PROTOCOL_GDL90,
   (settings->baudrate   == B4800             ? "selected" : ""), B4800,
@@ -189,7 +197,7 @@ void handleSettings() {
 <tr>\
 <th align=left>Source Id</th>\
 <td align=right>\
-<INPUT type='text' name='server' maxlength='17' size='17' value='%s'>\
+<INPUT type='text' name='server' maxlength='21' size='21' value='%s'>\
 </td>\
 </tr>\
 <tr>\
@@ -284,7 +292,8 @@ void handleRoot() {
   <tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
   <tr><th align=left>Strobe mode</th><td align=right>%s</td></tr>\
   <tr><th align=left>Sound</th><td align=right>%s</td></tr>\
-  <tr><th align=left>Connection type</th><td align=right>%s</td></tr>"),
+  <tr><th align=left>Connection type</th><td align=right>%s</td></tr>\
+  <tr><th align=left>Wireless bridge</th><td align=right>%s</td></tr>"),
     SoC->getChipId() & 0xFFFFFF, SKYSTROBE_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
@@ -296,7 +305,10 @@ void handleRoot() {
     settings->connection == CON_SERIAL        ? "Serial" :
     settings->connection == CON_BLUETOOTH_SPP ? "Bluetooth SPP" :
     settings->connection == CON_BLUETOOTH_LE  ? "Bluetooth LE" :
-    settings->connection == CON_WIFI_UDP      ? "WiFi" : "NONE"
+    settings->connection == CON_WIFI_UDP      ? "WiFi" : "NONE",
+    settings->bridge == BRIDGE_BT_SPP ? "Bluetooth SPP" :
+    settings->bridge == BRIDGE_BT_LE  ? "Bluetooth LE" :
+    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" : "NONE"
   );
 
   len = strlen(offset);
@@ -391,6 +403,8 @@ void handleInput() {
   for ( uint8_t i = 0; i < server.args(); i++ ) {
     if (server.argName(i).equals("connection")) {
       settings->connection = server.arg(i).toInt();
+    } else if (server.argName(i).equals("bridge")) {
+      settings->bridge = server.arg(i).toInt();
     } else if (server.argName(i).equals("protocol")) {
       settings->protocol = server.arg(i).toInt();
     } else if (server.argName(i).equals("baudrate")) {
@@ -405,6 +419,10 @@ void handleInput() {
       settings->sound = server.arg(i).toInt();
     }
   }
+
+  if (settings->connection != CON_SERIAL)     // disallow wireless->wireless bridge
+      settings->bridge = BRIDGE_NONE;         // wireless->serial bridge happens regardless
+
   snprintf_P ( Input_temp, 2000,
 PSTR("<html>\
 <head>\
@@ -418,6 +436,7 @@ PSTR("<html>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>Sound</th><td align=right>%d</td></tr>\
 <tr><th align=left>Connection</th><td align=right>%d</td></tr>\
+<tr><th align=left>Bridge</th><td align=right>%d</td></tr>\
 <tr><th align=left>Protocol</th><td align=right>%d</td></tr>\
 <tr><th align=left>Baud rate</th><td align=right>%d</td></tr>\
 <tr><th align=left>Server</th><td align=right>%s</td></tr>\
@@ -427,8 +446,8 @@ PSTR("<html>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->strobe, settings->sound, settings->connection, settings->protocol,
-  settings->baudrate, settings->server, settings->key  );
+  settings->strobe, settings->sound, settings->connection, settings->bridge,
+  settings->protocol, settings->baudrate, settings->server, settings->key  );
 
   SoC->swSer_enableRx(false);
   server.send ( 200, "text/html", Input_temp );

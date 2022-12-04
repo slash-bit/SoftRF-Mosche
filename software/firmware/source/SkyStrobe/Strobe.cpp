@@ -21,19 +21,13 @@
 #include "EEPROMHelper.h"
 #include "NMEAHelper.h"
 #include "GDL90Helper.h"
-
-#if defined(EXCLUDE_STROBE)
-void  Strobe_setup()       {}
-void  Strobe_loop()        {}
-void  Strobe_fini()        {}
-#else
-
+#include "Sound.h"
 #include "Strobe.h"
 #include "EEPROM.h"
 #include "TrafficHelper.h"
 
 static int StrobePin = SOC_UNUSED_PIN;
-static uint32_t StrobeSetupMarker = 0;
+uint32_t StrobeSetupMarker = 0;
 static uint32_t StrobeTimeMarker = 0;
 static uint32_t StrobePauseMarker = 0;
 static int StrobeFlashes = 0;      /* how many flashes */
@@ -52,6 +46,10 @@ void Strobe_setup(void)
   StrobeState = false;
   StrobeTimeMarker = 0;
   digitalWrite(StrobePin, LOW);
+  if (BLUELEDPIN != SOC_UNUSED_PIN) {
+      pinMode(BLUELEDPIN, OUTPUT);
+      digitalWrite(BLUELEDPIN, HIGH);   /* LED connected to +Vcc */
+  }
 }
 
 void Strobe_Start()
@@ -70,6 +68,7 @@ void Strobe_Start()
         }
 
         digitalWrite(StrobePin, HIGH);
+        blue_LED(true);                  // defined in Sound.cpp
         StrobeState = true;
         StrobeTimeMarker = millis();
 
@@ -91,9 +90,11 @@ void Strobe_Continue()
     if (StrobeFlashes > 1) {
       if (StrobeState == 1) {   /* a flash is ending */
          digitalWrite(StrobePin, LOW);
+         blue_LED(false);
          StrobeState = false;
       } else {  /* Strobe is off, start another flash */
          digitalWrite(StrobePin, HIGH);
+         blue_LED(true);
          StrobeState = true;
          --StrobeFlashes;
       }
@@ -102,6 +103,7 @@ void Strobe_Continue()
     } else {
       /* pause for now */
       digitalWrite(StrobePin, LOW);
+      blue_LED(false);
       StrobeTimeMarker = 0;
       StrobePauseMarker = millis();   /* reset timer for the next flash burst */
     }
@@ -161,4 +163,3 @@ void Strobe_fini(void)
   StrobePauseMarker = 0;  // prevents new flashes
 }
 
-#endif /* EXCLUDE_STROBE */

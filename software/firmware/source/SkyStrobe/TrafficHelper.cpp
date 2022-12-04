@@ -37,16 +37,22 @@ int max_alarm_level = ALARM_LEVEL_NONE;       /* global, used for visual display
 
 void Traffic_Add()
 {
-    float fo_distance = fo.distance;
-
-    if (fo_distance > ALARM_ZONE_NONE) {
+    if (! fo.ID)
         return;
+
+    if (fo.alarm_level == ALARM_LEVEL_NONE) {
+        if (fo.distance > ALARM_ZONE_CLOSE)
+            return;
+        if (fabs(fo.RelativeVertical) > VERTICAL_SEPARATION)
+            return;
     }
+
+    LED_notify();   /* blink green LED to signal traffic received */
 
     int i;
 
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (Container[i].ID == fo.ID) {
+      if (Container[i].ID == fo.ID) {             // updating known traffic
         uint8_t alert_bak = Container[i].alert;
         uint8_t alert_level = Container[i].alert_level;
         Container[i] = fo;
@@ -63,32 +69,34 @@ void Traffic_Add()
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
       if (! Container[i].ID) {
-          Container[i] = fo;
-          return;
+        Container[i] = fo;            // use an empty slot
+        return;
       }
 
       if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
-          Container[i] = fo;
-          return;
+        Container[i] = fo;            // overwrite expired
+        return;
       }
 
-      float distance = Container[i].distance;
-      if  (distance > max_distance) {
+      float adj_dist = Container[i].adj_dist;
+      if  (adj_dist > max_distance) {
         max_dist_ndx = i;
-        max_distance = distance;
+        max_distance = adj_dist;
       }
-      if (Container[i].alarm_level < Container[min_level_ndx].alarm_level)
-          min_level_ndx = i;
+      if (Container[i].alarm_level < Container[min_level_ndx].alarm_level
+       || ((Container[i].alarm_level == Container[min_level_ndx].alarm_level)
+           && (adj_dist > Container[min_level_ndx].adj_dist)))
+              min_level_ndx = i;
     }
 
     if (fo.alarm_level > Container[min_level_ndx].alarm_level) {
-      Container[min_level_ndx] = fo;
+      Container[min_level_ndx] = fo;     // alarming traffic overrides
       return;
     }
 
-    if (fo_distance <  max_distance &&
+    if (fo.adj_dist <  max_distance &&
         fo.alarm_level  >= Container[max_dist_ndx].alarm_level) {
-      Container[max_dist_ndx] = fo;
+      Container[max_dist_ndx] = fo;      // overwrite farthest traffic
       return;
     }
 }
@@ -115,7 +123,7 @@ void Traffic_Update(traffic_t *fop)
 
     // fop->RelativeBearing = bearing;
     fop->distance = distance;
-    fop->adj_dist = fabs(distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
+    fop->adj_dist = distance + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
   } else if (fop->distance != 0) {     /* a PFLAU sentence: distance & bearing known */
 
@@ -135,6 +143,9 @@ void Traffic_Update(traffic_t *fop)
 
 static void Traffic_Sound()
 {
+  if (settings->sound == SOUND_OFF)
+      return;
+
   int i=0;
   int ntraffic=0;
 //  int bearing;
@@ -189,28 +200,26 @@ void Traffic_setup()
 
 void Traffic_loop()
 {
-    if (isTimeToUpdateTraffic()) {
 
-      for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-
-        if (Container[i].ID &&
-            (ThisAircraft.timestamp - Container[i].timestamp) <= ENTRY_EXPIRATION_TIME) {
-          if ((ThisAircraft.timestamp - Container[i].timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL)
-            Traffic_Update(&Container[i]);
-        } else {
-          Container[i] = EmptyFO;
+  if (isTimeToUpdateTraffic()) {
+    for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      traffic_t *fop = &Container[i];
+      if (fop->ID) {
+        if ((ThisAircraft.timestamp - fop->timestamp) > ENTRY_EXPIRATION_TIME) {    // 5s
+            *fop = EmptyFO;
+        } else if ((ThisAircraft.timestamp - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL) {  // 2s
+            Traffic_Update(fop);
         }
       }
-
-      UpdateTrafficTimeMarker = millis();
-
-    if (isTimeToSound()) {
-        if (settings->sound != SOUND_OFF)
-            Traffic_Sound();
-        Traffic_Sound_TimeMarker = millis();
     }
-
+    UpdateTrafficTimeMarker = millis();
   }
+
+  if (isTimeToSound()) {
+      Traffic_Sound();
+      Traffic_Sound_TimeMarker = millis();
+  }
+
 }
 
 void Traffic_ClearExpired()

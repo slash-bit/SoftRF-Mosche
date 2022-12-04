@@ -88,9 +88,70 @@ static float ESP8266_Battery_voltage()
   return analogRead (SOC_GPIO_PIN_BATTERY) / SOC_A0_VOLTAGE_DIVIDER ;
 }
 
+static void ESP8266_WiFi_set_param(int ndx, int value)
+{
+  switch (ndx)
+  {
+  case WIFI_PARAM_TX_POWER:
+    WiFi.setOutputPower(value);
+    break;
+  case WIFI_PARAM_DHCP_LEASE_TIME:
+    if (WiFi.getMode() == WIFI_AP) {
+      wifi_softap_set_dhcps_lease_time((uint32) (value * 60)); /* in minutes */
+    }
+    break;
+  default:
+    break;
+  }
+}
+
 static size_t ESP8266_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
 {
   return WiFi_Receive_UDP(buf, max_size);
+}
+
+static void ESP8266_WiFi_Transmit_UDP(int port, byte *buf, size_t size)
+{
+  IPAddress ClientIP;
+  struct station_info *stat_info;
+  WiFiMode_t mode = WiFi.getMode();
+
+  switch (mode)
+  {
+  case WIFI_STA:
+    ClientIP = ESP8266_WiFi_get_broadcast();
+
+    Serial_GNSS_In.enableRx(false);
+
+    Uni_Udp.beginPacket(ClientIP, port);
+    Uni_Udp.write(buf, size);
+    Uni_Udp.endPacket();
+
+    Serial_GNSS_In.enableRx(true);
+
+    break;
+  case WIFI_AP:
+    stat_info = wifi_softap_get_station_info();
+
+    while (stat_info != NULL) {
+      ClientIP = stat_info->ip.addr;
+
+      Serial_GNSS_In.enableRx(false);
+
+      Uni_Udp.beginPacket(ClientIP, port);
+      Uni_Udp.write(buf, size);
+      Uni_Udp.endPacket();
+
+      Serial_GNSS_In.enableRx(true);
+
+      stat_info = STAILQ_NEXT(stat_info, next);
+    }
+    wifi_softap_free_station_info();
+    break;
+  case WIFI_OFF:
+  default:
+    break;
+  }
 }
 
 static int ESP8266_WiFi_clients_count()
@@ -158,7 +219,9 @@ const SoC_ops_t ESP8266_ops = {
   ESP8266_WiFiUDP_stopAll,
   ESP8266_Battery_setup,
   ESP8266_Battery_voltage,
+  ESP8266_WiFi_set_param,
   ESP8266_WiFi_Receive_UDP,
+  ESP8266_WiFi_Transmit_UDP,
   ESP8266_WiFi_clients_count,
 #if defined(EXCLUDE_BUTTONS)
   NULL, NULL, NULL,
@@ -168,7 +231,6 @@ const SoC_ops_t ESP8266_ops = {
 #endif
   ESP8266_WDT_setup,
   ESP8266_WDT_fini,
-  NULL,
   NULL
 };
 

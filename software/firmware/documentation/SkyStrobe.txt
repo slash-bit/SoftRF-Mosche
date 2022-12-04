@@ -1,0 +1,113 @@
+SkyStrobe documentation
+=======================
+
+By Moshe Braner
+This version last updated December 4, 2022
+
+
+WHAT IS SKYSTROBE
+
+Gliders (and other aircraft) can benefit from higher visibility to other aircraft.  That can be achieved using bright LEDs mounted under the canopy or elsewhere.  Due to the limited electrical power available, such strobes must be directional (usually facing forward), and turned on only a small percentage of the time.  SkyStrobe is firmware for a computerized control circuit for such an LED strobe.  It controls the flashing pattern.  It can increase the flashing frequency when information about nearby traffic, received via radio signals, warrants it.  It can also keep the strobe from flashing when the glider is on the ground.  A SkyStrobe device can work standalone, or can receive information via a cable or wirelessly.
+
+In addition, since the Skystrobe device runs on the glider's 12V battery system, it can generate louder collision-warning beeps than a SoftRF device running on lower voltage.  The SkyStrobe firmware includes the capability to drive such added hardware, based on the signals it receives (via cable or wirelessly) from a SoftRF device, or a FLARM device.
+
+Skystrobe can also serve as a data bridge.  Data arriving via a wireless connection is mirrored by SkyStrobe to its serial port.  This can be useful to feed data, sent wirelessly from SoftRF, to a device that can process FLARM type input but only via a serial cable, such as a ClearNav, SN10, or XCvario.  Conversely, Skystrobe can mirror data arriving via serial cable (e.g., from FLARM) to WiFi or Bluetooth (e.g., to XCsoar).
+
+
+ALTERNATIVES TO SKYSTROBE
+
+My current version of SoftRF has strobe-control capability built-in.  One can connect the appropriate pins in the hardware, via wires, to a simple (non-computerized) strobe circuit.  See example circuit diagram here: ___________  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
+
+
+SKYSTROBE HARDWARE
+
+The SkyStrobe software is available compiled for the ESP32 platform.  It only requires a simple ESP32 development board, without the radio devices (beyond the WiFi/Bluetooth capability of the ESP32 module itself).  There are many such boards available inexpensively.  Just make sure it includes 4+ MB flash memory.  In order to power the board from the glider's 12 volt system, a converter to 5 volts (USB power) is needed.  An easier approach is to use an ESP32 board that has such a converter built in, such as this one (which is made in the USA):
+   https://www.ezsbc.com/product/wifi01-sw/
+That board also has excess 5V output that can power a T-Beam (but don't charge your phone with it).  Another possible model with 12V input is the "D1 R32" Arduino shield, but it is poorly documented:
+   https://www.amazon.com/HiLetgo-ESP-32-Development-Bluetooth-Arduino/dp/B07WFZCBH8
+Or maybe use any generic ESP32 board, such as this tiny one:
+   https://www.amazon.com/Teyleten-Robot-ESP-WROOM-32-Bluetooth-Development/dp/B09C5RDZ8G
+or this (same thing):
+   https://www.amazon.com/HiLetgo-Development-ESP8285-Wireless-Internet/dp/B07BK435ZW
+and add a tiny voltage converter like this to convert 12V to 5V:
+   https://www.amazon.com/Regulator-Module-Voltage-Reducer-Adjustable/dp/B08R6337QY
+(be sure to cut the "adjustable" trace correctly, see user comments there).
+
+For the strobe part, an LED module is needed that can be driven in short pulses with a momentary power on the order of 10 watts (or more).  Red color is preferred.  I have used this module:
+https://xpriteusa.com/collections/replacement-bulbs/products/xprite-g1-series-replacement-led-hide-a-way-lights?variant=37716161462431
+It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 parallel strings, each with 2 LEDs and a 5-ohm resistor in series.  At 0.5 amps, each LED shows a voltage of 2.6V, about 1 watt.  At 0.75 amps, each LED shows a voltage of 2.75V i.e. a momentary power of 2W.  I cut three traces in the middle of the circuit board and rewired it to make it 4 LEDs in series.  And moved one 5-ohm resistor to be in parallel with the other one.  The resulting circuit fits the available voltage better.  Given 13V power it self-limits to 0.75 amp.
+
+To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  See the circuit diagram ______________.  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  Or use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.
+
+These circuits do not limit the current, only a small resistor in series with the LEDs (built into the module I use) limits the current.  As the battery slowly depletes and the supply voltage decreases, the current through the LEDs - and the brightness of the flashing - will decline somewhat.  This may be seen as a good thing, as it will extend the battery life somewhat.  If desired, a constant-current circuit can be used instead, see ______________.  But the LED module I used is self-limited by the LED voltage drop rising with the current, and the strobe pulses are short, thus no current limiting is needed.
+
+For the sound alarms, I've used a small passive piezo beeper, of this type:
+https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
+It will beep with useful volume if simply connected (in series with a 100-ohm resistor) between pins 26 and 27 of the processor.  For more volume, an amplifier circuit is needed.  A suitable amplifier can be built with 2 small transistors and a couple of resistors, see _____________.  Or, drive an external 12V *active* buzzer from pin 33 via a transistor.  That pin offers +3VDC during buzzing times.
+
+For the connections between the ESP32 board and the LED & buzzer circuits, see the diagram here: __________.  Note: the pin numbers are different from those used on the T-Beam with my version of SoftRF.  
+
+
+INSTALLING THE FIRMWARE FOR THE FIRST TIME
+
+Since the generic ESP32 board will come with no (relevant) software installed, you will need to follow the "first time" firmware installation instructions in the SoftRF documentation file ____________ - but substitute the SkyStrobe binary file for the SoftRF one - find it here: _______________
+
+
+SETTINGS
+
+SkyStrobe has some settings that can be changed via a web browser in a similar way to SoftRF.  After startup, SkyStrobe creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SkyStrobe-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SkyStrobe, allowing one to view SkyStrobe status info, change settings, or even update the firmware.
+
+Click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the settings being saved and then the device will reboot.  Once it is done rebooting, re-connect to the SkyStrobe WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
+
+The settings you choose are stored inside the device, and are not erased even when upgrading to a new version of the firmware - as long as the stored settings are in a format compatible with the new firmware version.  If not, then the settings are reset to their defaults, and you need to set them again.
+
+Here are the settings available in the current version:
+
+* Connection type: whether via serial cable, WiFi or one of two types of Bluetooth.  If you are using SkyStrobe standalone, unconnected, choose "serial", which is also the default.
+
+* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.
+
+* Protocol: the data coming in from the connected device is usually in the NMEA format (default), but GDL90 is also theoretically supported (I have not tested it).
+
+* Baud rate: this is only relevant to the serial connection method.  38400 is the default, as it is on SoftRF.
+
+* Source Id: this is the network name (SSID), and password, if connecting via WiFi.
+
+* Strobe: the mode of operation can be "off", "alarm" (only flashes when the connected device is signaling a collision danger), "airborne" (flashes periodically once airborne, and more often when the connected device is signaling a collision danger - the default, and recommended), and "always" (even when not airborne).
+
+* Sound: the beeps upon collision warnings, can turn on or off.  Default is on - but a sound device may not be connected.
+
+
+UPDATING THE FIRMWARE
+
+Future firmware updates are easier, you can use the WiFi method, via the web page mentioned above. See instructions in the SoftRF documentation file ____________ but substitute the SkyStrobe binary file for the SoftRF one - find it here: _______________
+
+
+HOW TO CONNECT EXTERNAL DEVICES
+
+At this point WiFi connection only offers the UDP protocol, not TCP, so set the other device accordingly.
+
+If you prefer or need a Bluetooth connection, that is available.  But be aware that only a pair of devices can "pair".  I.e., the device sending the data to SkyStrobe cannot send the data to a third device (e.g., SkyView, or XCsoar) at the same time.  If you need to connect more than a pair of devices, use WiFi UDP.
+
+For a cable connection, see the diagram here: __________.  Note: SkyStrobe expects serial data in the TTL voltage levels (0 and +3.3 V).  Do not connect "RS232" serial ports directly to it, as such a port swings between a negative voltage and 5V or higher.  If you need to receive data from a device with RS232 voltage levels, such as FLARM, a level-converter circuit is needed.  You can use a module based on the MAX232 chip, or the simple circuit shown here: ____________ - or even this simpler circuit if the serial port has internal pull-up: ____________.  If you need to send data in the other direction, from SkyStrobe to the other device which is expecting RS232 levels, a more complicated circuit may be needed, try this: __________, or even simply this: __________ - it may work - or use the max3232 type converter module.
+
+
+OPERATION
+
+SkyStrobe keeps trying its WiFi connection until the other device is ready.
+
+Note that regardless of the strobe operation mode selected (other than "off") the strobe will operate for 2 minutes after SkyStrobe power-on, alternating the "alarm" and non-alarm flashing patterns, and occasionally beeping, as a self-test.
+
+After the self-test, if in "airborne" mode, SkyStrobe will try and detect whether the aircraft is airborne (based on GNSS sentences in the NMEA stream).  If a GNSS fix (from the connected device) is not available, SkyStrobe will assume the aircraft is airborne and will flash the strobe periodically (but not in the faster "alarm" pattern since the data is not available).  This is a "fail-safe" feature.
+
+Alarm beeps will sound whenever another aircraft is first considered to pose a collision danger at one of the three "alarm levels" defined in the FLARM protocol: collision within 8 seconds (level 3), 9-12 seconds (level 2), or 13-19 seconds (level 1).  The warning beep will actually sound a second or two later than the time of that calculation.  After that, the same aircraft will not be warned about again, unless it either reaches a higher alarm level than was already warned, or the alarm level decreases first and then increases again.  The beeping pattern identifies the alarm level: a single beep for level 1, double beep for level 2, and 5 short beeps for level 3.  The pitch of the beep also increases with the level.
+
+
+Extra features on the EZSBC ESP32 board
+
+This board has two RGB LEDs.  One shows USB (but not UART) I/O in red and green.  The other one is programmable, and Skystrobe uses it as follows, for aid in troubleshooting:
+* flash the LED red when giving a sound alarm, stay on for a while if WiFi connection failed
+* flash the LED green to signal traffic data received, blink while WiFi connecting
+* flash the LED blue when driving the strobe, stay on for a while if WiFi successfully connected
+Those are turned on by pulling *low* GPIO pins 16, 17, and 18, respectively.  So if using another board one can attach external LEDs for the same functionality.
+

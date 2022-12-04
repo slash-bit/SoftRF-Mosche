@@ -62,15 +62,16 @@ void EEPROM_setup()
 
 void EEPROM_defaults()
 {
-  eeprom_block.field.magic                  = SKYSTROBE_EEPROM_MAGIC;
-  eeprom_block.field.version                = SKYSTROBE_EEPROM_VERSION;
+  eeprom_block.field.magic                = SKYSTROBE_EEPROM_MAGIC;
+  eeprom_block.field.version              = SKYSTROBE_EEPROM_VERSION;
 
-  eeprom_block.field.settings.strobe        = STROBE_AIRBORNE;
-  eeprom_block.field.settings.sound         = SOUND_ON;
+  eeprom_block.field.settings.strobe      = STROBE_AIRBORNE;
+  eeprom_block.field.settings.sound       = SOUND_ON;
 
-  eeprom_block.field.settings.connection    = CON_SERIAL;
-  eeprom_block.field.settings.baudrate      = B38400;
-  eeprom_block.field.settings.protocol      = PROTOCOL_NMEA;
+  eeprom_block.field.settings.connection  = CON_SERIAL;
+  eeprom_block.field.settings.bridge      = BRIDGE_NONE;
+  eeprom_block.field.settings.baudrate    = B38400;
+  eeprom_block.field.settings.protocol    = PROTOCOL_NMEA;
 
   strcpy(eeprom_block.field.settings.server,  DEFAULT_AP_SSID);
   strcpy(eeprom_block.field.settings.key,     DEFAULT_AP_PSK);

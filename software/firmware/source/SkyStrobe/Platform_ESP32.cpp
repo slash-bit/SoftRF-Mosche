@@ -31,7 +31,7 @@
 #include "BluetoothHelper.h"
 #include "Sound.h"
 
-#include "Platform_ESP32.h"
+// #include "Platform_ESP32.h"  // done via SoCHelper.h
 
 #include "SkyStrobe.h"
 
@@ -50,54 +50,13 @@
 
 WebServer server ( 80 );
 
-/*
- * TTGO-T5S. Pin definition
-
-#define BUSY_PIN        4
-#define CS_PIN          5
-#define RST_PIN         16
-#define DC_PIN          17
-#define SCK_PIN         18
-#define MOSI_PIN        23
-
-P1-1                    21
-P1-2                    22 (LED)
-
-I2S MAX98357A           26
-                        25
-                        19
-
-I2S MIC                 27
-                        32
-                        33
-
-B0                      RST
-B1                      38
-B2                      37
-B3                      39
-
-SD                      2
-                        13
-                        14
-                        15
-
-P2                      0
-                        12
-                        13
-                        RXD
-                        TXD
-                        34
-                        35 (BAT)
- */
-
-
 static union {
   uint8_t efuse_mac[6];
   uint64_t chipmacid;
 };
 
 
-RTC_DATA_ATTR int bootCount = 0;
+// RTC_DATA_ATTR int bootCount = 0;
 
 static uint32_t ESP32_getFlashId()
 {
@@ -134,7 +93,7 @@ static void ESP32_setup()
   esp_err_t ret = ESP_OK;
   uint8_t null_mac[6] = {0};
 
-  ++bootCount;
+//  ++bootCount;
 
   ret = esp_efuse_mac_get_custom(efuse_mac);
   if (ret != ESP_OK) {
@@ -218,23 +177,6 @@ static uint32_t ESP32_getChipId()
 static bool ESP32_EEPROM_begin(size_t size)
 {
   return EEPROM.begin(size);
-}
-
-static void ESP32_Sound_tone(int hz, uint8_t volume)
-{
-  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && volume != BUZZER_OFF) {
-    if (hz > 0) {
-      ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
-
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, hz);
-      ledcWrite(LEDC_CHANNEL_BUZZER, volume == BUZZER_VOLUME_FULL ? 0xFF : 0x07);
-    } else {
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
-
-      ledcDetachPin(SOC_GPIO_PIN_BUZZER);
-      pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
-    }
-  }
 }
 
 static const int8_t ESP32_dB_to_power_level[21] = {
@@ -322,11 +264,95 @@ static float ESP32_Battery_voltage()
 #endif
 }
 
-
 static size_t ESP32_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
 {
   return WiFi_Receive_UDP(buf, max_size);
 }
+
+static void ESP32_WiFi_set_param(int ndx, int value)
+{
+#if !defined(EXCLUDE_WIFI)
+  uint32_t lt = value * 60; /* in minutes */
+
+  switch (ndx)
+  {
+  case WIFI_PARAM_TX_POWER:
+    if (value > 20) {
+      value = 20; /* dBm */
+    }
+
+    if (value < 0) {
+      value = 0; /* dBm */
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_max_tx_power(ESP32_dB_to_power_level[value]));
+    break;
+  case WIFI_PARAM_DHCP_LEASE_TIME:
+    tcpip_adapter_dhcps_option(
+      (tcpip_adapter_dhcp_option_mode_t) TCPIP_ADAPTER_OP_SET,
+      (tcpip_adapter_dhcp_option_id_t)   TCPIP_ADAPTER_IP_ADDRESS_LEASE_TIME,
+      (void*) &lt, sizeof(lt));
+    break;
+  default:
+    break;
+  }
+#endif /* EXCLUDE_WIFI */
+}
+
+static IPAddress ESP32_WiFi_get_broadcast()
+{
+  tcpip_adapter_ip_info_t info;
+  IPAddress broadcastIp;
+
+  if (WiFi.getMode() == WIFI_STA) {
+    tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &info);
+  } else {
+    tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &info);
+  }
+  broadcastIp = ~info.netmask.addr | info.ip.addr;
+
+  return broadcastIp;
+}
+
+static void ESP32_WiFi_Transmit_UDP(int port, byte *buf, size_t size)
+{
+#if !defined(EXCLUDE_WIFI)
+  IPAddress ClientIP;
+  WiFiMode_t mode = WiFi.getMode();
+  int i = 0;
+
+  switch (mode)
+  {
+  case WIFI_STA:
+    ClientIP = ESP32_WiFi_get_broadcast();
+
+    Uni_Udp.beginPacket(ClientIP, port);
+    Uni_Udp.write(buf, size);
+    Uni_Udp.endPacket();
+
+    break;
+  case WIFI_AP:
+    wifi_sta_list_t stations;
+    ESP_ERROR_CHECK(esp_wifi_ap_get_sta_list(&stations));
+
+    tcpip_adapter_sta_list_t infoList;
+    ESP_ERROR_CHECK(tcpip_adapter_get_sta_list(&stations, &infoList));
+
+    while(i < infoList.num) {
+      ClientIP = infoList.sta[i++].ip.addr;
+
+      Uni_Udp.beginPacket(ClientIP, port);
+      Uni_Udp.write(buf, size);
+      Uni_Udp.endPacket();
+    }
+    break;
+  case WIFI_OFF:
+  default:
+    break;
+  }
+#endif /* EXCLUDE_WIFI */
+}
+
 
 static int ESP32_WiFi_clients_count()
 {
@@ -497,7 +523,9 @@ const SoC_ops_t ESP32_ops = {
   ESP32_WiFiUDP_stopAll,
   ESP32_Battery_setup,
   ESP32_Battery_voltage,
+  ESP32_WiFi_set_param,
   ESP32_WiFi_Receive_UDP,
+  ESP32_WiFi_Transmit_UDP,
   ESP32_WiFi_clients_count,
 #if defined(EXCLUDE_BUTTONS)
   NULL, NULL, NULL,
@@ -508,7 +536,6 @@ const SoC_ops_t ESP32_ops = {
 #endif
   ESP32_WDT_setup,
   ESP32_WDT_fini,
-  ESP32_Sound_tone,
   &ESP32_Bluetooth_ops
 };
 
