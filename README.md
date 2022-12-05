@@ -16,7 +16,9 @@ Beyond Lyusupov's version 1.0:
 * Estimates wind while circling, uses for collision prediction
 * Corrected frequency hopping and time slots
 
-Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
+* Very new: Modified version of SkyView
+
+Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.  [Binary for SkyView](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView).
 <br>
 <br>
 New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).

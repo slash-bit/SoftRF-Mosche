@@ -808,12 +808,12 @@ static bool play_file(char *filename, bool quieter)
         if (n == 4) {
             if (quieter) {           // halve the values, 6 dB quieter
               if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_16BIT) {
-                int16_t *p16 = (int16_t *) data;
+                int16_t *p16 = (int16_t *) &data;
                 *p16 >>= 1;
                 ++p16;
                 *p16 >>= 1;
               } else if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_8BIT) {
-                uint8_t *p8 = (uint8_t *) data;
+                uint8_t *p8 = (uint8_t *) &data;
                 *p8++ >>= 1;
                 *p8++ >>= 1;
                 *p8++ >>= 1;
@@ -863,10 +863,10 @@ static void ESP32_TTS(char *message)
       while (word != NULL)
       {
           strcpy(filename, WAV_FILE_PREFIX);
-          strcat(filename,  settings->voice == VOICE_1 ? VOICE1_SUBDIR :
-                           (settings->voice == VOICE_2 ? VOICE2_SUBDIR :
-                           (settings->voice == VOICE_3 ? VOICE3_SUBDIR :
-                            "" )));
+          strcat(filename, settings->voice == VOICE_1 ? VOICE1_SUBDIR :
+                          (settings->voice == VOICE_2 ? VOICE2_SUBDIR :
+                          (settings->voice == VOICE_3 ? VOICE3_SUBDIR :
+                           "" )));
           strcat(filename, word);
           strcat(filename, WAV_FILE_SUFFIX);
           play_file(filename, (settings->voice == VOICE_1));  // make voice_1 quieter
@@ -887,32 +887,42 @@ static void ESP32_TTS(char *message)
 
     if (settings->voice != VOICE_OFF && settings->adapter == ADAPTER_TTGO_T5S) {
 
-      settings->voice = VOICE_2;
+      if (SD.cardType() == CARD_NONE) {
+        /* no SD card, can't play WAV files */
+        //if (hw_info.display == DISPLAY_EPD_2_7)
+        {
+          /* keep boot-time SkyView logo on the screen for 7 seconds */
+          delay(7000);
+        }
+      }
 
+      settings->voice = VOICE_2;
       strcpy(filename, WAV_FILE_PREFIX);
       strcat(filename, "POST");
       strcat(filename, WAV_FILE_SUFFIX);
 
-      if (SD.cardType() == CARD_NONE || !play_file(filename, false)) {
-        /* keep boot-time SkyView logo on the screen for 7 seconds */
-        //delay(7000);
-        /* demonstrate the voice output meanwhile */
-        delay(3000);
-        strcpy(filename, WAV_FILE_PREFIX);
-        strcat(filename, "notice");
-        strcat(filename, WAV_FILE_SUFFIX);
-        settings->voice = VOICE_1;
-        play_file(filename, true);  // make voice_1 quieter
-        delay(2000);
-        settings->voice = VOICE_3;
-        play_file(filename, false);
-        delay(2000);
-      }
-    } else {
-      //if (hw_info.display == DISPLAY_EPD_2_7)
-      {
+      if (play_file(filename, false)) {
+        /* playing POST.wav worked */
         /* keep boot-time SkyView logo on the screen for 7 seconds */
         delay(7000);
+
+      } else {
+        /* demonstrate the voice output */
+        delay(1000);
+        settings->voice = VOICE_1;
+        strcpy(filename, WAV_FILE_PREFIX);
+        strcat(filename, VOICE1_SUBDIR);
+        strcat(filename, "notice");
+        strcat(filename, WAV_FILE_SUFFIX);
+        play_file(filename, true);  // make voice_1 quieter
+        delay(3000);
+        settings->voice = VOICE_3;
+        strcpy(filename, WAV_FILE_PREFIX);
+        strcat(filename, VOICE3_SUBDIR);
+        strcat(filename, "notice");
+        strcat(filename, WAV_FILE_SUFFIX);
+        play_file(filename, false);
+        delay(3000);
       }
     }
   }

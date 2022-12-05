@@ -1,5 +1,34 @@
 # Release notes
 
+## revision MB01
+
+### Major improvements
+
+#### ESP32
+
+This version, by Moshe Braner, Dec. 4, 2022
+
+Skyview gives voice notifications about nearby traffic.  The original version behaves as follows: as soon as another aircraft (with a compatible device transmitting) gets closer than 10 km from this aircraft, a voice notification announces it's relative position (bearing, distance and altitude).  After that, no further notifications are given about the same aircraft, unless it travels out of range and later comes back.
+
+Thus, you may get an audio notification about an aircraft that is sort-of-close but not a danger yet, then you'll get a notification about some other aircraft that is sort-of-close (even if 2000 feet above you?), and meanwhile the first aircraft may be approaching closer in a dangerous way but you won't hear about it.
+
+Moreover, the voice notifications were only based on PFLAA sentences from FLARM or SoftRF, and not the PFLAU sentences.  But the latter are supposed to be the primary collision warnings, and there is no guarantee that the same aircraft will also be reported in a PFLAA sentence.
+
+I revised the behavior as follows:  Based on the "alarm level" for each reported aircraft, which is included in those "sentences", a voice warning is given about the aircraft that is at the highest alarm level.  (There are 3 levels, predicting a possible collision within 0-8, 9-12, and 13-19 seconds - reporting in Skyview may be a second or two later than when these were computed.)  If there are two aircraft at the same highest level, the closer one is chosen.  Once a warning is given about an aircraft, no further warnings are given at the same alarm level.  But if the aircraft's alarm level increases, or if it first decreases and then increases to what it was before, then another warning is given about the same aircraft.
+
+These voice warnings are given based on both PFLAU and PFLAA sentences.
+
+As a secondary feature, only when there are no aircraft around that are considered a collision danger (to avoid distraction), voice traffic advisories are given about other aircraft when they first get closer than 6 km (about 4 miles) from this aircraft.  After that, no further notifications are given about the same aircraft, unless its signal is lost and regained, or if it goes outside of that threshold and then returns.  Also, if that aircraft is later deemed to be a collision danger, the warning messages are given as explained above.
+
+In addition, I made the following further changes:
+* Collision danger voice warnings are short, e.g., "danger, 3 o'clock, high".
+* Traffic advisories are longer, e.g., "traffic, 3 o'clock, 2 miles, 500 feet above".
+* Collision danger voice warnings are given in a female voice speaking rapidly.
+* Traffic advisories are given in a male voice speaking more slowly.
+* Reduced the volume of the advisories 6dB to make it about level with the female voice.
+* The settings now only allow voice on or off, no choice of voices - see above.
+
+
 ## revision 0.12
 
 ### Major improvements
