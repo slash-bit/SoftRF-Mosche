@@ -1,6 +1,6 @@
 /*
  * WiFiHelper.cpp
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,6 +19,9 @@
 #include <FS.h>
 #include <TimeLib.h>
 
+#include<Arduino.h>
+#include<WiFi.h>
+// - can now use WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
 
 #include "EEPROMHelper.h"
 #include "SoCHelper.h"
@@ -59,6 +62,7 @@ char UDPpacketBuffer[UDP_PACKET_BUFSIZE]; // buffer to hold incoming packets
 
 static unsigned long WiFi_STA_TimeMarker = 0;
 static bool WiFi_STA_connected = false;
+static bool WiFi_STA_trying = false;
 
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
 static unsigned long WiFi_No_Clients_Time_ms = 0;
@@ -82,9 +86,26 @@ size_t WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   }
 }
 
-/**
- * @brief Arduino setup function.
- */
+#if 0   /* this does not seem to work */
+/* handle SoftAP connection and disconnection events */
+// https://techtutorialsx.com/2019/09/22/esp32-soft-ap-station-disconnected-event/
+
+void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Serial.print(F("WIFI: client connected to SoftAP"));
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.print(F("WIFI: pause trying to connect to hardAP"));
+    WiFi.enableSTA(false);
+  }
+}
+
+//void WiFiStationDisconnected(arduino_event_id_t event, arduino_event_info_t info) {
+void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Serial.print(F("WIFI: client disconnected from SoftAP"));
+  Serial.print(F("WIFI: resume connecting to hardAP..."));
+  WiFi.enableSTA(true);
+}
+#endif
+
 void WiFi_setup()
 {
 
@@ -98,6 +119,7 @@ void WiFi_setup()
   WiFiMode_t mode = (settings->connection == CON_WIFI_UDP ||
                      settings->connection == CON_WIFI_TCP ) ?
                      WIFI_AP_STA : WIFI_AP;
+                     // note: WIFI_AP_STA, not WIFI_STA
   WiFi.mode(mode);
 
   SoC->WiFi_setOutputPower(WIFI_TX_POWER_MED); // 10 dB
@@ -109,16 +131,29 @@ void WiFi_setup()
   Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ?
     F("Ready") : F("Failed!"));
 
-  Serial.print(F("Setting soft-AP ... "));
+  Serial.print(F("Setting up soft-AP ... "));
   Serial.println(WiFi.softAP(host_name.c_str(), ap_default_psk) ?
     F("Ready") : F("Failed!"));
+
+#if 0
+  // Connect using combined STA & AP mode, but disconnect as STA while soft-AP utilized.
+  // Without this the soft-AP access is erratic while trying to also connect as STA.
+  WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_AP_STACONNECTED);
+  WiFi.onEvent(WiFiStationDisconnected, SYSTEM_EVENT_AP_STADISCONNECTED);
+  - but these lines yield error messages:
+  no known conversion for argument 2 from 'system_event_id_t' to 'arduino_event_id_t'
+  candidate: 'wifi_event_id_t WiFiGenericClass::onEvent(WiFiEventSysCb, arduino_event_id_t)'
+  no matching function for call to 'WiFiClass::onEvent(void (&)(arduino_event_id_t, arduino_event_info_t), system_event_id_t)'
+#endif
+
 #if defined(USE_DNS_SERVER)
   // if DNSServer is started with "*" for domain name, it will reply with
   // provided IP to all DNS request
   dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
   dns_active = true;
 #endif
-  Serial.print(F("IP address: "));
+
+  Serial.print(F("Soft-AP IP address: "));
   Serial.println(WiFi.softAPIP());
 
   if (settings->connection == CON_WIFI_UDP) {
@@ -148,11 +183,13 @@ void WiFi_setup()
         strnlen(settings->key,  sizeof(settings->key))  > 0) {
       WiFi.begin(settings->server, settings->key);
 
-      Serial.print(F("Wait for WiFi connection to "));
+      Serial.print(F("Waiting for WiFi connection to "));
       Serial.print(settings->server);
       Serial.println(F(" AP..."));
     }
 
+    WiFi_STA_connected = false;
+    WiFi_STA_trying = true;
     WiFi_STA_TimeMarker = millis();
   }
 
@@ -165,29 +202,46 @@ void WiFi_loop()
 {
   if (settings->connection == CON_WIFI_UDP ||
       settings->connection == CON_WIFI_TCP ) {
-    if (WiFi.status() != WL_CONNECTED) {
-#if 0
-      if (millis() - WiFi_STA_TimeMarker > 2000) {
-        Serial.print(".");
-        WiFi_STA_TimeMarker = millis();
-      }
-#endif
-      if (WiFi_STA_connected == true) {
-        WiFi_STA_connected = false;
-        Serial.print(F("Disconnected from WiFi AP "));
-        Serial.println(settings->server);
-      }
-    } else {
+    if (WiFi.status() == WL_CONNECTED) {
       if (WiFi_STA_connected == false) {
-        Serial.println("");
+        WiFi_STA_connected = true;
+        WiFi_STA_trying = false;
         Serial.print(F("Connected to WiFi AP "));
         Serial.println(settings->server);
         Serial.print(F("IP address: "));
         Serial.println(WiFi.localIP());
-        WiFi_STA_connected = true;
+      }
+    } else {
+      if (WiFi_STA_connected == true) {
+        WiFi_STA_connected = false;
+        Serial.print(F("Disconnected from WiFi AP "));
+        Serial.println(settings->server);
+        WiFi.reconnect();       // this works!
+        WiFi_STA_trying = true;
+        WiFi_STA_TimeMarker = millis();
       }
     }
+
+#if 1
+    /* a solution that does not depend on event handlers */
+    if (WiFi_STA_connected == false) {
+      if (millis() - WiFi_STA_TimeMarker > (WiFi_STA_trying ? 3000 : 6000)) {
+        if (WiFi_STA_trying) {
+          Serial.println("Pausing STA connection attempt to give soft-AP a chance");
+          WiFi.enableSTA(false);
+          WiFi_STA_trying = false;
+        } else {
+          Serial.println("Resuming STA connection attempt");
+          WiFi.enableSTA(true);
+          WiFi.reconnect();
+          WiFi_STA_trying = true;
+        }
+        WiFi_STA_TimeMarker = millis();
+      }
+    }
+#endif
   }
+
 #if defined(USE_DNS_SERVER)
   if (dns_active) {
     dnsServer.processNextRequest();
@@ -200,10 +254,7 @@ void WiFi_loop()
       if ((millis() - WiFi_No_Clients_Time_ms) > POWER_SAVING_WIFI_TIMEOUT) {
         Web_fini();
         WiFi_fini();
-
-        if (settings->protocol == PROTOCOL_NMEA) {
-          Serial.println(F("$PSRFS,WIFI_OFF"));
-        }
+        Serial.println(F("WIFI OFF"));
       }
     } else {
       WiFi_No_Clients_Time_ms = millis();

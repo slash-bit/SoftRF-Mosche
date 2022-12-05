@@ -1,12 +1,12 @@
 # Release notes
 
-## revision MB01
+## revision MB01b
 
 ### Major improvements
 
 #### ESP32
 
-This version, by Moshe Braner, Dec. 4, 2022
+This version, by Moshe Braner, Dec. 5, 2022
 
 Skyview gives voice notifications about nearby traffic.  The original version behaves as follows: as soon as another aircraft (with a compatible device transmitting) gets closer than 10 km from this aircraft, a voice notification announces it's relative position (bearing, distance and altitude).  After that, no further notifications are given about the same aircraft, unless it travels out of range and later comes back.
 

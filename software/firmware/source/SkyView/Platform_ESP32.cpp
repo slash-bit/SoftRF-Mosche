@@ -814,10 +814,10 @@ static bool play_file(char *filename, bool quieter)
                 *p16 >>= 1;
               } else if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_8BIT) {
                 uint8_t *p8 = (uint8_t *) &data;
-                *p8++ >>= 1;
-                *p8++ >>= 1;
-                *p8++ >>= 1;
-                *p8   >>= 1;
+                *p8++ = (*p8 >> 1) + 64;
+                *p8++ = (*p8 >> 1) + 64;
+                *p8++ = (*p8 >> 1) + 64;
+                *p8++ = (*p8 >> 1) + 64;
               }
             }
             i2s_write_sample_nb(data);
@@ -869,7 +869,9 @@ static void ESP32_TTS(char *message)
                            "" )));
           strcat(filename, word);
           strcat(filename, WAV_FILE_SUFFIX);
-          play_file(filename, (settings->voice == VOICE_1));  // make voice_1 quieter
+          // voice_1 in the existing collection of .wav files is louder than voice_3,
+          // so make it a bit quieter since we use it for less-urgent advisories
+          play_file(filename, (settings->voice == VOICE_1));
           word = strtok (NULL, " ");
 
           yield();
@@ -914,15 +916,15 @@ static void ESP32_TTS(char *message)
         strcat(filename, VOICE1_SUBDIR);
         strcat(filename, "notice");
         strcat(filename, WAV_FILE_SUFFIX);
-        play_file(filename, true);  // make voice_1 quieter
-        delay(3000);
+        play_file(filename, true);  // make voice_1 6dB quieter
+        delay(1000);
         settings->voice = VOICE_3;
         strcpy(filename, WAV_FILE_PREFIX);
         strcat(filename, VOICE3_SUBDIR);
         strcat(filename, "notice");
         strcat(filename, WAV_FILE_SUFFIX);
         play_file(filename, false);
-        delay(3000);
+        delay(1000);
       }
     }
   }
