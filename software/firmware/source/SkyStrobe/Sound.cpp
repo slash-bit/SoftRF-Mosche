@@ -17,6 +17,8 @@
  */
 
 #include "SoCHelper.h"
+#include "EEPROMHelper.h"
+#include "SkyStrobe.h"
 
 #if defined(EXCLUDE_SOUND)
 void  Sound_setup()       {}
@@ -75,8 +77,8 @@ void blue_LED(bool state)
 // This LED is not available without USB power.
 void blue2_LED(bool state)
 {
-  if (SOC_GPIO_PIN_LED_BLUE2 != SOC_UNUSED_PIN)
-      digitalWrite(SOC_GPIO_PIN_LED_BLUE2, state? LOW : HIGH);
+//  if (SOC_GPIO_PIN_LED_BLUE2 != SOC_UNUSED_PIN)
+//      digitalWrite(SOC_GPIO_PIN_LED_BLUE2, state? LOW : HIGH);
 }
 
 void toggle_green_LED()       // unlike LED_notify this does not depend on Sound_loop().
@@ -101,7 +103,7 @@ void LED_notify()           // called from Traffic_Add() to signal traffic recei
 
 void Sound_setup(void)
 {  
-  toneAC_setup(SOC_GPIO_PIN_BUZZER, SOC_GPIO_PIN_BUZZER2);
+  toneAC_setup(SOC_GPIO_PIN_BUZZER2, SOC_GPIO_PIN_BUZZER);
 
   if (SOC_GPIO_PIN_DCBUZZ != SOC_UNUSED_PIN) {
     pinMode(SOC_GPIO_PIN_DCBUZZ, OUTPUT);
@@ -123,10 +125,10 @@ void Sound_setup(void)
       blue_LED(false);
   }
 
-  if (SOC_GPIO_PIN_LED_BLUE2 != SOC_UNUSED_PIN) {
-      pinMode(SOC_GPIO_PIN_LED_BLUE2, OUTPUT);
-      blue2_LED(false);
-  }
+//  if (SOC_GPIO_PIN_LED_BLUE2 != SOC_UNUSED_PIN) {
+//      pinMode(SOC_GPIO_PIN_LED_BLUE2, OUTPUT);
+//      blue2_LED(false);
+//  }
 
   SoundToneHz = 0;
   SoundBeepMS = 0;
@@ -157,15 +159,25 @@ void Sound_Notify(int8_t alarm_level)
   }
 
   ext_buzzer(true);
-  int volume = 10;            // max volume
-  int duration = 0;           // forever, until turned off
-  bool background = true;    // return to main thread while sounding tone
+  int volume = 10;          // max volume
+  int duration = 0;         // forever, until turned off
+  bool background = true;   // return to main thread while sounding tone
   toneAC(SoundToneHz, volume, duration, background);
 
   red_LED(true);
 
   SoundState = 1;
   SoundTimeMarker = millis();
+
+  if (settings->bridge != BRIDGE_SERIAL) {
+        Serial.print("Sound notification at alarm level: ");
+        Serial.println(alarm_level);
+  }
+  if (settings->protocol == PROTOCOL_NMEA) {
+      char buf[16]; 
+      snprintf_P(buf, sizeof(buf), PSTR("$PSKSA,%d*"), alarm_level);
+      NMEA_Out(buf);
+  }
 }
 
 void Sound_loop(void)
@@ -200,6 +212,15 @@ void Sound_loop(void)
   if (LEDTimeMarker != 0 && millis() - LEDTimeMarker > 300) {
     green_LED(false);
     LEDTimeMarker = 0;
+  }
+
+  /* always blink the BLUE2 LED, it will only actually blink if USB connected */
+  static uint32_t blue2_timer = 0;
+  static bool blue2_on = false;
+  if (millis() > blue2_timer) {
+     blue2_on = !blue2_on;
+     blue2_LED(blue2_on);
+     blue2_timer = millis() + (blue2_on? 250 : 750);
   }
 
   /* strobe does a self test, do something similar with sound */

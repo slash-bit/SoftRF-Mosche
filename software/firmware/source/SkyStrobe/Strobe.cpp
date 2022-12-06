@@ -78,8 +78,15 @@ void Strobe_Start()
         StrobePauseMarker = millis();
     }
 
-    Serial.print("Strobe flash at alarm level: ");
-    Serial.println(alarm_level);
+    if (settings->bridge != BRIDGE_SERIAL) {
+        Serial.print("Strobe flash at alarm level: ");
+        Serial.println(alarm_level);
+    }
+    if (settings->protocol == PROTOCOL_NMEA) {
+        char buf[16]; 
+        snprintf_P(buf, sizeof(buf), PSTR("$PSKSF,%d*"), alarm_level);
+        NMEA_Out(buf);
+    }
 }
 
 void Strobe_Continue()

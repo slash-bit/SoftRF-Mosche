@@ -127,6 +127,8 @@ bool NMEA_isConnected(void);
 bool NMEA_hasGNSS(void);
 bool NMEA_hasFLARM(void);
 
+void NMEA_Out(char *);
+
 extern status_t NMEA_Status;
 extern TinyGPSPlus nmea;
 

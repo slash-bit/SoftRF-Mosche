@@ -83,7 +83,7 @@ Copyright (C) 2022 &nbsp;&nbsp;&nbsp; Moshe Braner\
 
 void handleSettings() {
 
-  size_t size = 2000;
+  size_t size = 3000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -114,7 +114,7 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
-<th align=left>Connection type</th>\
+<th align=left>Input type</th>\
 <td align=right>\
 <select name='connection'>\
 <option %s value='%d'>Serial</option>\
@@ -125,10 +125,11 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
-<th align=left>Wireless Bridge</th>\
+<th align=left>Bridge Output</th>\
 <td align=right>\
 <select name='bridge'>\
 <option %s value='%d'>None</option>\
+<option %s value='%d'>Serial</option>\
 <option %s value='%d'>WiFi UDP</option>\
 <option %s value='%d'>Bluetooth SPP</option>\
 <option %s value='%d'>Bluetooth LE</option>\
@@ -158,6 +159,7 @@ void handleSettings() {
   (settings->connection == CON_BLUETOOTH_SPP ? "selected" : ""), CON_BLUETOOTH_SPP,
   (settings->connection == CON_BLUETOOTH_LE  ? "selected" : ""), CON_BLUETOOTH_LE,
   (settings->bridge == BRIDGE_NONE           ? "selected" : ""), BRIDGE_NONE,
+  (settings->bridge == BRIDGE_SERIAL         ? "selected" : ""), BRIDGE_SERIAL,
   (settings->bridge == BRIDGE_UDP            ? "selected" : ""), BRIDGE_UDP,
   (settings->bridge == BRIDGE_BT_SPP         ? "selected" : ""), BRIDGE_BT_SPP,
   (settings->bridge == BRIDGE_BT_LE          ? "selected" : ""), BRIDGE_BT_LE,
@@ -226,7 +228,12 @@ void handleSettings() {
 <option %s value='%d'>On</option>\
 </select>\
 </td>\
-</tr>"),
+</tr>\
+</table>\
+<p align=center><INPUT type='submit' value='Save and restart'></p>\
+</form>\
+</body>\
+</html>"),
   settings->server, settings->key,
   (settings->strobe == STROBE_OFF ? "selected" : ""), STROBE_OFF,
   (settings->strobe == STROBE_ALARM ? "selected" : ""), STROBE_ALARM,
@@ -234,10 +241,6 @@ void handleSettings() {
   (settings->strobe == STROBE_ALWAYS ? "selected" : ""), STROBE_ALWAYS,
   (settings->sound == SOUND_OFF ? "selected" : ""), SOUND_OFF,
   (settings->sound == SOUND_ON ? "selected" : ""), SOUND_ON );
-
-  len = strlen(offset);
-  offset += len;
-  size -= len;
 
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -292,8 +295,8 @@ void handleRoot() {
   <tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
   <tr><th align=left>Strobe mode</th><td align=right>%s</td></tr>\
   <tr><th align=left>Sound</th><td align=right>%s</td></tr>\
-  <tr><th align=left>Connection type</th><td align=right>%s</td></tr>\
-  <tr><th align=left>Wireless bridge</th><td align=right>%s</td></tr>"),
+  <tr><th align=left>Input type</th><td align=right>%s</td></tr>\
+  <tr><th align=left>Bridge output</th><td align=right>%s</td></tr>"),
     SoC->getChipId() & 0xFFFFFF, SKYSTROBE_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
@@ -308,7 +311,8 @@ void handleRoot() {
     settings->connection == CON_WIFI_UDP      ? "WiFi" : "NONE",
     settings->bridge == BRIDGE_BT_SPP ? "Bluetooth SPP" :
     settings->bridge == BRIDGE_BT_LE  ? "Bluetooth LE" :
-    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" : "NONE"
+    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" :
+    settings->bridge == BRIDGE_SERIAL ? "Serial" : "NONE"
   );
 
   len = strlen(offset);
@@ -420,8 +424,9 @@ void handleInput() {
     }
   }
 
-  if (settings->connection != CON_SERIAL)     // disallow wireless->wireless bridge
-      settings->bridge = BRIDGE_NONE;         // wireless->serial bridge happens regardless
+  if (settings->connection != CON_SERIAL
+         && settings->bridge != BRIDGE_SERIAL)     // disallow wireless->wireless bridge
+     settings->bridge = BRIDGE_NONE;
 
   snprintf_P ( Input_temp, 2000,
 PSTR("<html>\

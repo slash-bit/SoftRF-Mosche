@@ -20,7 +20,7 @@
 #define STROBEHELPER_H
 
 /* gap between flashes in a burst */
-#define STROBE_MS_GAP             75
+#define STROBE_MS_GAP             50
 
 /* different strobe patterns for alarm vs. no-alarm: */
 
@@ -29,13 +29,13 @@
 #define STROBE_MS_ALARM           50
 #define STROBE_MS_PAUSE_ALARM  (750-STROBE_FLASHES_ALARM*(STROBE_MS_ALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
-/* no-alarm pattern: double flash every 2500 ms, duty cycle 4% */
-#define STROBE_FLASHES_NOALARM     2
-#define STROBE_MS_NOALARM         50
-#define STROBE_MS_PAUSE_NOALARM (2500-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
+/* no-alarm pattern: double flash every 2400 ms, duty cycle 5% */
+#define STROBE_FLASHES_NOALARM     3
+#define STROBE_MS_NOALARM         40
+#define STROBE_MS_PAUSE_NOALARM (2400-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
-/* even if not airborne, flash the strobe for the first 120 seconds as a test */
-#define STROBE_INITIAL_RUN        90
+/* even if not airborne, flash the strobe for the first 2 minutes as a test */
+#define STROBE_INITIAL_RUN       110
 
 void Strobe_setup(void);
 void Strobe_loop(void);

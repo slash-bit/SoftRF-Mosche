@@ -25,7 +25,7 @@
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#define SKYSTROBE_FIRMWARE_VERSION  "0.1"
+#define SKYSTROBE_FIRMWARE_VERSION  "0.1a"
 #define SKYSTROBE_IDENT     "SkyStrobe-"
 
 #define EXCLUDE_BUTTONS
@@ -35,6 +35,8 @@
 
 #define RELAY_DST_PORT    12390
 #define RELAY_SRC_PORT    (RELAY_DST_PORT - 1)
+
+//#define BRIDGE_UDP_PORT   10110
 
 /* SoftRF serial output defaults */
 #define SERIAL_OUT_BR     38400
@@ -105,7 +107,8 @@ enum
 	BRIDGE_UDP,
 	BRIDGE_TCP,
 	BRIDGE_BT_SPP,
-	BRIDGE_BT_LE
+	BRIDGE_BT_LE,
+	BRIDGE_SERIAL
 };
 
 enum
