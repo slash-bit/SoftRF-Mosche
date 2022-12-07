@@ -114,21 +114,30 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
-<th align=left>Input type</th>\
+<th align=left>Strobe</th>\
 <td align=right>\
-<select name='connection'>\
-<option %s value='%d'>Serial</option>\
-<option %s value='%d'>WiFi UDP</option>\
-<option %s value='%d'>Bluetooth SPP</option>\
-<option %s value='%d'>Bluetooth LE</option>\
+<select name='strobe'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Alarm</option>\
+<option %s value='%d'>Airborne</option>\
+<option %s value='%d'>Always</option>\
 </select>\
 </td>\
 </tr>\
 <tr>\
-<th align=left>Bridge Output</th>\
+<th align=left>Sound</th>\
 <td align=right>\
-<select name='bridge'>\
-<option %s value='%d'>None</option>\
+<select name='sound'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>On</option>\
+</select>\
+</td>\
+</tr>\
+<tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
+<tr>\
+<th align=left>Input type</th>\
+<td align=right>\
+<select name='connection'>\
 <option %s value='%d'>Serial</option>\
 <option %s value='%d'>WiFi UDP</option>\
 <option %s value='%d'>Bluetooth SPP</option>\
@@ -154,15 +163,16 @@ void handleSettings() {
 <option %s value='%d'>19200</option>\
 <option %s value='%d'>38400</option>\
 <option %s value='%d'>57600</option>"),
+  (settings->strobe == STROBE_OFF ? "selected" : ""), STROBE_OFF,
+  (settings->strobe == STROBE_ALARM ? "selected" : ""), STROBE_ALARM,
+  (settings->strobe == STROBE_AIRBORNE ? "selected" : ""), STROBE_AIRBORNE,
+  (settings->strobe == STROBE_ALWAYS ? "selected" : ""), STROBE_ALWAYS,
+  (settings->sound == SOUND_OFF ? "selected" : ""), SOUND_OFF,
+  (settings->sound == SOUND_ON ? "selected" : ""), SOUND_ON,
   (settings->connection == CON_SERIAL        ? "selected" : ""), CON_SERIAL,
   (settings->connection == CON_WIFI_UDP      ? "selected" : ""), CON_WIFI_UDP,
   (settings->connection == CON_BLUETOOTH_SPP ? "selected" : ""), CON_BLUETOOTH_SPP,
   (settings->connection == CON_BLUETOOTH_LE  ? "selected" : ""), CON_BLUETOOTH_LE,
-  (settings->bridge == BRIDGE_NONE           ? "selected" : ""), BRIDGE_NONE,
-  (settings->bridge == BRIDGE_SERIAL         ? "selected" : ""), BRIDGE_SERIAL,
-  (settings->bridge == BRIDGE_UDP            ? "selected" : ""), BRIDGE_UDP,
-  (settings->bridge == BRIDGE_BT_SPP         ? "selected" : ""), BRIDGE_BT_SPP,
-  (settings->bridge == BRIDGE_BT_LE          ? "selected" : ""), BRIDGE_BT_LE,
   (settings->protocol   == PROTOCOL_NMEA     ? "selected" : ""), PROTOCOL_NMEA,
   (settings->protocol   == PROTOCOL_GDL90    ? "selected" : ""), PROTOCOL_GDL90,
   (settings->baudrate   == B4800             ? "selected" : ""), B4800,
@@ -199,33 +209,26 @@ void handleSettings() {
 <tr>\
 <th align=left>Source Id</th>\
 <td align=right>\
-<INPUT type='text' name='server' maxlength='21' size='21' value='%s'>\
+<INPUT type='text' name='server' maxlength='21' size='15' value='%s'>\
 </td>\
 </tr>\
 <tr>\
 <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\
 &nbsp;&nbsp;Key</th>\
 <td align=right>\
-<INPUT type='text' name='key' maxlength='17' size='17' value='%s'>\
+<INPUT type='text' name='key' maxlength='17' size='15' value='%s'>\
 </td>\
 </tr>\
+<tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
 <tr>\
-<th align=left>Strobe</th>\
+<th align=left>Bridge Output</th>\
 <td align=right>\
-<select name='strobe'>\
-<option %s value='%d'>Off</option>\
-<option %s value='%d'>Alarm</option>\
-<option %s value='%d'>Airborne</option>\
-<option %s value='%d'>Always</option>\
-</select>\
-</td>\
-</tr>\
-<tr>\
-<th align=left>Sound</th>\
-<td align=right>\
-<select name='sound'>\
-<option %s value='%d'>Off</option>\
-<option %s value='%d'>On</option>\
+<select name='bridge'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>Serial</option>\
+<option %s value='%d'>WiFi UDP</option>\
+<option %s value='%d'>Bluetooth SPP</option>\
+<option %s value='%d'>Bluetooth LE</option>\
 </select>\
 </td>\
 </tr>\
@@ -235,12 +238,11 @@ void handleSettings() {
 </body>\
 </html>"),
   settings->server, settings->key,
-  (settings->strobe == STROBE_OFF ? "selected" : ""), STROBE_OFF,
-  (settings->strobe == STROBE_ALARM ? "selected" : ""), STROBE_ALARM,
-  (settings->strobe == STROBE_AIRBORNE ? "selected" : ""), STROBE_AIRBORNE,
-  (settings->strobe == STROBE_ALWAYS ? "selected" : ""), STROBE_ALWAYS,
-  (settings->sound == SOUND_OFF ? "selected" : ""), SOUND_OFF,
-  (settings->sound == SOUND_ON ? "selected" : ""), SOUND_ON );
+  (settings->bridge == BRIDGE_NONE           ? "selected" : ""), BRIDGE_NONE,
+  (settings->bridge == BRIDGE_SERIAL         ? "selected" : ""), BRIDGE_SERIAL,
+  (settings->bridge == BRIDGE_UDP            ? "selected" : ""), BRIDGE_UDP,
+  (settings->bridge == BRIDGE_BT_SPP         ? "selected" : ""), BRIDGE_BT_SPP,
+  (settings->bridge == BRIDGE_BT_LE          ? "selected" : ""), BRIDGE_BT_LE );
 
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -295,8 +297,8 @@ void handleRoot() {
   <tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
   <tr><th align=left>Strobe mode</th><td align=right>%s</td></tr>\
   <tr><th align=left>Sound</th><td align=right>%s</td></tr>\
-  <tr><th align=left>Input type</th><td align=right>%s</td></tr>\
-  <tr><th align=left>Bridge output</th><td align=right>%s</td></tr>"),
+  <tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
+  <tr><th align=left>Input type</th><td align=right>%s</td></tr>"),
     SoC->getChipId() & 0xFFFFFF, SKYSTROBE_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
@@ -308,20 +310,14 @@ void handleRoot() {
     settings->connection == CON_SERIAL        ? "Serial" :
     settings->connection == CON_BLUETOOTH_SPP ? "Bluetooth SPP" :
     settings->connection == CON_BLUETOOTH_LE  ? "Bluetooth LE" :
-    settings->connection == CON_WIFI_UDP      ? "WiFi" : "NONE",
-    settings->bridge == BRIDGE_BT_SPP ? "Bluetooth SPP" :
-    settings->bridge == BRIDGE_BT_LE  ? "Bluetooth LE" :
-    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" :
-    settings->bridge == BRIDGE_SERIAL ? "Serial" : "NONE"
+    settings->connection == CON_WIFI_UDP      ? "WiFi" : "NONE"
   );
 
   len = strlen(offset);
   offset += len;
   size -= len;
 
-  switch (settings->connection)
-  {
-  case CON_WIFI_UDP:
+  if (settings->connection == CON_WIFI_UDP) {
     snprintf_P ( offset, size,
       PSTR("\
   <tr><th align=left>Link partner</th><td align=right>%s</td></tr>\
@@ -334,31 +330,30 @@ void handleRoot() {
     len = strlen(offset);
     offset += len;
     size -= len;
-  case CON_SERIAL:
-  case CON_BLUETOOTH_SPP:
-  case CON_BLUETOOTH_LE:
-    switch (settings->protocol)
+  }
+  
+  switch (settings->protocol)
     {
     case PROTOCOL_GDL90:
       snprintf_P ( offset, size,
         PSTR("\
-  <tr><th align=left>Connection status</th><td align=right>%s connected</td></tr>\
+  <tr><th align=left>Data status</th><td align=right>%s connected</td></tr>\
   <tr><th align=left>Data type</th><td align=right>%s %s</td></tr>\
   "),
         GDL90_isConnected()  ? "" : "not",
         GDL90_isConnected()  && !GDL90_hasHeartBeat() ? "UNK" : "",
-        GDL90_hasHeartBeat() ? "GDL90"  : ""
+        GDL90_hasHeartBeat() ? "GDL90"  : "--"
       );
       break;
     case PROTOCOL_NMEA:
     default:
       snprintf_P ( offset, size,
         PSTR("\
-  <tr><th align=left>Connection status</th><td align=right>%s connected</td></tr>\
+  <tr><th align=left>Data status</th><td align=right>%s active</td></tr>\
   <tr><th align=left>Data type</th><td align=right>%s %s %s</td></tr>\
   "),
         NMEA_isConnected() ? "" : "not",
-        NMEA_isConnected() && !(NMEA_hasGNSS() || NMEA_hasFLARM()) ? "UNK" : "",
+        NMEA_isConnected() && !(NMEA_hasGNSS() || NMEA_hasFLARM()) ? "OTHER" : "",
         NMEA_hasGNSS()     ? "GNSS"  : "",
         NMEA_hasFLARM()    ? "FLARM" : ""
       );
@@ -368,14 +363,11 @@ void handleRoot() {
     len = strlen(offset);
     offset += len;
     size -= len;
-    break;
-  case CON_NONE:
-  default:
-    break;
-  }
 
   snprintf_P ( offset, size,
-    PSTR(" </table>\
+    PSTR("\
+  <tr><th align=left>Bridge output</th><td align=right>%s</td></tr>\
+ </table>\
  <hr>\
  <table width=100%%>\
   <tr>\
@@ -385,7 +377,11 @@ void handleRoot() {
   </tr>\
  </table>\
 </body>\
-</html>")
+</html>"),
+    settings->bridge == BRIDGE_BT_SPP ? "Bluetooth SPP" :
+    settings->bridge == BRIDGE_BT_LE  ? "Bluetooth LE" :
+    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" :
+    settings->bridge == BRIDGE_SERIAL ? "Serial" : "NONE"
   );
 
   SoC->swSer_enableRx(false);
@@ -441,18 +437,18 @@ PSTR("<html>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>Sound</th><td align=right>%d</td></tr>\
 <tr><th align=left>Connection</th><td align=right>%d</td></tr>\
-<tr><th align=left>Bridge</th><td align=right>%d</td></tr>\
 <tr><th align=left>Protocol</th><td align=right>%d</td></tr>\
 <tr><th align=left>Baud rate</th><td align=right>%d</td></tr>\
 <tr><th align=left>Server</th><td align=right>%s</td></tr>\
 <tr><th align=left>Key</th><td align=right>%s</td></tr>\
+<tr><th align=left>Bridge</th><td align=right>%d</td></tr>\
 </table>\
 <hr>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->strobe, settings->sound, settings->connection, settings->bridge,
-  settings->protocol, settings->baudrate, settings->server, settings->key  );
+  settings->strobe, settings->sound, settings->connection, settings->protocol,
+  settings->baudrate, settings->server, settings->key, settings->bridge );
 
   SoC->swSer_enableRx(false);
   server.send ( 200, "text/html", Input_temp );

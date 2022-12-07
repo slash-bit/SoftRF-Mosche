@@ -165,7 +165,7 @@ static void ESP32_setup()
   }
 #endif
 
-  ledcSetup(LEDC_CHANNEL_BUZZER, 0, LEDC_RESOLUTION_BUZZER);
+  // ledcSetup(LEDC_CHANNEL_BUZZER, 0, LEDC_RESOLUTION_BUZZER);
 }
 
 static uint32_t ESP32_getChipId()

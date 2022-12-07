@@ -250,25 +250,10 @@ static void NMEA_Parse_Character(char c)
       }
 }
 
-int NMEA_add_checksum(char *buf)
-{
-  size_t sentence_size = strlen(buf);
-
-  //calculate the checksum
-  unsigned char cs = 0;
-  for (unsigned int n = 1; n < sentence_size - 1; n++) {
-    cs ^= buf[n];
-  }
-
-  char *csum_ptr = buf + sentence_size;
-  snprintf_P(csum_ptr, 5, PSTR("%02X\r\n"), cs);  // assumes there is room!
-
-  return (sentence_size + 4);
-}
-
 void NMEA_setup()
 {
   if (settings->protocol == PROTOCOL_NMEA) {
+
     switch (settings->connection)
     {
     case CON_SERIAL:
@@ -314,8 +299,36 @@ void NMEA_setup()
       break;
     }
 
+    switch (settings->bridge)
+    {
+    case BRIDGE_BT_SPP:
+    case BRIDGE_BT_LE:
+      if (SoC->Bluetooth) {
+        SoC->Bluetooth->setup();
+      }
+      break;
+    default:
+      break;
+    }
+
     NMEA_TimeMarker = millis();
   }
+}
+
+int NMEA_add_checksum(char *buf)
+{
+  size_t sentence_size = strlen(buf);
+
+  //calculate the checksum
+  unsigned char cs = 0;
+  for (unsigned int n = 1; n < sentence_size - 1; n++) {
+    cs ^= buf[n];
+  }
+
+  char *csum_ptr = buf + sentence_size;
+  snprintf_P(csum_ptr, 5, PSTR("%02X\r\n"), cs);  // assumes there is room!
+
+  return (sentence_size + 4);
 }
 
 void NMEA_bridge_send(char *buf, int len)
@@ -327,10 +340,12 @@ void NMEA_bridge_send(char *buf, int len)
     } else if (settings->bridge == BRIDGE_BT_SPP
             || settings->bridge == BRIDGE_BT_LE) {
         if (SoC->Bluetooth) {
+//Serial.print("calling BT_write(): ");
+//Serial.print(buf);
             SoC->Bluetooth->write((uint8_t *) buf, (size_t) len);
         }
     } else if (settings->bridge == BRIDGE_SERIAL) {
-        buf[len] = '\0';
+        // buf[len] = '\0';
         Serial.print(buf);
     }
 }
@@ -391,11 +406,7 @@ void NMEA_loop()
               PSTR("$PSKSH,%06X,v%s,%d,%d,%d,%d*"),
               SoC->getChipId() & 0xFFFFFF, SKYSTROBE_FIRMWARE_VERSION,
               settings->strobe, settings->sound, settings->connection, settings->bridge);
-      int len = NMEA_add_checksum(buf);           // adds \r\n too
-      if (settings->bridge != BRIDGE_SERIAL)
-          Serial.print(buf);            // otherwise sent via bridge_send()
-      // even if no input received
-      NMEA_bridge_send(buf, len);
+      NMEA_Out(buf);
       heartbeat = millis();
   }
 #endif

@@ -63,9 +63,11 @@ The settings you choose are stored inside the device, and are not erased even wh
 
 Here are the settings available in the current version:
 
-* Connection type: whether via serial cable, WiFi or one of two types of Bluetooth.  If you are using SkyStrobe standalone, unconnected, choose "serial", which is also the default.
+* Strobe: the mode of operation can be "off", "alarm" (only flashes when the connected device is signaling a collision danger), "airborne" (flashes periodically once airborne, and more often when the connected device is signaling a collision danger - the default, and recommended), and "always" (even when not airborne).
 
-* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.
+* Sound: the beeps upon collision warnings, can turn on or off.  Default is on - but a sound device may not be connected.
+
+* Connection type: whether via serial cable, WiFi or one of two types of Bluetooth.  If you are using SkyStrobe standalone, unconnected, choose "serial", which is also the default.
 
 * Protocol: the data coming in from the connected device is usually in the NMEA format (default), but GDL90 is also theoretically supported (I have not tested it).
 
@@ -73,9 +75,7 @@ Here are the settings available in the current version:
 
 * Source Id: this is the network name (SSID), and password, if connecting via WiFi.
 
-* Strobe: the mode of operation can be "off", "alarm" (only flashes when the connected device is signaling a collision danger), "airborne" (flashes periodically once airborne, and more often when the connected device is signaling a collision danger - the default, and recommended), and "always" (even when not airborne).
-
-* Sound: the beeps upon collision warnings, can turn on or off.  Default is on - but a sound device may not be connected.
+* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.
 
 
 UPDATING THE FIRMWARE

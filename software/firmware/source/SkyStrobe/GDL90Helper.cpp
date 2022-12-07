@@ -257,6 +257,19 @@ void GDL90_setup()
       break;
     }
 
+    switch (settings->bridge)
+    {
+    case BRIDGE_BT_SPP:
+    case BRIDGE_BT_LE:
+      if (SoC->Bluetooth) {
+        SoC->Bluetooth->setup();
+      }
+      break;
+    default:
+      break;
+    }
+
+
     GDL90_HeartBeat_TimeMarker = GDL90_Data_TimeMarker = millis();
   }
 }

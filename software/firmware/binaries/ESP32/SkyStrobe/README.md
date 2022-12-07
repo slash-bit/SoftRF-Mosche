@@ -1,10 +1,16 @@
 # Release notes
 
+
+## revision MB01b
+
+### Major improvements
+
+Now Bluetooth bridge output works too.  Not sure about BT input.
+
+
 ## revision 01a
 
-#### ESP32
-
-Very first deployment of SkyView's firmware binaries.
+Very first deployment of SkyStrobe's firmware binaries.
 
 by Moshe Braner, Dec. 6, 2022
 
