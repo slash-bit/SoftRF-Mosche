@@ -1,6 +1,6 @@
 /*
  * BluetoothHelper.h
- * Copyright (C) 2018-2021 Linar Yusupov
+ * Copyright (C) 2018-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// this is from SoftRF v1.2
+
 #ifndef BLUETOOTHHELPER_H
 #define BLUETOOTHHELPER_H
 
@@ -28,6 +30,10 @@ enum
 };
 
 #if defined(ESP32)
+#include "sdkconfig.h"
+#endif
+
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 
 #define UART_SERVICE_UUID         "0000ffe0-0000-1000-8000-00805f9b34fb"
 #define UART_CHARACTERISTIC_UUID  "0000ffe1-0000-1000-8000-00805f9b34fb"
@@ -59,7 +65,6 @@ enum
 #define BLE_MAX_WRITE_CHUNK_SIZE  20
 
 extern IODev_ops_t ESP32_Bluetooth_ops;
-extern void ESP32_BLEMIDI_test(void);
 
 #if defined(ENABLE_BT_VOICE)
 
@@ -187,7 +192,6 @@ typedef struct {
 #define isTimeToSensBox() (millis() - BLE_SensBox_TimeMarker > 500) /* 2 Hz */
 
 extern IODev_ops_t nRF52_Bluetooth_ops;
-extern void nRF52_BLEMIDI_test(void);
 
 #endif /* ESP32 or ARDUINO_ARCH_NRF52 */
 

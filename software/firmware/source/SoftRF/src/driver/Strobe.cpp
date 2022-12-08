@@ -62,11 +62,14 @@ void Strobe_Start()
     if (StrobeTimeMarker != 0)   // flashing currently in progress
         return;
 
+    int NMEAlevel = alarm_level;
+
     if (StrobePin != SOC_UNUSED_PIN) {
 
         if (alarm_level >= ALARM_LEVEL_LOW) {
           StrobeFlashes = STROBE_FLASHES_ALARM;
           StrobeOnMS = STROBE_MS_ALARM;
+          --NMEAlevel;   // for the NMEA message below
         } else {
           StrobeFlashes = STROBE_FLASHES_NOALARM;
           StrobeOnMS = STROBE_MS_NOALARM;
@@ -87,7 +90,8 @@ void Strobe_Start()
 
     if (settings->nmea_l || settings->nmea2_l) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-          PSTR("$PSRSF,%d\r\n"), alarm_level);
+          PSTR("$PSRSF,%d*"), NMEAlevel);
+        NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
         NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
     }
 }

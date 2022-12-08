@@ -112,6 +112,7 @@ class UARTCallbacks: public BLECharacteristicCallbacks {
 BluetoothSerial SerialBT;
 String BT_name = HOSTNAME;
 
+/* used by both SPP & LE (but not bridge) */
 Bluetooth_ctl_t ESP32_BT_ctl = {
   .mutex   = portMUX_INITIALIZER_UNLOCKED,
   .command = BT_CMD_NONE,
@@ -171,6 +172,7 @@ class AppAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
   }
 };
 
+/* only used for SPP */
 static void ESP32_BT_SPP_Connection_Manager(void *parameter)
 {
   int command;
@@ -288,9 +290,8 @@ static void ESP32_Bluetooth_setup()
     {
       esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
 
-      //SerialBT.setPin(settings->key);            // >>> why use a PIN?
-      //SerialBT.begin(BT_name.c_str(), true);
-      SerialBT.begin(BT_name.c_str());
+      SerialBT.setPin(settings->key);            // why set a PIN?
+      SerialBT.begin(BT_name.c_str(), true);     // start as master
 
       xTaskCreate(ESP32_BT_SPP_Connection_Manager, "BT SPP ConMgr Task", 1024, NULL, tskIDLE_PRIORITY, NULL);
 
@@ -608,8 +609,7 @@ static void ESP32_Bluetooth_loop()
 
 static void ESP32_Bluetooth_fini()
 {
-  if (settings->connection == CON_BLUETOOTH_SPP
-       || settings->bridge == BRIDGE_BT_SPP)
+  if (settings->connection == CON_BLUETOOTH_SPP)
     {
       portENTER_CRITICAL(&ESP32_BT_ctl.mutex);
       ESP32_BT_ctl.command = BT_CMD_SHUTDOWN;
@@ -617,6 +617,11 @@ static void ESP32_Bluetooth_fini()
 
       delay(100);
 
+      SerialBT.end();
+    }
+
+  else if (settings->bridge == BRIDGE_BT_SPP)
+    {
       SerialBT.end();
     }
 

@@ -1,6 +1,13 @@
 # Release notes
 
 
+## revision MB01c
+
+### Major improvements
+
+Bluetooth input works now.
+
+
 ## revision MB01b
 
 ### Major improvements

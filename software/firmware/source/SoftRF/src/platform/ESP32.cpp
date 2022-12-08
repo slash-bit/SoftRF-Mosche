@@ -619,74 +619,6 @@ static long ESP32_random(long howsmall, long howBig)
   return random(howsmall, howBig);
 }
 
-#if EXCLUDE_TONEAC
-static void ESP32_Sound_test(int var)
-{
-//Serial.println("Sound_test()...");
-
-  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && settings->volume != BUZZER_OFF) {
-
-    ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
-    ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
-    ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(50);
-    // without this pre-tone the first tone below did not sound,
-    // after upgrading to ESP32 Core 2.0.2+
-
-    if (var == REASON_DEFAULT_RST ||
-        var == REASON_EXT_SYS_RST ||
-        var == REASON_SOFT_RESTART) {
-//Serial.println("... tone 1:");
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
-//Serial.println("... tone 2:");
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 640);delay(500);
-//Serial.println("... tone 3:");
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 840);delay(500);
-//Serial.println("... tone 4:");
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);
-    } else if (var == REASON_WDT_RST) {
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);
-    } else {
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 1040);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 840);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 640);delay(500);
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 440);
-    }
-    delay(600);
-
-    ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
-//Serial.println("... done tones");
-
-    ledcDetachPin(SOC_GPIO_PIN_BUZZER);
-    pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
-  }
-
-#if defined(USE_BLE_MIDI)
-  ESP32_BLEMIDI_test();
-#endif /* USE_BLE_MIDI */
-}
-
-static void ESP32_Sound_tone(int hz, uint8_t volume)
-{
-  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && volume != BUZZER_OFF) {
-    if (hz > 0) {
-      ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
-
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, hz);
-      ledcWrite(LEDC_CHANNEL_BUZZER, volume == BUZZER_VOLUME_FULL ? 0xFF : 0x07);
-    } else {
-      ledcWriteTone(LEDC_CHANNEL_BUZZER, 0); // off
-
-      ledcDetachPin(SOC_GPIO_PIN_BUZZER);
-      pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
-    }
-  }
-}
-
-#else
-/* now using the ToneAC library instead */
 
 #include <toneAC.h>
 
@@ -735,10 +667,8 @@ Serial.println("... tone 4:");
     }
 
     noToneAC();
-//Serial.println("... done tones");
 }
 
-#endif  /* TONEAC */
 
 static uint32_t ESP32_maxSketchSpace()
 {

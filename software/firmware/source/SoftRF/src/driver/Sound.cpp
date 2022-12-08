@@ -49,73 +49,6 @@ static int SoundToneHz = 0;    /* variable tone */
 static int SoundBeepMS = 0;    /* how long each beep */
 static int SoundPin = SOC_UNUSED_PIN;
 
-#if defined (EXCLUDE_TONEAC)
-
-void Sound_setup(void)
-{
-  SoC->Sound_tone(0, settings->volume);
-  SoundToneHz = 0;
-  SoundBeepMS = 0;
-  SoundBeeps = 0;
-  SoundState = 0;
-  SoundTimeMarker = 0;
-}
-
-void Sound_Notify(int8_t level)
-{
-  if (SoundTimeMarker == 0) {
-
-    if (level == ALARM_LEVEL_LOW) {
-      SoundToneHz = ALARM_TONE_HZ_LOW;
-      SoundBeepMS = ALARM_TONE_MS_LOW;
-      SoundBeeps  = ALARM_BEEPS_LOW;
-    } else if (level == ALARM_LEVEL_IMPORTANT) {
-      SoundToneHz = ALARM_TONE_HZ_IMPORTANT;
-      SoundBeepMS = ALARM_TONE_MS_IMPORTANT;
-      SoundBeeps  = ALARM_BEEPS_IMPORTANT;
-    } else if (level == ALARM_LEVEL_URGENT) {
-      SoundToneHz = ALARM_TONE_HZ_URGENT;
-      SoundBeepMS = ALARM_TONE_MS_URGENT;
-      SoundBeeps  = ALARM_BEEPS_URGENT;
-    } else {    /* whether NONE or CLOSE */
-      Sound_setup();
-      return;
-    }
-
-    SoC->Sound_tone(SoundToneHz, settings->volume);
-    SoundState = 1;
-    SoundTimeMarker = millis();
-  }
-}
-
-void Sound_loop(void)
-{
-  if (SoundTimeMarker != 0 && millis() - SoundTimeMarker > SoundBeepMS) {
-  
-    if (SoundBeeps > 1) {
-      if (SoundState == 1) {   /* a beep is ending */
-         SoC->Sound_tone(0, settings->volume);
-         SoundState = 0;
-      } else {  /* sound is off, start another beep */
-         SoC->Sound_tone(SoundToneHz, settings->volume);
-         SoundState = 1;
-         --SoundBeeps;
-      }
-      SoundTimeMarker = millis();   /* reset timer for the next beep or gap */
-
-    } else {  /* done beeping, turn it all off */
-      Sound_setup();
-    }
-  }
-}
-
-void Sound_fini(void)
-{
-  Sound_setup();
-}
-
-#else   /* use the TONEAC library for louder beeps */
-
 #include <toneAC.h>
 
 void ext_buzzer(bool state)
@@ -134,7 +67,7 @@ void Sound_setup(void)
       pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
       ext_buzzer(false);
   } else {
-      toneAC_setup(SOC_GPIO_PIN_BUZZER, SOC_GPIO_PIN_BUZZER2);
+      toneAC_setup(SOC_GPIO_PIN_BUZZER2, SOC_GPIO_PIN_BUZZER);
       volume = (settings->volume == BUZZER_VOLUME_LOW ? 8 : 10);
   }
   SoundToneHz = 0;
@@ -180,7 +113,8 @@ void Sound_Notify(int8_t alarm_level)
 
   if (settings->nmea_l || settings->nmea2_l) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSRAA,%d\r\n"), alarm_level-1);
+        PSTR("$PSRAA,%d*"), alarm_level-1);
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
       NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
   }
 }
@@ -240,8 +174,6 @@ void Sound_fini(void)
     noToneAC();
   SoundTimeMarker = 0;
 }
-
-#endif  /* EXCLUDE_TONEAC */
 
 #endif  /* ESP32 */
 
