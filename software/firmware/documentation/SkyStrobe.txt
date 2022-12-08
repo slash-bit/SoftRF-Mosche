@@ -2,7 +2,8 @@ SkyStrobe documentation
 =======================
 
 By Moshe Braner
-This version last updated December 4, 2022
+This version last updated December 8, 2022
+To fit SkyStrobe version 01c.
 
 
 WHAT IS SKYSTROBE
@@ -11,12 +12,12 @@ Gliders (and other aircraft) can benefit from higher visibility to other aircraf
 
 In addition, since the Skystrobe device runs on the glider's 12V battery system, it can generate louder collision-warning beeps than a SoftRF device running on lower voltage.  The SkyStrobe firmware includes the capability to drive such added hardware, based on the signals it receives (via cable or wirelessly) from a SoftRF device, or a FLARM device.
 
-Skystrobe can also serve as a data bridge.  Data arriving via a wireless connection is mirrored by SkyStrobe to its serial port.  This can be useful to feed data, sent wirelessly from SoftRF, to a device that can process FLARM type input but only via a serial cable, such as a ClearNav, SN10, or XCvario.  Conversely, Skystrobe can mirror data arriving via serial cable (e.g., from FLARM) to WiFi or Bluetooth (e.g., to XCsoar).
+Skystrobe can also serve as a data bridge.  Data arriving via a wireless connection is mirrored by SkyStrobe to its serial port.  This can be useful to feed data received wirelessly (e.g., from SoftRF), to a device that can process FLARM type input but only via a serial cable, such as a ClearNav, SN10, or XCvario.  Conversely, Skystrobe can mirror data arriving via serial cable (e.g., from FLARM) to WiFi or Bluetooth (e.g., to XCsoar).
 
 
 ALTERNATIVES TO SKYSTROBE
 
-My current version of SoftRF has strobe-control capability built-in.  One can connect the appropriate pins in the hardware, via wires, to a simple (non-computerized) strobe circuit.  See example circuit diagram here: ___________  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
+My current version of SoftRF has strobe-control capability built-in.  One can connect the GPIO25 pin to a simple (non-computerized) strobe circuit.  See example circuit diagrams here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg.  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
 
 
 SKYSTROBE HARDWARE
@@ -37,7 +38,7 @@ For the strobe part, an LED module is needed that can be driven in short pulses 
 https://xpriteusa.com/collections/replacement-bulbs/products/xprite-g1-series-replacement-led-hide-a-way-lights?variant=37716161462431
 It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 parallel strings, each with 2 LEDs and a 5-ohm resistor in series.  At 0.5 amps, each LED shows a voltage of 2.6V, about 1 watt.  At 0.75 amps, each LED shows a voltage of 2.75V i.e. a momentary power of 2W.  I cut three traces in the middle of the circuit board and rewired it to make it 4 LEDs in series.  And moved one 5-ohm resistor to be in parallel with the other one.  The resulting circuit fits the available voltage better.  Given 13V power it self-limits to 0.75 amp.
 
-To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  See the circuit diagram ______________.  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  Or use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.
+To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  See the circuit diagram ______________.  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  Or use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
 
 These circuits do not limit the current, only a small resistor in series with the LEDs (built into the module I use) limits the current.  As the battery slowly depletes and the supply voltage decreases, the current through the LEDs - and the brightness of the flashing - will decline somewhat.  This may be seen as a good thing, as it will extend the battery life somewhat.  If desired, a constant-current circuit can be used instead, see ______________.  But the LED module I used is self-limited by the LED voltage drop rising with the current, and the strobe pulses are short, thus no current limiting is needed.
 
@@ -75,7 +76,7 @@ Here are the settings available in the current version:
 
 * Source Id: this is the network name (SSID), and password, if connecting via WiFi.
 
-* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.
+* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.  The difference between bridge settings "none" and "serial" is that with "none" some informational messages are sent to the serial and USB ports interleaved with the NMEA sentences.  With "serial" only NMEA sentences appear, although they include Skystrobe's special sentences announcing flashing of the strobe and the output of sound (buzzer) notifications.
 
 
 UPDATING THE FIRMWARE
@@ -111,3 +112,9 @@ This board has two RGB LEDs.  One shows USB (but not UART) I/O in red and green.
 * flash the LED blue when driving the strobe, stay on for a while if WiFi successfully connected
 Those are turned on by pulling *low* GPIO pins 16, 17, and 18, respectively.  So if using another board one can attach external LEDs for the same functionality.
 
+
+Possible future enhancements
+
+The exact pattern of the strobe flashing: how many flashes in quick succession, how many milliseconds each, etc, is currently hardcoded.  This could be made customizable through the settings screen.
+
+If SkyStrobe is connected to a buzzer, it is possible in principle to program it to react to additional inputs to its processor by giving certain buzzer patterns.  For example, could connect landing gear and spoiler microswitches and produce a gear-up warning.

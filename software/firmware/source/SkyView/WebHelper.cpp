@@ -97,7 +97,7 @@ Copyright (C) 2019-2022 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 4770;
+  size_t size = 5000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -237,7 +237,7 @@ void handleSettings() {
 <tr>\
 <th align=left>Source Id</th>\
 <td align=right>\
-<INPUT type='text' name='server' maxlength='17' size='17' value='%s'>\
+<INPUT type='text' name='server' maxlength='21' size='21' value='%s'>\
 </td>\
 </tr>\
 <tr>\
@@ -247,6 +247,20 @@ void handleSettings() {
 <INPUT type='text' name='key' maxlength='17' size='17' value='%s'>\
 </td>\
 </tr>\
+<tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
+<tr>\
+<th align=left>Bridge Output</th>\
+<td align=right>\
+<select name='bridge'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>Serial</option>\
+<option %s value='%d'>WiFi UDP</option>\
+<option %s value='%d'>Bluetooth SPP</option>\
+<option %s value='%d'>Bluetooth LE</option>\
+</select>\
+</td>\
+</tr>\
+<tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
 <tr>\
 <th align=left>Units</th>\
 <td align=right>\
@@ -309,6 +323,11 @@ void handleSettings() {
 </td>\
 </tr>"),
   settings->server, settings->key,
+  (settings->bridge == BRIDGE_NONE    ? "selected" : ""), BRIDGE_NONE,
+  (settings->bridge == BRIDGE_SERIAL  ? "selected" : ""), BRIDGE_SERIAL,
+  (settings->bridge == BRIDGE_UDP     ? "selected" : ""), BRIDGE_UDP,
+  (settings->bridge == BRIDGE_BT_SPP  ? "selected" : ""), BRIDGE_BT_SPP,
+  (settings->bridge == BRIDGE_BT_LE   ? "selected" : ""), BRIDGE_BT_LE,
   (settings->units == UNITS_METRIC    ? "selected" : ""), UNITS_METRIC,
   (settings->units == UNITS_IMPERIAL  ? "selected" : ""), UNITS_IMPERIAL,
   (settings->units == UNITS_MIXED     ? "selected" : ""), UNITS_MIXED,
@@ -440,7 +459,7 @@ void handleRoot() {
   time_t timestamp = now();
   char str_Vcc[8];
 
-  size_t size = 2300;
+  size_t size = 2400;
   char *offset;
   size_t len = 0;
 
@@ -546,7 +565,9 @@ void handleRoot() {
   }
 
   snprintf_P ( offset, size,
-    PSTR(" </table>\
+    PSTR("\
+  <tr><th align=left>Bridge output</th><td align=right>%s</td></tr>\
+ </table>\
  <hr>\
  <table width=100%%>\
   <tr>\
@@ -556,7 +577,11 @@ void handleRoot() {
   </tr>\
  </table>\
 </body>\
-</html>")
+</html>"),
+    settings->bridge == BRIDGE_BT_SPP ? "Bluetooth SPP" :
+    settings->bridge == BRIDGE_BT_LE  ? "Bluetooth LE" :
+    settings->bridge == BRIDGE_UDP    ? "WiFi UDP" :
+    settings->bridge == BRIDGE_SERIAL ? "Serial" : "NONE"
   );
 
   SoC->swSer_enableRx(false);
@@ -580,6 +605,8 @@ void handleInput() {
       settings->adapter = server.arg(i).toInt();
     } else if (server.argName(i).equals("connection")) {
       settings->connection = server.arg(i).toInt();
+    } else if (server.argName(i).equals("bridge")) {
+      settings->bridge = server.arg(i).toInt();
     } else if (server.argName(i).equals("protocol")) {
       settings->protocol = server.arg(i).toInt();
     } else if (server.argName(i).equals("baudrate")) {
@@ -614,6 +641,12 @@ void handleInput() {
       settings->team = strtoul(buf, NULL, 16);
     }
   }
+
+
+  if (settings->connection != CON_SERIAL
+         && settings->bridge != BRIDGE_SERIAL)     // disallow wireless->wireless bridge
+     settings->bridge = BRIDGE_NONE;
+
   snprintf_P ( Input_temp, 2000,
 PSTR("<html>\
 <head>\
@@ -630,6 +663,7 @@ PSTR("<html>\
 <tr><th align=left>Baud rate</th><td align=right>%d</td></tr>\
 <tr><th align=left>Server</th><td align=right>%s</td></tr>\
 <tr><th align=left>Key</th><td align=right>%s</td></tr>\
+<tr><th align=left>Bridge</th><td align=right>%d</td></tr>\
 <tr><th align=left>Units</th><td align=right>%d</td></tr>\
 <tr><th align=left>View mode</th><td align=right>%d</td></tr>\
 <tr><th align=left>Radar orientation</th><td align=right>%d</td></tr>\
@@ -647,7 +681,7 @@ PSTR("<html>\
 </body>\
 </html>"),
   settings->adapter, settings->connection, settings->protocol,
-  settings->baudrate, settings->server, settings->key,
+  settings->baudrate, settings->server, settings->key, settings->bridge,
   settings->units, settings->vmode, settings->orientation, settings->zoom,
   settings->adb, settings->idpref, settings->voice, settings->aghost,
   settings->filter, settings->power_save, settings->team

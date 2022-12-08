@@ -257,8 +257,65 @@ void GDL90_setup()
       break;
     }
 
+    switch (settings->bridge)
+    {
+    case BRIDGE_BT_SPP:
+    case BRIDGE_BT_LE:
+      if (SoC->Bluetooth) {
+        SoC->Bluetooth->setup();
+      }
+      break;
+    default:
+      break;
+    }
+
     GDL90_HeartBeat_TimeMarker = GDL90_Data_TimeMarker = millis();
   }
+}
+
+void GDL90_bridge_send(char *buf, int len)
+{
+    if (settings->bridge == BRIDGE_UDP) {
+        WiFi_Transmit_UDP(buf, (size_t) len);
+    } else if (settings->bridge == BRIDGE_TCP) {
+        // tbd
+    } else if (settings->bridge == BRIDGE_BT_SPP
+            || settings->bridge == BRIDGE_BT_LE) {
+        if (SoC->Bluetooth) {
+            SoC->Bluetooth->write((uint8_t *) buf, (size_t) len);
+        }
+    } else if (settings->bridge == BRIDGE_SERIAL) {
+        buf[len] = '\0';
+        Serial.print(buf);   // this will look ugly?
+    }
+}
+
+void GDL90_bridge_buffer(char c)
+{
+    static char buf[128+2];
+    static int n = 0;
+
+    if (settings->bridge == BRIDGE_NONE)
+        return;
+
+    if (n == 0 && c != 0x7E)
+        return;
+
+    if (n < 5 && c == 0x7E)
+        n = 0;
+
+    buf[n++] = c;
+
+    if (n < 6)
+        return;
+
+    if (c == 0x7E) {
+        GDL90_bridge_send(buf, n);
+        n = 0;
+    }
+
+    if (n >= 128)
+        n = 0;
 }
 
 void GDL90_loop()
@@ -270,7 +327,7 @@ void GDL90_loop()
   case CON_SERIAL:
     while (SerialInput.available() > 0) {
       char c = SerialInput.read();
-//      Serial.print(c);
+      GDL90_bridge_buffer(c);
       GDL90_Parse_Character(c);
       GDL90_Data_TimeMarker = millis();
     }
@@ -281,7 +338,7 @@ void GDL90_loop()
     {
       while (Serial.available() > 0) {
         char c = Serial.read();
-//        Serial.print(c);
+        GDL90_bridge_buffer(c);
         GDL90_Parse_Character(c);
         GDL90_Data_TimeMarker = millis();
       }
@@ -291,8 +348,12 @@ void GDL90_loop()
     size = SoC->WiFi_Receive_UDP((uint8_t *) UDPpacketBuffer, sizeof(UDPpacketBuffer));
     if (size > 0) {
       for (size_t i=0; i < size; i++) {
-//        Serial.print(UDPpacketBuffer[i]);
-        GDL90_Parse_Character(UDPpacketBuffer[i]);
+        char c = UDPpacketBuffer[i];
+        if (settings->bridge == BRIDGE_SERIAL)
+            GDL90_bridge_buffer(c);   // only output complete sentences
+        else
+            Serial.print(c);          // as received, unfiltered
+        GDL90_Parse_Character(c);
       }
       GDL90_Data_TimeMarker = millis();
     }
@@ -302,7 +363,10 @@ void GDL90_loop()
     if (SoC->Bluetooth) {
       while (SoC->Bluetooth->available() > 0) {
         char c = SoC->Bluetooth->read();
-//        Serial.print(c);
+        if (settings->bridge == BRIDGE_SERIAL)
+            GDL90_bridge_buffer(c);
+        else
+            Serial.print(c);
         GDL90_Parse_Character(c);
         GDL90_Data_TimeMarker = millis();
       }

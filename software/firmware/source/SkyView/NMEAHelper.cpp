@@ -285,13 +285,117 @@ void NMEA_setup()
       break;
     }
 
+    switch (settings->bridge)
+    {
+    case BRIDGE_BT_SPP:
+    case BRIDGE_BT_LE:
+      if (SoC->Bluetooth) {
+        SoC->Bluetooth->setup();
+      }
+      break;
+    default:
+      break;
+    }
+
     NMEA_TimeMarker = millis();
   }
+}
+
+int NMEA_add_checksum(char *buf)
+{
+  size_t sentence_size = strlen(buf);
+
+  //calculate the checksum
+  unsigned char cs = 0;
+  for (unsigned int n = 1; n < sentence_size - 1; n++) {
+    cs ^= buf[n];
+  }
+
+  char *csum_ptr = buf + sentence_size;
+  snprintf_P(csum_ptr, 5, PSTR("%02X\r\n"), cs);  // assumes there is room!
+
+  return (sentence_size + 4);
+}
+
+void NMEA_bridge_send(char *buf, int len)
+{
+    if (settings->bridge == BRIDGE_UDP) {
+        WiFi_Transmit_UDP(buf, (size_t) len);
+    } else if (settings->bridge == BRIDGE_TCP) {
+        // tbd
+    } else if (settings->bridge == BRIDGE_BT_SPP
+            || settings->bridge == BRIDGE_BT_LE) {
+        if (SoC->Bluetooth) {
+//Serial.print("calling BT_write(): ");
+//Serial.print(buf);
+            SoC->Bluetooth->write((uint8_t *) buf, (size_t) len);
+        }
+    } else if (settings->bridge == BRIDGE_SERIAL) {
+        // buf[len] = '\0';
+        Serial.print(buf);
+    }
+}
+
+void NMEA_Out(char *buf)
+{
+    int len = NMEA_add_checksum(buf);
+    if (settings->bridge != BRIDGE_SERIAL)
+        Serial.print(buf);         // otherwise sent via bridge_send()
+    NMEA_bridge_send(buf, len);    // even if no input received
+}
+
+void NMEA_bridge_buffer(char c)
+{
+    static char buf[128+3];
+    static int n = 0;
+
+    if (settings->bridge == BRIDGE_NONE)
+        return;
+
+    if (! NMEA_isConnected())  // still true before processing this newly input char
+        n = 0;
+
+    if (c=='\r' || c=='\n')
+        return;
+
+    if (n == 0 && c != '$')
+        return;
+
+    buf[n++] = c;
+
+    if (n < 5)
+        return;
+
+    if (buf[n-3] == '*') {
+        buf[n++] = '\r';
+        buf[n++] = '\n';
+        buf[n]   = '\0';
+        NMEA_bridge_send(buf, n);
+        n = 0;
+    }
+
+    if (n >= 128)
+        n = 0;
 }
 
 void NMEA_loop()
 {
   size_t size;
+
+#if !defined(EXCLUDE_HEARTBEAT)
+  char buf[40];
+  static uint32_t heartbeat = 0;
+  if (heartbeat == 0)
+      heartbeat = millis();
+  if (millis() > heartbeat + 4900) {
+      snprintf_P(buf, sizeof(buf)-4,     // leave room for checksum
+              PSTR("$PSKVH,%06X,v%s,%d,%d,%d*"),
+              SoC->getChipId() & 0xFFFFFF, SKYVIEW_FIRMWARE_VERSION,
+              settings->connection, settings->bridge, settings->filter);
+      NMEA_Out(buf);
+      heartbeat = millis();
+  }
+#endif
 
   switch (settings->connection)
   {
@@ -299,6 +403,7 @@ void NMEA_loop()
     while (SerialInput.available() > 0) {
       char c = SerialInput.read();
       Serial.print(c);
+      NMEA_bridge_buffer(c);
       NMEA_Parse_Character(c);
       NMEA_TimeMarker = millis();
     }
@@ -309,7 +414,7 @@ void NMEA_loop()
     {
       while (Serial.available() > 0) {
         char c = Serial.read();
-//        Serial.print(c);
+        NMEA_bridge_buffer(c);
         NMEA_Parse_Character(c);
         NMEA_TimeMarker = millis();
       }
@@ -319,8 +424,12 @@ void NMEA_loop()
     size = SoC->WiFi_Receive_UDP((uint8_t *) UDPpacketBuffer, sizeof(UDPpacketBuffer));
     if (size > 0) {
       for (size_t i=0; i < size; i++) {
-        Serial.print(UDPpacketBuffer[i]);
-        NMEA_Parse_Character(UDPpacketBuffer[i]);
+        char c = UDPpacketBuffer[i];
+        if (settings->bridge == BRIDGE_SERIAL)
+            NMEA_bridge_buffer(c);   // only output complete sentences
+        else
+            Serial.print(c);         // as received, unfiltered
+        NMEA_Parse_Character(c);
       }
       NMEA_TimeMarker = millis();
     }
@@ -330,7 +439,10 @@ void NMEA_loop()
     if (SoC->Bluetooth) {
       while (SoC->Bluetooth->available() > 0) {
         char c = SoC->Bluetooth->read();
-        Serial.print(c);
+        if (settings->bridge == BRIDGE_SERIAL)
+            NMEA_bridge_buffer(c);
+        else
+            Serial.print(c);
         NMEA_Parse_Character(c);
         NMEA_TimeMarker = millis();
       }

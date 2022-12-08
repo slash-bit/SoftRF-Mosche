@@ -642,6 +642,7 @@ const SoC_ops_t RPi_ops = {
   RPi_EPD_is_ready,
   RPi_EPD_update,
   RPi_WiFi_Receive_UDP,
+  RPi_WiFi_Transmit_UDP,
   RPi_WiFi_clients_count,
   RPi_DB_init,
   RPi_DB_query,

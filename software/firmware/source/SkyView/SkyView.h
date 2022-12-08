@@ -25,7 +25,7 @@
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#define SKYVIEW_FIRMWARE_VERSION  "MB01b"
+#define SKYVIEW_FIRMWARE_VERSION  "MB02"
 #define SKYVIEW_IDENT     "SkyView-"
 
 #define DEFAULT_AP_SSID   "SoftRF-abc123"
@@ -109,6 +109,16 @@ enum
 	CON_WIFI_TCP,
 	CON_BLUETOOTH_SPP,
 	CON_BLUETOOTH_LE
+};
+
+enum
+{
+	BRIDGE_NONE,
+	BRIDGE_SERIAL,
+	BRIDGE_UDP,
+	BRIDGE_TCP,
+	BRIDGE_BT_SPP,
+	BRIDGE_BT_LE
 };
 
 enum

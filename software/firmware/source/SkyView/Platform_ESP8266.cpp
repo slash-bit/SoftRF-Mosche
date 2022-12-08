@@ -224,6 +224,7 @@ const SoC_ops_t ESP8266_ops = {
   ESP8266_EPD_is_ready,
   ESP8266_EPD_update,
   ESP8266_WiFi_Receive_UDP,
+  ESP8266_WiFi_Transmit_UDP,
   ESP8266_WiFi_clients_count,
   ESP8266_DB_init,
   ESP8266_DB_query,

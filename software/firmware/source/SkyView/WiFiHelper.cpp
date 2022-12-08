@@ -21,7 +21,7 @@
 
 #include<Arduino.h>
 #include<WiFi.h>
-// - can now use WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
+// can we now use WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) ?
 
 #include "EEPROMHelper.h"
 #include "SoCHelper.h"
@@ -86,11 +86,18 @@ size_t WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   }
 }
 
+void WiFi_Transmit_UDP(char *buf, size_t size)
+{
+    SoC->WiFi_Transmit_UDP(
+        (settings->protocol==PROTOCOL_GDL90 ? GDL90_DST_PORT : NMEA_UDP_PORT),
+          (byte *)buf, size);
+}
+
 #if 0   /* this does not seem to work */
 /* handle SoftAP connection and disconnection events */
 // https://techtutorialsx.com/2019/09/22/esp32-soft-ap-station-disconnected-event/
 
-void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+void WiFiStationConnected(arduino_event_id_t event, arduino_event_info_t info){
   Serial.print(F("WIFI: client connected to SoftAP"));
   if (WiFi.status() != WL_CONNECTED) {
     Serial.print(F("WIFI: pause trying to connect to hardAP"));
@@ -98,8 +105,7 @@ void WiFiStationConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   }
 }
 
-//void WiFiStationDisconnected(arduino_event_id_t event, arduino_event_info_t info) {
-void WiFiStationDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+void WiFiStationDisconnected(arduino_event_id_t event, arduino_event_info_t info){
   Serial.print(F("WIFI: client disconnected from SoftAP"));
   Serial.print(F("WIFI: resume connecting to hardAP..."));
   WiFi.enableSTA(true);
@@ -138,12 +144,8 @@ void WiFi_setup()
 #if 0
   // Connect using combined STA & AP mode, but disconnect as STA while soft-AP utilized.
   // Without this the soft-AP access is erratic while trying to also connect as STA.
-  WiFi.onEvent(WiFiStationConnected, SYSTEM_EVENT_AP_STACONNECTED);
-  WiFi.onEvent(WiFiStationDisconnected, SYSTEM_EVENT_AP_STADISCONNECTED);
-  - but these lines yield error messages:
-  no known conversion for argument 2 from 'system_event_id_t' to 'arduino_event_id_t'
-  candidate: 'wifi_event_id_t WiFiGenericClass::onEvent(WiFiEventSysCb, arduino_event_id_t)'
-  no matching function for call to 'WiFiClass::onEvent(void (&)(arduino_event_id_t, arduino_event_info_t), system_event_id_t)'
+  WiFi.onEvent(WiFiStationConnected, (arduino_event_id_t) SYSTEM_EVENT_AP_STACONNECTED);
+  WiFi.onEvent(WiFiStationDisconnected, (arduino_event_id_t) SYSTEM_EVENT_AP_STADISCONNECTED);
 #endif
 
 #if defined(USE_DNS_SERVER)
@@ -216,7 +218,7 @@ void WiFi_loop()
         WiFi_STA_connected = false;
         Serial.print(F("Disconnected from WiFi AP "));
         Serial.println(settings->server);
-        WiFi.reconnect();       // this works!
+        WiFi.reconnect();         // this works!
         WiFi_STA_trying = true;
         WiFi_STA_TimeMarker = millis();
       }
@@ -227,11 +229,11 @@ void WiFi_loop()
     if (WiFi_STA_connected == false) {
       if (millis() - WiFi_STA_TimeMarker > (WiFi_STA_trying ? 3000 : 6000)) {
         if (WiFi_STA_trying) {
-          Serial.println("Pausing STA connection attempt to give soft-AP a chance");
+          //Serial.println("Pausing STA connection attempt to give soft-AP a chance");
           WiFi.enableSTA(false);
           WiFi_STA_trying = false;
         } else {
-          Serial.println("Resuming STA connection attempt");
+          //Serial.println("Resuming STA connection attempt");
           WiFi.enableSTA(true);
           WiFi.reconnect();
           WiFi_STA_trying = true;
@@ -249,7 +251,10 @@ void WiFi_loop()
 #endif
 
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
-  if ((settings->power_save & POWER_SAVE_WIFI) && WiFi.getMode() == WIFI_AP) {
+  if ((settings->power_save & POWER_SAVE_WIFI)
+       && WiFi.getMode() == WIFI_AP
+       && settings->connection != CON_WIFI_UDP && settings->connection != CON_WIFI_TCP
+       && settings->bridge != BRIDGE_UDP && settings->bridge != BRIDGE_TCP) {
     if (SoC->WiFi_clients_count() == 0) {
       if ((millis() - WiFi_No_Clients_Time_ms) > POWER_SAVING_WIFI_TIMEOUT) {
         Web_fini();

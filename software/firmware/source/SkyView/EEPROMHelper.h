@@ -25,7 +25,7 @@
 
 
 #define SKYVIEW_EEPROM_MAGIC   0xABBAFACE
-#define SKYVIEW_EEPROM_VERSION 0x00000BA1
+#define SKYVIEW_EEPROM_VERSION 0x00000BA3
 
 typedef struct Settings {
 
@@ -37,10 +37,10 @@ typedef struct Settings {
     uint8_t  protocol;
     uint8_t  baudrate;
     uint8_t  power_save:4;
-    uint8_t  resvd2;
+    uint8_t  bridge:4;
 
-    char     server  [18];
-    char     key     [18];
+    char     server  [21+1];
+    char     key     [17+1];
 
     uint8_t  resvd1:2;
     uint8_t  orientation:1;
@@ -51,6 +51,7 @@ typedef struct Settings {
     uint8_t  voice:3;
     uint8_t  aghost:3;
     uint8_t  filter:4;
+    uint8_t  resvd0:4;
 
     uint32_t team;
 
@@ -60,7 +61,7 @@ typedef struct Settings {
     uint8_t  resvd6;
     uint8_t  resvd7;
     uint8_t  resvd8;
-} settings_t;
+} __attribute__((packed)) settings_t;
 
 typedef struct EEPROM_S {
     uint32_t  magic;

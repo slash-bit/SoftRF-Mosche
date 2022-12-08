@@ -44,6 +44,7 @@ typedef struct SoC_ops_struct {
   bool (*EPD_is_ready)();
   void (*EPD_update)(int);
   size_t (*WiFi_Receive_UDP)(uint8_t *, size_t);
+  void (*WiFi_Transmit_UDP)(int, byte *, size_t);
   int  (*WiFi_clients_count)();
   bool (*DB_init)();
   bool (*DB_query)(uint8_t, uint32_t, char *, size_t);

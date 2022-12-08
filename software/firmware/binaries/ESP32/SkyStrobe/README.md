@@ -32,7 +32,7 @@ Skystrobe can also serve as a data bridge.  Data arriving via a wireless connect
 
 ALTERNATIVES TO SKYSTROBE
 
-My current version of SoftRF has strobe-control capability built-in.  One can connect the appropriate pins in the hardware, via wires, to a simple (non-computerized) strobe circuit.  See example circuit diagram here: ___________  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
+My current version of SoftRF has strobe-control capability built-in.  One can connect the appropriate pins in the hardware, via wires, to a simple (non-computerized) strobe circuit.  See [example circuit diagram](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg).  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
 
 
 SKYSTROBE HARDWARE

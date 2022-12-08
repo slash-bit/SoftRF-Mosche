@@ -493,6 +493,58 @@ static size_t ESP32_WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
   return WiFi_Receive_UDP(buf, max_size);
 }
 
+static IPAddress ESP32_WiFi_get_broadcast()
+{
+  tcpip_adapter_ip_info_t info;
+  IPAddress broadcastIp;
+
+  if (WiFi.getMode() == WIFI_STA) {
+    tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &info);
+  } else {
+    tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_AP, &info);
+  }
+  broadcastIp = ~info.netmask.addr | info.ip.addr;
+
+  return broadcastIp;
+}
+
+static void ESP32_WiFi_Transmit_UDP(int port, byte *buf, size_t size)
+{
+  IPAddress ClientIP;
+  WiFiMode_t mode = WiFi.getMode();
+  int i = 0;
+
+  switch (mode)
+  {
+  case WIFI_STA:
+    ClientIP = ESP32_WiFi_get_broadcast();
+
+    Uni_Udp.beginPacket(ClientIP, port);
+    Uni_Udp.write(buf, size);
+    Uni_Udp.endPacket();
+
+    break;
+  case WIFI_AP:
+    wifi_sta_list_t stations;
+    ESP_ERROR_CHECK(esp_wifi_ap_get_sta_list(&stations));
+
+    tcpip_adapter_sta_list_t infoList;
+    ESP_ERROR_CHECK(tcpip_adapter_get_sta_list(&stations, &infoList));
+
+    while(i < infoList.num) {
+      ClientIP = infoList.sta[i++].ip.addr;
+
+      Uni_Udp.beginPacket(ClientIP, port);
+      Uni_Udp.write(buf, size);
+      Uni_Udp.endPacket();
+    }
+    break;
+  case WIFI_OFF:
+  default:
+    break;
+  }
+}
+
 static int ESP32_WiFi_clients_count()
 {
   WiFiMode_t mode = WiFi.getMode();
@@ -1086,6 +1138,7 @@ const SoC_ops_t ESP32_ops = {
   ESP32_EPD_is_ready,
   ESP32_EPD_update,
   ESP32_WiFi_Receive_UDP,
+  ESP32_WiFi_Transmit_UDP,
   ESP32_WiFi_clients_count,
   ESP32_DB_init,
   ESP32_DB_query,
