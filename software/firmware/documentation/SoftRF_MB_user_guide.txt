@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated December 1, 2022
-to fit software version MB09e based on v1.0 with some parts of v1.2
+This version last updated December 12, 2022
+to fit software version MB09h based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -69,16 +69,14 @@ With my version of SoftRF you have the option of attaching a passive piezo buzze
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
 The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external amplifier, or, select "external" in the buzzer volume setting to get +3v DC output on pin 14, and drive an external (12V) *active* buzzer via a transistor.  Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm happens (or could happen).
 
-You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 25.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.
+You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 25.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for circuit diagrams for such a connection.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  Alternatively, a separate device - SkyStrobe - possibly embedded into the strobe unit, can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  See the SkyStrobe software in this github repository.
 
 Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".
 
-One needs to arrange a case for the T-Beam board.  Arranging the case is actually the hardest part of setting it up!  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  Some have used 3D-printed cases.  STL files for that purpose are available, e.g. here:
-https://github.com/lyusupov/SoftRF/tree/master/case/v5
-but these files make a case that is too small, hard to use, and won't fit a gopro mount.  A modified 3D model is available here:
+One needs to arrange a case for the T-Beam board.  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  It is easiest to use a 3D-printed case.  There are many designs available online as STL files for that purpose.  Some of these files make a case that is too small, hard to use, or won't fit a gopro mount.  One modified 3D model is available here:
 https://drive.google.com/drive/folders/1hdEJ-nRVz4D_sYihwv1Re2S-p8_nsYaM?usp=sharing
-which is larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
-If you don't have a 3d printer you can order a case from treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  Cost is about $20 for 1, and as low as $12 each for 4 or more.
+which is a bit larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
+Or you can find a slightly deeper case here: https://www.dropbox.com/sh/iav5bai4vxluv5s/AADZT4aboAOxVr0VuBjDEtAAa?dl=0 that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case from treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  But better yet cut out the middleman and go here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
 
 A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, should give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is busy with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
 
@@ -112,6 +110,8 @@ If a battery is installed on the board, the T-Beam is never completely turned "o
 
 The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - but they cannot be changed here, see below.  Find more info about operating the T-Echo ("Badge Edition") here:
 https://github.com/lyusupov/SoftRF/wiki/Badge-Edition
+
+FLARM does not generate collision warnings while it is not airborne.  My version of SoftRF follows that rule.  But to allow testing on the ground, my version does give such warnings for one minute after it is done booting and has acquired a GNSS fix.
 
 
 Installing firmware for the first time
@@ -179,7 +179,7 @@ The "alarm" and "airborne" modes also flash in the first 2 minutes after turning
 
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 
-Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).  (Only SPP may work on the T-Beam, I am not sure.)
+Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).
 
 NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
 
@@ -206,9 +206,7 @@ No track: this is similar to Stealth, but for the purpose of telling ground (OGN
 
 Radio CF correction: you can tell SoftRF (on some devices) to adjust the radio frequency up or down a bit.  Only use this if you have reliable information (e.g., from OGN ground stations) telling you that your device is a bit off-frequency.
 
-Debug flags: this is for my debugging scheme (mentioned above), leave as 00 normally.
-
-IGC encryption key:  Only shown if compiled so as to enable the encryption option in OGNTP. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
+IGC encryption key:  Only shown if set to use the OGNTP protocol. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 
 
 The settings displayed, and adjusted, within the T-Echo

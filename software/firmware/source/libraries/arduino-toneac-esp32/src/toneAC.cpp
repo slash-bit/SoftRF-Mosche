@@ -15,14 +15,24 @@ void toneAC_setup(int pinA, int pinB)
 {
     toneAC_pinA = pinA;
     toneAC_pinB = pinB;
-    toneAC_init();     // to avoid crash in noToneAC()
+
+    // set the output pins to LOW state:
+    gpio_reset_pin((gpio_num_t) toneAC_pinA);
+    gpio_reset_pin((gpio_num_t) toneAC_pinB);
+    pinMode(toneAC_pinA, OUTPUT);
+    pinMode(toneAC_pinB, OUTPUT);
+    digitalWrite(toneAC_pinA, LOW);
+    digitalWrite(toneAC_pinB, LOW);
 }
 
 void toneAC(unsigned long frequency, uint8_t volume, unsigned long length, uint8_t background) {
+
   if (toneAC_pinA == 255 || toneAC_pinB == 255)
       return;    // toneAC_setup() needs to be called first.
-//  toneAC_init();
-  if (frequency == NOTONEAC || volume == 0) { noToneAC(); return; } // If frequency or volume are 0, turn off sound and return.
+
+  // If frequency or volume are 0, turn off sound and return.
+  if (frequency == NOTONEAC || volume == 0) { noToneAC(); return; }
+
   if (volume > 10) volume = 10;       // Make sure volume is in range (1 to 10).
 
   toneAC_playNote(frequency, volume); // Routine that plays the note using timers.

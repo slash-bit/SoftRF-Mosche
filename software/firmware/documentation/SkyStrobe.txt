@@ -24,7 +24,9 @@ SKYSTROBE HARDWARE
 
 The SkyStrobe software is available compiled for the ESP32 platform.  It only requires a simple ESP32 development board, without the radio devices (beyond the WiFi/Bluetooth capability of the ESP32 module itself).  There are many such boards available inexpensively.  Just make sure it includes 4+ MB flash memory.  In order to power the board from the glider's 12 volt system, a converter to 5 volts (USB power) is needed.  An easier approach is to use an ESP32 board that has such a converter built in, such as this one (which is made in the USA):
    https://www.ezsbc.com/product/wifi01-sw/
-That board also has excess 5V output that can power a T-Beam (but don't charge your phone with it).  Another possible model with 12V input is the "D1 R32" Arduino shield, but it is poorly documented:
+That board also has excess 5V output that can power a T-Beam (but don't charge your phone with it).  See pinout diagram for this board here:
+  https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/EzSBC_ESP32_HV_wiring.jpg
+Another possible model with 12V input is the "D1 R32" Arduino shield, but it is poorly documented:
    https://www.amazon.com/HiLetgo-ESP-32-Development-Bluetooth-Arduino/dp/B07WFZCBH8
 Or maybe use any generic ESP32 board, such as this compact one:
    https://www.amazon.com/Teyleten-Robot-ESP-WROOM-32-Bluetooth-Development/dp/B09C5RDZ8G
@@ -32,7 +34,8 @@ or this (same thing):
    https://www.amazon.com/HiLetgo-Development-ESP8285-Wireless-Internet/dp/B07BK435ZW
 and add a tiny voltage converter like this to convert 12V to 5V:
    https://www.amazon.com/Regulator-Module-Voltage-Reducer-Adjustable/dp/B08R6337QY
-(be sure to cut the "adjustable" trace correctly, see user comments there).
+(be sure to cut the "adjustable" trace correctly, see user comments there).  See pinout diagram for this board here:
+  https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/D1_Mini_ESP32_board_wiring.jpg
 
 For the strobe part, an LED module is needed that can be driven in short pulses with a momentary power on the order of 10 watts (or more).  Red color is preferred.  I have used this module:
 https://xpriteusa.com/collections/replacement-bulbs/products/xprite-g1-series-replacement-led-hide-a-way-lights?variant=37716161462431
