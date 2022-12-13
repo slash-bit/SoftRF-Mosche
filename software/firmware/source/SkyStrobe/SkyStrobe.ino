@@ -178,6 +178,11 @@ void loop()
   if (when_to_reboot != 0 && millis() > when_to_reboot) {
       if (SoC->Bluetooth)
           SoC->Bluetooth->fini();
+
+      /* only do this now, to prevent BT crash in preceding seconds */
+      settings->connection = temp_connection;
+      settings->bridge     = temp_bridge;
+
       delay(300);
       EEPROM_store();
       delay(300);

@@ -444,11 +444,14 @@ void handleInput() {
     return;
   }
 
+  temp_connection = settings->connection;
+  temp_bridge     = settings->bridge;
+
   for ( uint8_t i = 0; i < server.args(); i++ ) {
     if (server.argName(i).equals("connection")) {
-      settings->connection = server.arg(i).toInt();
+      temp_connection = server.arg(i).toInt();
     } else if (server.argName(i).equals("bridge")) {
-      settings->bridge = server.arg(i).toInt();
+      temp_bridge = server.arg(i).toInt();
     } else if (server.argName(i).equals("protocol")) {
       settings->protocol = server.arg(i).toInt();
     } else if (server.argName(i).equals("baudrate")) {
@@ -470,9 +473,9 @@ void handleInput() {
     }
   }
 
-  if (settings->connection != CON_SERIAL
-         && settings->bridge != BRIDGE_SERIAL)     // disallow wireless->wireless bridge
-     settings->bridge = BRIDGE_NONE;
+  if (temp_connection != CON_SERIAL
+         && temp_bridge != BRIDGE_SERIAL)     // disallow wireless->wireless bridge
+     temp_bridge = BRIDGE_NONE;
 
   snprintf_P ( Input_temp, 2000,
 PSTR("<html>\
@@ -500,8 +503,8 @@ PSTR("<html>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->strobe, settings->sound, settings->connection, settings->protocol,
-  settings->baudrate, settings->server, settings->key, settings->bridge,
+  settings->strobe, settings->sound, temp_connection, settings->protocol,
+  settings->baudrate, settings->server, settings->key, temp_bridge,
   settings->sw1, settings->sw2, settings->swlogic);
 
   SoC->swSer_enableRx(false);

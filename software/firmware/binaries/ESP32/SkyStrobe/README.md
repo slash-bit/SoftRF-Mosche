@@ -1,6 +1,13 @@
 # Release notes
 
 
+### revision MB02a
+
+Added gear-warning buzzer control logic.
+Added ability to change low-level settings via "back-door".
+Ensured buzzer pins go low when not beeping.
+
+
 ### revision MB01c
 
 Bluetooth input works now.

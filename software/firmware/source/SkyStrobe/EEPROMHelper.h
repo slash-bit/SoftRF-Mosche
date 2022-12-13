@@ -126,6 +126,9 @@ void EEPROM_defaults(void);
 void EEPROM_store(void);
 extern settings_t *settings;
 
+extern uint8_t temp_connection;
+extern uint8_t temp_bridge;
+
 extern uint16_t  gap_alarm;
 extern uint16_t  flashes_alarm;
 extern uint16_t  ms_alarm;

@@ -222,9 +222,13 @@ void EEPROM_setup()
 
     } else {
       read_settings();
+
     }
   }
 }
+
+uint8_t temp_connection;
+uint8_t temp_bridge;
 
 void EEPROM_store()
 {
