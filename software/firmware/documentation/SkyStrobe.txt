@@ -2,15 +2,15 @@ SkyStrobe documentation
 =======================
 
 By Moshe Braner
-This version last updated December 8, 2022
-To fit SkyStrobe version 01c.
+This version last updated December 12, 2022
+To fit SkyStrobe version 02.
 
 
 WHAT IS SKYSTROBE
 
 Gliders (and other aircraft) can benefit from higher visibility to other aircraft.  That can be achieved using bright LEDs mounted under the canopy or elsewhere.  Due to the limited electrical power available, such strobes must be directional (usually facing forward), and turned on only a small percentage of the time.  SkyStrobe is firmware for a computerized control circuit for such an LED strobe.  It controls the flashing pattern.  It can increase the flashing frequency when information about nearby traffic, received via radio signals, warrants it.  It can also keep the strobe from flashing when the glider is on the ground.  A SkyStrobe device can work standalone, or can receive information via a cable or wirelessly.
 
-In addition, since the Skystrobe device runs on the glider's 12V battery system, it can generate louder collision-warning beeps than a SoftRF device running on lower voltage.  The SkyStrobe firmware includes the capability to drive such added hardware, based on the signals it receives (via cable or wirelessly) from a SoftRF device, or a FLARM device.
+In addition, since the Skystrobe device runs on the glider's 12V battery system, it can generate louder collision-warning beeps than a SoftRF device running on lower voltage.  The SkyStrobe firmware includes the capability to drive such added hardware, based on the signals it receives (via cable or wirelessly) from a SoftRF device, or a FLARM device.  Moreover, if connected to microswitches, it can also generate a sound alarm based on flexible logic, for example, if the spoilers are open with the gear still up.
 
 Skystrobe can also serve as a data bridge.  Data arriving via a wireless connection is mirrored by SkyStrobe to its serial port.  This can be useful to feed data received wirelessly (e.g., from SoftRF), to a device that can process FLARM type input but only via a serial cable, such as a ClearNav, SN10, or XCvario.  Conversely, Skystrobe can mirror data arriving via serial cable (e.g., from FLARM) to WiFi or Bluetooth (e.g., to XCsoar).
 
@@ -26,7 +26,7 @@ The SkyStrobe software is available compiled for the ESP32 platform.  It only re
    https://www.ezsbc.com/product/wifi01-sw/
 That board also has excess 5V output that can power a T-Beam (but don't charge your phone with it).  Another possible model with 12V input is the "D1 R32" Arduino shield, but it is poorly documented:
    https://www.amazon.com/HiLetgo-ESP-32-Development-Bluetooth-Arduino/dp/B07WFZCBH8
-Or maybe use any generic ESP32 board, such as this tiny one:
+Or maybe use any generic ESP32 board, such as this compact one:
    https://www.amazon.com/Teyleten-Robot-ESP-WROOM-32-Bluetooth-Development/dp/B09C5RDZ8G
 or this (same thing):
    https://www.amazon.com/HiLetgo-Development-ESP8285-Wireless-Internet/dp/B07BK435ZW
@@ -38,7 +38,7 @@ For the strobe part, an LED module is needed that can be driven in short pulses 
 https://xpriteusa.com/collections/replacement-bulbs/products/xprite-g1-series-replacement-led-hide-a-way-lights?variant=37716161462431
 It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 parallel strings, each with 2 LEDs and a 5-ohm resistor in series.  At 0.5 amps, each LED shows a voltage of 2.6V, about 1 watt.  At 0.75 amps, each LED shows a voltage of 2.75V i.e. a momentary power of 2W.  I cut three traces in the middle of the circuit board and rewired it to make it 4 LEDs in series.  And moved one 5-ohm resistor to be in parallel with the other one.  The resulting circuit fits the available voltage better.  Given 13V power it self-limits to 0.75 amp.
 
-To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  See the circuit diagram ______________.  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  Or use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
+To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  A better approach is to use a power MOSFET instead.  Use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
 
 These circuits do not limit the current, only a small resistor in series with the LEDs (built into the module I use) limits the current.  As the battery slowly depletes and the supply voltage decreases, the current through the LEDs - and the brightness of the flashing - will decline somewhat.  This may be seen as a good thing, as it will extend the battery life somewhat.  If desired, a constant-current circuit can be used instead, see ______________.  But the LED module I used is self-limited by the LED voltage drop rising with the current, and the strobe pulses are short, thus no current limiting is needed.
 
@@ -47,6 +47,8 @@ https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1
 It will beep with useful volume if simply connected (in series with a 100-ohm resistor) between pins 26 and 27 of the processor.  For more volume, an amplifier circuit is needed.  A suitable amplifier can be built with 2 small transistors and a couple of resistors, see _____________.  Or, drive an external 12V *active* buzzer from pin 33 via a transistor.  That pin offers +3VDC during buzzing times.
 
 For the connections between the ESP32 board and the LED & buzzer circuits, see the diagram here: __________.  Note: the pin numbers are different from those used on the T-Beam with my version of SoftRF.  
+
+For microswitches, connect "switch 1" between ground and pin 34, and "switch 2" between ground and pin 35.  Each of these pins, if used, should also be fitted with a pull-up resistor to the +3.3V line.
 
 
 INSTALLING THE FIRMWARE FOR THE FIRST TIME
@@ -64,9 +66,9 @@ The settings you choose are stored inside the device, and are not erased even wh
 
 Here are the settings available in the current version:
 
-* Strobe: the mode of operation can be "off", "alarm" (only flashes when the connected device is signaling a collision danger), "airborne" (flashes periodically once airborne, and more often when the connected device is signaling a collision danger - the default, and recommended), and "always" (even when not airborne).
+* Strobe: the mode of operation can be "off", "alarm" (only flashes when the received data is signaling a collision danger), "airborne" (flashes periodically once airborne, and more often when signaled a collision danger - the default, and recommended), and "always" (even when not airborne).
 
-* Sound: the beeps upon collision warnings, can turn on or off.  Default is on - but a sound device may not be connected.
+* Sound: the beeps upon collision warnings, can turn on or off.  Default is on - but a sound will be heard only if a soundmaking device is connected.
 
 * Connection type: whether via serial cable, WiFi or one of two types of Bluetooth.  If you are using SkyStrobe standalone, unconnected, choose "serial", which is also the default.
 
@@ -74,9 +76,13 @@ Here are the settings available in the current version:
 
 * Baud rate: this is only relevant to the serial connection method.  38400 is the default, as it is on SoftRF.
 
-* Source Id: this is the network name (SSID), and password, if connecting via WiFi.
+* Source Id: this is the network name (SSID), and password, if connecting via WiFi.  If using Bluetooth, this is the Bluetooth ID of the device sending the data - same as the SSID, in the case of SoftRF.  (You can leave the password in place when using Bluetooth.)
 
-* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their using the same hardware in the ESP32.  The difference between bridge settings "none" and "serial" is that with "none" some informational messages are sent to the serial and USB ports interleaved with the NMEA sentences.  With "serial" only NMEA sentences appear, although they include Skystrobe's special sentences announcing flashing of the strobe and the output of sound (buzzer) notifications.
+* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their sharing the same hardware in the ESP32.  The difference between bridge settings "none" and "serial" is that with "none" some informational messages are sent to the serial and USB ports interleaved with the NMEA sentences.  With "serial" only NMEA sentences appear, although they include Skystrobe's special sentences announcing flashing of the strobe and the output of sound (buzzer) notifications.
+
+* For the "gear warning" Switch 1 and Switch 2: each can be selected as absent, normally-open, or normally-closed.  And the logic of the warning can be AND (if both switches are NOT in their normal position then an alarm sounds), OR (either switch can trigger the alarm), or XOR - exclusive OR (alarm is triggered by either switch by itself, but not both at the same time).  An absent switch is considered to be a phantom switch in normal position, so choose "OR" logic to make one switch operate the alarm.  Leave each switch setting as "absent" unless a pull-up resistor is in place.
+
+For example, ============================
 
 
 UPDATING THE FIRMWARE
@@ -95,9 +101,9 @@ For a cable connection, see the diagram here: __________.  Note: SkyStrobe expec
 
 OPERATION
 
-SkyStrobe keeps trying its WiFi connection until the other device is ready.
+SkyStrobe keeps trying to reconnect to its WiFi or Bluetooth partner until the other device is ready.
 
-Note that regardless of the strobe operation mode selected (other than "off") the strobe will operate for 2 minutes after SkyStrobe power-on, alternating the "alarm" and non-alarm flashing patterns, and occasionally beeping, as a self-test.
+Regardless of the strobe operation mode selected (other than "off"), the strobe will operate for one minute after SkyStrobe power-on, alternating the "alarm" and non-alarm flashing patterns.  It also occasionally beeps for two minutes, to demo the collision alarm sound warnings.  And for a few early seconds it activates the gear-warning sound alarm.  All as a self-test, to verify the hardware is working.
 
 After the self-test, if in "airborne" mode, SkyStrobe will try and detect whether the aircraft is airborne (based on GNSS sentences in the NMEA stream).  If a GNSS fix (from the connected device) is not available, SkyStrobe will assume the aircraft is airborne and will flash the strobe periodically (but not in the faster "alarm" pattern since the data is not available).  This is a "fail-safe" feature.
 
@@ -108,13 +114,12 @@ Extra features on the EZSBC ESP32 board
 
 This board has two RGB LEDs.  One shows USB (but not UART) I/O in red and green.  The other one is programmable, and Skystrobe uses it as follows, for aid in troubleshooting:
 * flash the LED red when giving a sound alarm, stay on for a while if WiFi connection failed
-* flash the LED green to signal traffic data received, blink while WiFi connecting
+* flash the LED green to signal traffic data received or gear warning, blink while WiFi connecting
 * flash the LED blue when driving the strobe, stay on for a while if WiFi successfully connected
-Those are turned on by pulling *low* GPIO pins 16, 17, and 18, respectively.  So if using another board one can attach external LEDs for the same functionality.
+Those are turned on by pulling *low* GPIO pins 16, 17, and 18, respectively.  So if using a different board, one can attach external LEDs for the same functionality.  Each should be connected to the +3.3V line via a 1K resistor.
 
 
-Possible future enhancements
+For the geeks
 
-The exact pattern of the strobe flashing: how many flashes in quick succession, how many milliseconds each, etc, is currently hardcoded.  This could be made customizable through the settings screen.
+Hopefully the low-level default settings, such as the duration of each flash (in milliseconds), are OK.  But yes it is possible to change them, via a Bluetooth terminal app.  Read through EEPROMHelper.cpp.
 
-If SkyStrobe is connected to a buzzer, it is possible in principle to program it to react to additional inputs to its processor by giving certain buzzer patterns.  For example, could connect landing gear and spoiler microswitches and produce a gear-up warning.

@@ -1,9 +1,9 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
 <html>
 <head>
-<title>SoftRF online 'security and privacy' settings tool</title>
+<title>IGC Key via NMEA tool</title>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
-<meta name=keywords content="SoftRF, NMEA, checksum, settings, javascript">
+<meta name=keywords content="SoftRF, NMEA, checksum, settings, javascript, GNSS">
 <style type="text/css"><!--
 
 p.warn {
@@ -21,10 +21,7 @@ const version = 1;
 // Compute NMEA checksum and display it
 function UpdateChecksum()
 {
-  var cmd = "PSRFS,"
-      + version + ","
-      + document.getElementById("igc_key").value;
-
+  var cmd = document.getElementById("sentence").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -53,39 +50,40 @@ function settext(span, text)
   }
 }
 
-function SelIGCKey()
+function SelCmd()
 {
-  var igc_key = document.getElementById("IGCKey");
-  document.getElementById("igc_key").value = igc_key.value;
+  var id = document.getElementById("NMEA");
+  document.getElementById("sentence").value = id.value;
   UpdateChecksum();
 }
 
 function InitSettings()
 {
-//  document.getElementById("ver").value   = 1;
-  document.getElementById("igc_key").value = "00000000000000000000000000000000";
-
+  document.getElementById("sentence").value = "PSRFS,1,00000000000000000000000000000000";
   UpdateChecksum();
 }
 
 --></script>
 </head>
 <body  onload="InitSettings()">
-<h3 align=left>SoftRF online 'security and privacy' settings tool</h3>
+<h3 align=left>IGC Key via NMEA tool</h3>
 <b>NOTICE!</b> <small>Your browser should have support for JavaScript and DHTML (most modern browsers do).</small>
 <hr>
-<h1 align=center>Security settings</h1>
 <form>
 <table width=100%%>
 <tr>
-<th align=left>IGC key (HEX)</th>
+<tr>
+<th align=left>NMEA Sentence (without the $)</th>
 <td align=right>
-<INPUT type="text" id="IGCKey" maxlength="32" size="32" value="00000000000000000000000000000000" onchange="SelIGCKey()">
+<INPUT type="text" id="NMEA" maxlength="100" size="100" value="PSRFS,1,00000000000000000000000000000000" onchange="SelCmd()">
 </td>
 </tr>
 </table>
-<!-- IGC key:  --><input type="hidden" id="igc_key" size="32">
-<h3 align=center>NMEA control sentence:</h3>
+
+<!-- NMEA:  --><input type="hidden" id="sentence" size="100">
+
+<hr>
+<h4 align=center>NMEA control sentence with checksum:</h4>
 <hr>
 <h4 align=center><tt><span id="output" style="font-family: monospace;"></span><br><br></tt></h4>
 </form>

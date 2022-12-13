@@ -55,6 +55,8 @@
 
 extern void airborne_loop(void);
 
+uint32_t when_to_reboot = 0;
+
 hardware_info_t hw_info = {
   .model    = SOFTRF_MODEL_SKYSTROBE,
   .revision = 0,  // HW_REV_UNKNOWN,
@@ -126,27 +128,43 @@ void setup()
   Traffic_setup();
 
   SoC->WDT_setup();
+
+  StrobeSetupMarker = millis();
 }
 
 void loop()
 {
+//Serial.println("calling BT loop...");
+
   if (SoC->Bluetooth) {
     SoC->Bluetooth->loop();
   }
 
+//Serial.println("calling input_loop...");
+
   Input_loop();
+
+//Serial.println("calling traffic loop...");
 
   Traffic_loop();
 
   airborne_loop();
 
+//Serial.println("calling strobe loop...");
+
   Strobe_loop();
+
+//Serial.println("calling sound loop...");
 
   Sound_loop();
 
   Traffic_ClearExpired();
 
+//Serial.println("calling wifi loop...");
+
   WiFi_loop();
+
+//Serial.println("calling web loop...");
 
   // Handle Web
   Web_loop();
@@ -156,6 +174,15 @@ void loop()
 #endif
 
   Battery_loop();
+
+  if (when_to_reboot != 0 && millis() > when_to_reboot) {
+      if (SoC->Bluetooth)
+          SoC->Bluetooth->fini();
+      delay(300);
+      EEPROM_store();
+      delay(300);
+      ESP.restart();
+  }
 }
 
 void shutdown(const char *msg)

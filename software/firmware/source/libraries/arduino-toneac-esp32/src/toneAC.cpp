@@ -15,12 +15,13 @@ void toneAC_setup(int pinA, int pinB)
 {
     toneAC_pinA = pinA;
     toneAC_pinB = pinB;
+    toneAC_init();     // to avoid crash in noToneAC()
 }
 
 void toneAC(unsigned long frequency, uint8_t volume, unsigned long length, uint8_t background) {
   if (toneAC_pinA == 255 || toneAC_pinB == 255)
       return;    // toneAC_setup() needs to be called first.
-  toneAC_init();
+//  toneAC_init();
   if (frequency == NOTONEAC || volume == 0) { noToneAC(); return; } // If frequency or volume are 0, turn off sound and return.
   if (volume > 10) volume = 10;       // Make sure volume is in range (1 to 10).
 

@@ -48,6 +48,8 @@
 #define SOC_GPIO_PIN_BUZZER    26
 #define SOC_GPIO_PIN_BUZZER2   27
 #define SOC_GPIO_PIN_DCBUZZ    33
+#define SOC_GPIO_PIN_SWITCH1   34   // need external pull-up resistor
+#define SOC_GPIO_PIN_SWITCH2   35   // need external pull-up resistor
 
 #define SOC_BUTTON_MODE_DEF     0
 

@@ -150,6 +150,7 @@ class AppClientCallback : public BLEClientCallbacks {
     ESP32_BT_ctl.status = BT_STATUS_NC;
 
     Serial.println(F("BLE: disconnected from Server."));
+    blue_LED(false);
     red_LED(true);
   }
 };
@@ -207,12 +208,14 @@ static void ESP32_BT_SPP_Connection_Manager(void *parameter)
           ESP32_BT_ctl.status = BT_STATUS_CON;
           ESP32_BT_ctl.command = BT_CMD_NONE;
           portEXIT_CRITICAL(&ESP32_BT_ctl.mutex);
+          red_LED(false);
           blue_LED(true);
           Serial.print(F("BT SPP: Connected to "));
         } else {
           portENTER_CRITICAL(&ESP32_BT_ctl.mutex);
           ESP32_BT_ctl.status = BT_STATUS_NC;
           portEXIT_CRITICAL(&ESP32_BT_ctl.mutex);
+          blue_LED(false);
           red_LED(true);
           Serial.print(F("BT SPP: Unable to connect to "));
         }
@@ -636,7 +639,8 @@ static int ESP32_Bluetooth_available()
 {
   int rval = 0;
 
-  if (settings->connection == CON_BLUETOOTH_SPP)
+  if (settings->connection == CON_BLUETOOTH_SPP
+       || settings->bridge == BRIDGE_BT_SPP)
     {
       portENTER_CRITICAL(&ESP32_BT_ctl.mutex);
       int status = ESP32_BT_ctl.status;
@@ -647,16 +651,12 @@ static int ESP32_Bluetooth_available()
       }
     }
 
-  else if (settings->connection == CON_BLUETOOTH_LE)
+  else if (settings->connection == CON_BLUETOOTH_LE
+             || settings->bridge == BRIDGE_BT_LE)
     {
       rval = BLE_FIFO_RX->available();
     }
 
-  else if (settings->bridge == BRIDGE_BT_LE)
-    {
-      rval = BLE_FIFO_RX->available();
-    }
-  
   return rval;
 }
 
@@ -664,7 +664,8 @@ static int ESP32_Bluetooth_read()
 {
   int rval = -1;
 
-  if (settings->connection == CON_BLUETOOTH_SPP)
+  if (settings->connection == CON_BLUETOOTH_SPP
+       || settings->bridge == BRIDGE_BT_SPP)
     {
       portENTER_CRITICAL(&ESP32_BT_ctl.mutex);
       int status = ESP32_BT_ctl.status;
@@ -675,7 +676,8 @@ static int ESP32_Bluetooth_read()
       }
     }
 
-  else if (settings->connection == CON_BLUETOOTH_LE)
+  else if (settings->connection == CON_BLUETOOTH_LE
+            || settings->bridge == BRIDGE_BT_LE)
     {
       rval = BLE_FIFO_RX->read();
     }

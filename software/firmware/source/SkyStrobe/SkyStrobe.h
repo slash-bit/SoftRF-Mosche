@@ -25,7 +25,7 @@
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#define SKYSTROBE_FIRMWARE_VERSION  "0.1c"
+#define SKYSTROBE_FIRMWARE_VERSION  "0.2"
 #define SKYSTROBE_IDENT     "SkyStrobe-"
 
 #define EXCLUDE_BUTTONS
@@ -141,8 +141,9 @@ enum
 };
 
 extern hardware_info_t hw_info;
+extern uint32_t when_to_reboot;
 
-extern void shutdown(const char *);
-extern void Input_loop(void);
+void shutdown(const char *);
+void Input_loop(void);
 
 #endif /* SKYSTROBE_H */

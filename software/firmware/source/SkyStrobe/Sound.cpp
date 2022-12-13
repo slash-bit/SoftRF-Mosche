@@ -41,17 +41,96 @@ void  Sound_fini()        {}
 
 #include <toneAC.h>
 
-static unsigned long SoundTimeMarker = 0;
-static unsigned long LEDTimeMarker = 0;
+static uint32_t SoundTimeMarker = 0;
+static uint32_t LEDTimeMarker = 0;
+
 static int SoundBeeps = 0;     /* how many beeps */
 static int SoundState = 0;     /* 1 = buzzing */
 static int SoundToneHz = 0;    /* variable tone */
 static int SoundBeepMS = 0;    /* how long each beep */
+static bool NeedBuzz = false;
+bool self_test_sound = true;
 
 void ext_buzzer(bool state)
 {
   if (SOC_GPIO_PIN_DCBUZZ != SOC_UNUSED_PIN)
       digitalWrite(SOC_GPIO_PIN_DCBUZZ, state? HIGH : LOW);
+}
+
+bool sw1_active()
+{
+    if (SWITCH1_PIN == SOC_UNUSED_PIN)
+        return false;
+    if (settings->sw1 == NO_SWITCH)
+        return false;
+    if (settings->sw1 == NORMALLY_CLOSED)
+        return (digitalRead(SWITCH1_PIN) == HIGH);
+    return (digitalRead(SWITCH1_PIN) == LOW);
+}
+
+bool sw2_active()
+{
+    if (SWITCH2_PIN == SOC_UNUSED_PIN)
+        return false;
+    if (settings->sw2 == NO_SWITCH)
+        return false;
+    if (settings->sw2 == NORMALLY_CLOSED)
+        return (digitalRead(SWITCH2_PIN) == HIGH);
+    return (digitalRead(SWITCH2_PIN) == LOW);
+}
+
+bool need_buzz()
+{
+    if (settings->swlogic == SWITCH_OR)
+        return (sw1_active() || sw2_active());
+
+    if (settings->swlogic == SWITCH_XOR)
+        return (sw1_active() != sw2_active());
+
+    // if (settings->swlogic == SWITCH_AND)
+        return (sw1_active() && sw2_active());
+}
+
+void intermittent_buzzer_loop(bool not_testing)
+{
+    static uint32_t BuzzTimeMarker = 0;
+    static bool state = false;
+    static bool newbuzz = true;
+
+    bool testing = ! not_testing;
+
+    if (millis() > BuzzTimeMarker) {  // buzz 224 ms on, 224 ms off
+        if (SoundTimeMarker != 0)     // other beeping in progress
+            return;
+        BuzzTimeMarker = millis() + buzz_period;
+        NeedBuzz = (need_buzz() || testing);
+        if (NeedBuzz) {
+            state = ! state;
+            ext_buzzer(state);
+            green_LED(state);
+            if (state)
+                toneAC(3000, 10, 0, true);
+            else
+                noToneAC();
+            if (state && newbuzz) {  // starting a new buzzing episode
+                newbuzz = false;
+                if (settings->bridge != BRIDGE_SERIAL)
+                      Serial.println("GEAR WARNING!");
+                if (settings->protocol == PROTOCOL_NMEA) { 
+                    strcpy(NMEAbuf,"$PSKSG*");
+                    NMEA_Out(NMEAbuf);
+                }
+            }
+        } else if (state) {
+            ext_buzzer(false);
+            green_LED(false);
+            noToneAC();
+            if (settings->bridge != BRIDGE_SERIAL)
+                Serial.println("gear warning off");
+            state = false;
+            newbuzz = true;
+        }
+    }
 }
 
 void red_LED(bool state)
@@ -101,9 +180,19 @@ void LED_notify()           // called from Traffic_Add() to signal traffic recei
     LEDTimeMarker = millis();
 }
 
+void Sound_Done()
+{
+  SoundToneHz = 0;
+  SoundBeepMS = 0;
+  SoundBeeps = 0;
+  SoundState = 0;
+  SoundTimeMarker = 0;
+}
+
 void Sound_setup(void)
-{  
+{
   toneAC_setup(SOC_GPIO_PIN_BUZZER2, SOC_GPIO_PIN_BUZZER);
+//  toneAC_setup(255, 255);
 
   if (SOC_GPIO_PIN_DCBUZZ != SOC_UNUSED_PIN) {
     pinMode(SOC_GPIO_PIN_DCBUZZ, OUTPUT);
@@ -130,30 +219,34 @@ void Sound_setup(void)
 //      blue2_LED(false);
 //  }
 
-  SoundToneHz = 0;
-  SoundBeepMS = 0;
-  SoundBeeps = 0;
-  SoundState = 0;
-  SoundTimeMarker = 0;
+  if (SWITCH1_PIN != SOC_UNUSED_PIN && settings->sw1 != NO_SWITCH)
+      pinMode(SWITCH1_PIN, INPUT);
+
+  if (SWITCH2_PIN != SOC_UNUSED_PIN && settings->sw2 != NO_SWITCH)
+      pinMode(SWITCH2_PIN, INPUT);
+
+  Sound_Done();
 }
 
 void Sound_Notify(int8_t alarm_level)
 {
   if (SoundTimeMarker != 0)   // beeping in progress
       return;
+  if (NeedBuzz)               // gear warning in progress
+      return;
 
   if (alarm_level == ALARM_LEVEL_LOW) {
-    SoundToneHz = ALARM_TONE_HZ_LOW;
-    SoundBeepMS = ALARM_TONE_MS_LOW;
-    SoundBeeps  = ALARM_BEEPS_LOW;
+    SoundToneHz = hz_low;
+    SoundBeepMS = tone_ms_low;
+    SoundBeeps  = beeps_low;
   } else if (alarm_level == ALARM_LEVEL_IMPORTANT) {
-    SoundToneHz = ALARM_TONE_HZ_IMPORTANT;
-    SoundBeepMS = ALARM_TONE_MS_IMPORTANT;
-    SoundBeeps  = ALARM_BEEPS_IMPORTANT;
+    SoundToneHz = hz_important;
+    SoundBeepMS = tone_ms_important;
+    SoundBeeps  = beeps_important;
   } else if (alarm_level == ALARM_LEVEL_URGENT) {
-    SoundToneHz = ALARM_TONE_HZ_URGENT;
-    SoundBeepMS = ALARM_TONE_MS_URGENT;
-    SoundBeeps  = ALARM_BEEPS_URGENT;
+    SoundToneHz = hz_urgent;
+    SoundBeepMS = tone_ms_urgent;
+    SoundBeeps  = beeps_urgent;
   } else {
     return;
   }
@@ -162,6 +255,7 @@ void Sound_Notify(int8_t alarm_level)
   int volume = 10;          // max volume
   int duration = 0;         // forever, until turned off
   bool background = true;   // return to main thread while sounding tone
+  // noToneAC();
   toneAC(SoundToneHz, volume, duration, background);
 
   red_LED(true);
@@ -174,9 +268,8 @@ void Sound_Notify(int8_t alarm_level)
         Serial.println(alarm_level);
   }
   if (settings->protocol == PROTOCOL_NMEA) {
-      char buf[16]; 
-      snprintf_P(buf, sizeof(buf), PSTR("$PSKSA,%d*"), alarm_level);
-      NMEA_Out(buf);
+      snprintf_P(NMEAbuf, sizeof(NMEAbuf)-4, PSTR("$PSKSA,%d*"), alarm_level);
+      NMEA_Out(NMEAbuf);
   }
 }
 
@@ -193,6 +286,7 @@ void Sound_loop(void)
           SoundState = 0;
       } else {  /* sound is off, start another beep */
           ext_buzzer(true);
+          //noToneAC();
           toneAC(SoundToneHz, 10, 0, true);
           red_LED(true);
           SoundState = 1;
@@ -204,16 +298,18 @@ void Sound_loop(void)
 
         ext_buzzer(false);
         noToneAC();
-        Sound_setup();
+        red_LED(false);
+        Sound_Done();
     }
   }
 
   /* if green LED was turned on by LED_notify(), turn it off 300 ms later */
-  if (LEDTimeMarker != 0 && millis() - LEDTimeMarker > 300) {
+  if (NeedBuzz == false && LEDTimeMarker != 0 && millis() - LEDTimeMarker > 300) {
     green_LED(false);
     LEDTimeMarker = 0;
   }
 
+#if 0
   /* always blink the BLUE2 LED, it will only actually blink if USB connected */
   static uint32_t blue2_timer = 0;
   static bool blue2_on = false;
@@ -222,10 +318,21 @@ void Sound_loop(void)
      blue2_LED(blue2_on);
      blue2_timer = millis() + (blue2_on? 250 : 750);
   }
+#endif
 
   /* strobe does a self test, do something similar with sound */
-  uint32_t t = millis();
-  if (t < StrobeSetupMarker + 1000 * STROBE_INITIAL_RUN) {
+  static bool testing = false;
+  if (self_test_sound) {
+      testing = true;
+      uint32_t t = millis();
+      // continue sound self-test for twice as long as the strobe self-test
+      if (t > StrobeSetupMarker + 2 * 1000 * self_test_sec)
+          self_test_sound = false;
+      if (t > StrobeSetupMarker + 3000 && t < StrobeSetupMarker + 6000)
+          // short test of the gear warning buzzer
+          intermittent_buzzer_loop(false);
+      else
+          intermittent_buzzer_loop(true);
       if ((t & 0x6F80) == 0x6F80 && SoundTimeMarker == 0) {
           static int8_t level = ALARM_LEVEL_LOW;
           ++level;
@@ -233,6 +340,13 @@ void Sound_loop(void)
               level = ALARM_LEVEL_LOW;
           Sound_Notify(level);
       }
+  } else {
+      if (testing) {
+          // first call since done self-test
+          testing = false;
+          red_LED(false);
+      }
+      intermittent_buzzer_loop(true);
   }
 }
 

@@ -26,6 +26,8 @@
 #include "BatteryHelper.h"
 #include "GDL90Helper.h"
 
+#include "SkyStrobe.h"
+
 #include "jquery_min_js.h"
 
 static uint32_t prev_rx_pkt_cnt = 0;
@@ -232,17 +234,59 @@ void handleSettings() {
 </select>\
 </td>\
 </tr>\
+<tr><th align=left>&nbsp;</th><td align=right>&nbsp;</td></tr>\
+<tr>\
+<th align=left>Buzzer-causing:</th><td align=right>&nbsp;</td></tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Switch 1</th>\
+<td align=right>\
+<select name='sw1'>\
+<option %s value='%d'>Absent</option>\
+<option %s value='%d'>Normally open</option>\
+<option %s value='%d'>Normally closed</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Switch 2</th>\
+<td align=right>\
+<select name='sw2'>\
+<option %s value='%d'>Absent</option>\
+<option %s value='%d'>Normally open</option>\
+<option %s value='%d'>Normally closed</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Switch Logic</th>\
+<td align=right>\
+<select name='swlogic'>\
+<option %s value='%d'>AND</option>\
+<option %s value='%d'>OR</option>\
+<option %s value='%d'>XOR</option>\
+</select>\
+</td>\
+</tr>\
 </table>\
 <p align=center><INPUT type='submit' value='Save and restart'></p>\
 </form>\
 </body>\
 </html>"),
   settings->server, settings->key,
-  (settings->bridge == BRIDGE_NONE           ? "selected" : ""), BRIDGE_NONE,
-  (settings->bridge == BRIDGE_SERIAL         ? "selected" : ""), BRIDGE_SERIAL,
-  (settings->bridge == BRIDGE_UDP            ? "selected" : ""), BRIDGE_UDP,
-  (settings->bridge == BRIDGE_BT_SPP         ? "selected" : ""), BRIDGE_BT_SPP,
-  (settings->bridge == BRIDGE_BT_LE          ? "selected" : ""), BRIDGE_BT_LE );
+  (settings->bridge == BRIDGE_NONE    ? "selected" : ""), BRIDGE_NONE,
+  (settings->bridge == BRIDGE_SERIAL  ? "selected" : ""), BRIDGE_SERIAL,
+  (settings->bridge == BRIDGE_UDP     ? "selected" : ""), BRIDGE_UDP,
+  (settings->bridge == BRIDGE_BT_SPP  ? "selected" : ""), BRIDGE_BT_SPP,
+  (settings->bridge == BRIDGE_BT_LE   ? "selected" : ""), BRIDGE_BT_LE,
+  (settings->sw1 == NO_SWITCH         ? "selected" : ""), NO_SWITCH,
+  (settings->sw1 == NORMALLY_OPEN     ? "selected" : ""), NORMALLY_OPEN,
+  (settings->sw1 == NORMALLY_CLOSED   ? "selected" : ""), NORMALLY_CLOSED,
+  (settings->sw2 == NO_SWITCH         ? "selected" : ""), NO_SWITCH,
+  (settings->sw2 == NORMALLY_OPEN     ? "selected" : ""), NORMALLY_OPEN,
+  (settings->sw2 == NORMALLY_CLOSED   ? "selected" : ""), NORMALLY_CLOSED,
+  (settings->swlogic == SWITCH_AND    ? "selected" : ""), SWITCH_AND,
+  (settings->swlogic == SWITCH_OR     ? "selected" : ""), SWITCH_OR,
+  (settings->swlogic == SWITCH_XOR    ? "selected" : ""), SWITCH_XOR );
 
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -417,6 +461,12 @@ void handleInput() {
       settings->strobe = server.arg(i).toInt();
     } else if (server.argName(i).equals("sound")) {
       settings->sound = server.arg(i).toInt();
+    } else if (server.argName(i).equals("sw1")) {
+      settings->sw1 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("sw2")) {
+      settings->sw2 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("swlogic")) {
+      settings->swlogic = server.arg(i).toInt();
     }
   }
 
@@ -442,22 +492,24 @@ PSTR("<html>\
 <tr><th align=left>Server</th><td align=right>%s</td></tr>\
 <tr><th align=left>Key</th><td align=right>%s</td></tr>\
 <tr><th align=left>Bridge</th><td align=right>%d</td></tr>\
+<tr><th align=left>Switch 1</th><td align=right>%d</td></tr>\
+<tr><th align=left>Switch 2</th><td align=right>%d</td></tr>\
+<tr><th align=left>Switch logic</th><td align=right>%d</td></tr>\
 </table>\
 <hr>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
   settings->strobe, settings->sound, settings->connection, settings->protocol,
-  settings->baudrate, settings->server, settings->key, settings->bridge );
+  settings->baudrate, settings->server, settings->key, settings->bridge,
+  settings->sw1, settings->sw2, settings->swlogic);
 
   SoC->swSer_enableRx(false);
   server.send ( 200, "text/html", Input_temp );
 //  SoC->swSer_enableRx(true);
   delay(1000);
   free(Input_temp);
-  EEPROM_store();
-  delay(1000);
-  ESP.restart();
+  when_to_reboot = millis() + 3000;
 }
 
 void handleNotFound() {

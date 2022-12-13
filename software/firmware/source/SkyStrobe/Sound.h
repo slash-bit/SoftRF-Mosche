@@ -30,6 +30,8 @@
 #define ALARM_TONE_MS_IMPORTANT 250
 #define ALARM_TONE_MS_URGENT    140
 
+#define BUZZ_PERIOD 224
+
 void Sound_setup(void);
 void Sound_Notify(int8_t);
 void Sound_loop(void);
@@ -41,5 +43,7 @@ void blue_LED(bool);
 void toggle_green_LED(void);
 void toggle_red_LED(void);
 void LED_notify(void);
+
+extern bool self_test_sound;
 
 #endif /* SOUNDHELPER_H */

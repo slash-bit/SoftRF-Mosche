@@ -35,6 +35,7 @@ static bool StrobeState = false;   /* true = lit */
 static int StrobeOnMS  = 0;        /* how long each flash */
 static int StrobeOffMS = 0;        /* how long between flashes */
 static int alarm_level = ALARM_LEVEL_NONE;
+bool self_test_strobe = true;
 
 void Strobe_setup(void)
 {
@@ -60,11 +61,13 @@ void Strobe_Start()
     if (StrobePin != SOC_UNUSED_PIN) {
 
         if (alarm_level >= ALARM_LEVEL_LOW) {
-          StrobeFlashes = STROBE_FLASHES_ALARM;
-          StrobeOnMS = STROBE_MS_ALARM;
+          StrobeFlashes = flashes_alarm;
+          StrobeOnMS = ms_alarm;
+          StrobeOffMS = gap_alarm;
         } else {
-          StrobeFlashes = STROBE_FLASHES_NOALARM;
-          StrobeOnMS = STROBE_MS_NOALARM;
+          StrobeFlashes = flashes_noalarm;
+          StrobeOnMS = ms_noalarm;
+          StrobeOffMS = gap_noalarm;
         }
 
         digitalWrite(StrobePin, HIGH);
@@ -83,9 +86,8 @@ void Strobe_Start()
         Serial.println(alarm_level);
     }
     if (settings->protocol == PROTOCOL_NMEA) {
-        char buf[16]; 
-        snprintf_P(buf, sizeof(buf), PSTR("$PSKSF,%d*"), alarm_level);
-        NMEA_Out(buf);
+        snprintf_P(NMEAbuf, sizeof(NMEAbuf)-4, PSTR("$PSKSF,%d*"), alarm_level);
+        NMEA_Out(NMEAbuf);
     }
 }
 
@@ -132,30 +134,32 @@ void Strobe_loop(void)
 
       /* currently flashing, complete the pattern */
 
-      uint32_t duration = (StrobeState ? StrobeOnMS : STROBE_MS_GAP);
+      uint32_t duration = (StrobeState ? StrobeOnMS : StrobeOffMS);
 
       if ((millis() - StrobeTimeMarker) > duration)
           Strobe_Continue();
 
   } else if (StrobePauseMarker != 0) {
 
-    /* not currently flashing, flash again after pause */
+      /* not currently flashing, flash again after pause */
 
-      bool self_test = (millis() - StrobeSetupMarker < 1000 * STROBE_INITIAL_RUN);
-      if (self_test)
+      if (self_test_strobe) {
+          if (millis() > StrobeSetupMarker + 1000 * self_test_sec)
+              self_test_strobe = false;
           alarm_level = ((millis() & 0x6000) == 0x6000) ? ALARM_LEVEL_LOW : ALARM_LEVEL_NONE;
-      else
+      } else {
           alarm_level = max_alarm_level;
+      }
       uint32_t pause_ms = 0;
-      if (self_test) {
-            pause_ms = alarm_level > ALARM_LEVEL_NONE ? STROBE_MS_PAUSE_ALARM : STROBE_MS_PAUSE_NOALARM;
+      if (self_test_strobe) {
+            pause_ms = alarm_level > ALARM_LEVEL_NONE ? pause_alarm : pause_noalarm;
       } else {
         if (alarm_level > ALARM_LEVEL_NONE) {
-            pause_ms = STROBE_MS_PAUSE_ALARM;
+            pause_ms = pause_alarm;
         } else if ((settings->strobe == STROBE_AIRBORNE && ThisAircraft.airborne)
                  || (settings->strobe == STROBE_AIRBORNE && (! hasGNSS()))
                  || settings->strobe == STROBE_ALWAYS) {
-            pause_ms = STROBE_MS_PAUSE_NOALARM;
+            pause_ms = pause_noalarm;
         }
       }
 

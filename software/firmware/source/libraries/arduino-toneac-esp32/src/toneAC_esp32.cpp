@@ -55,7 +55,7 @@ void toneAC_playNote(unsigned long frequency, uint8_t volume) {
 }
 
 void noToneAC() {
-  timerAlarmDisable(_tAC_timer);
+  timerAlarmDisable(_tAC_timer);    // this CRASHES if timer was not initialized
   mcpwm_stop(MCPWM_UNIT_0, MCPWM_TIMER_0);
 }
 

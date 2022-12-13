@@ -56,6 +56,8 @@ status_t NMEA_Status;
 
 static uint32_t NMEA_TimeMarker = 0;
 
+char NMEAbuf[128];
+
 static void NMEA_Parse_Character(char c)
 {
     static uint32_t old_id;
@@ -353,9 +355,9 @@ void NMEA_bridge_send(char *buf, int len)
 void NMEA_Out(char *buf)
 {
     int len = NMEA_add_checksum(buf);
-    if (settings->bridge != BRIDGE_SERIAL)
-        Serial.print(buf);         // otherwise sent via bridge_send()
-    NMEA_bridge_send(buf, len);    // even if no input received
+    if (settings->bridge != BRIDGE_SERIAL)   // otherwise sent via bridge_send()
+        Serial.print(buf);
+    NMEA_bridge_send(buf, len);              // although this is not mirrored input
 }
 
 void NMEA_bridge_buffer(char c)
@@ -375,6 +377,9 @@ void NMEA_bridge_buffer(char c)
     if (n == 0 && c != '$')
         return;
 
+    if (c == '$')
+        n = 0;
+
     buf[n++] = c;
 
     if (n < 5)
@@ -392,21 +397,59 @@ void NMEA_bridge_buffer(char c)
         n = 0;
 }
 
+void backdoor_write(const char *buf)
+{
+
+    if (settings->bridge == BRIDGE_BT_SPP
+     || settings->bridge == BRIDGE_BT_LE) {
+        if (SoC->Bluetooth) {
+//Serial.print("calling backdoor BT_write(): ");
+//Serial.print(buf);
+            SoC->Bluetooth->write((uint8_t *) buf, (size_t) strlen(buf));
+        }
+    } else if (settings->bridge == BRIDGE_SERIAL) {
+        Serial.print(buf);
+    }
+}
+
+void backdoor_buffer(char c)
+{
+    static char buf[128];
+    static int n = 0;
+
+    if (n == 0 && c != '$')
+        return;
+
+    if (c == '$')
+        n = 0;
+
+    if (c == '*') {
+        buf[n] = '\0';
+        backdoor(buf, n);   // in EEPROMHelper.cpp - interprets the command
+        n = 0;
+        return;
+    }
+
+    buf[n++] = c;
+
+    if (n >= 128)
+        n = 0;
+}
+
 void NMEA_loop()
 {
   size_t size;
 
 #if !defined(EXCLUDE_HEARTBEAT)
-  char buf[40];
   static uint32_t heartbeat = 0;
   if (heartbeat == 0)
       heartbeat = millis();
   if (millis() > heartbeat + 4900) {
-      snprintf_P(buf, sizeof(buf)-4,     // leave room for checksum
+      snprintf_P(NMEAbuf, sizeof(NMEAbuf)-4,     // leave room for checksum
               PSTR("$PSKSH,%06X,v%s,%d,%d,%d,%d*"),
               SoC->getChipId() & 0xFFFFFF, SKYSTROBE_FIRMWARE_VERSION,
               settings->strobe, settings->sound, settings->connection, settings->bridge);
-      NMEA_Out(buf);
+      NMEA_Out(NMEAbuf);
       heartbeat = millis();
   }
 #endif
@@ -465,6 +508,22 @@ void NMEA_loop()
   case CON_NONE:
   default:
     break;
+  }
+
+  /* the backdoor input channel */
+  if (settings->bridge == BRIDGE_BT_SPP
+   || settings->bridge == BRIDGE_BT_LE) {
+      if (SoC->Bluetooth) {
+        while (SoC->Bluetooth->available() > 0) {
+          char c = SoC->Bluetooth->read();
+          backdoor_buffer(c);
+        }
+      }
+  } else if (settings->bridge == BRIDGE_SERIAL) {
+      while (Serial.available() > 0) {
+          char c = Serial.read();
+          backdoor_buffer(c);
+      }
   }
 }
 

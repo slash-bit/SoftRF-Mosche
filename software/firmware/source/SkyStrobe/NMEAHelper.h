@@ -129,7 +129,10 @@ bool NMEA_hasFLARM(void);
 
 void NMEA_Out(char *);
 
+void backdoor_write(const char *);
+
 extern status_t NMEA_Status;
 extern TinyGPSPlus nmea;
+extern char NMEAbuf[128];
 
 #endif /* NMEAHELPER_H */

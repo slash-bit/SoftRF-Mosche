@@ -40,6 +40,25 @@
 #define BLUELEDPIN  SOC_UNUSED_PIN
 #endif
 
+#if !defined(SOC_GPIO_PIN_SWITCH1)
+#define SOC_GPIO_PIN_SWITCH1   SOC_UNUSED_PIN
+#endif
+#if !defined(SOC_GPIO_PIN_SWITCH2)
+#define SOC_GPIO_PIN_SWITCH2   SOC_UNUSED_PIN
+#endif
+
+#if defined(SOC_GPIO_PIN_SWITCH1)
+#define SWITCH1_PIN SOC_GPIO_PIN_SWITCH1
+#else
+#define SWITCH1_PIN SOC_UNUSED_PIN
+#endif
+
+#if defined(SOC_GPIO_PIN_SWITCH2)
+#define SWITCH2_PIN SOC_GPIO_PIN_SWITCH2
+#else
+#define SWITCH2_PIN SOC_UNUSED_PIN
+#endif
+
 typedef struct SoC_ops_struct {
   uint8_t id;
   const char name[16];

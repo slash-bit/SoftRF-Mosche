@@ -27,15 +27,17 @@
 /* alarm pattern: triple flash every 750 ms, duty cycle 20% */
 #define STROBE_FLASHES_ALARM       3
 #define STROBE_MS_ALARM           50
+#define STROBE_PERIOD_ALARM      750
 #define STROBE_MS_PAUSE_ALARM  (750-STROBE_FLASHES_ALARM*(STROBE_MS_ALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
 /* no-alarm pattern: double flash every 2400 ms, duty cycle 5% */
 #define STROBE_FLASHES_NOALARM     3
 #define STROBE_MS_NOALARM         40
+#define STROBE_PERIOD_NOALARM   2400
 #define STROBE_MS_PAUSE_NOALARM (2400-STROBE_FLASHES_NOALARM*(STROBE_MS_NOALARM+STROBE_MS_GAP)+STROBE_MS_GAP)
 
-/* even if not airborne, flash the strobe for the first 2 minutes as a test */
-#define STROBE_INITIAL_RUN       110
+/* even if not airborne, demo strobe and sound for the first 2 minutes as a test */
+#define STROBE_INITIAL_RUN        60
 
 void Strobe_setup(void);
 void Strobe_loop(void);
@@ -44,5 +46,6 @@ void Strobe_fini(void);
 bool hasGNSS(void);
 
 extern uint32_t StrobeSetupMarker;
+extern bool self_test_strobe;
 
 #endif /* STROBEHELPER_H */
