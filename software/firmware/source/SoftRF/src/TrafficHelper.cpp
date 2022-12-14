@@ -29,6 +29,7 @@
 #include "protocol/data/NMEA.h"
 #include "ApproxMath.h"
 #include "Wind.h"
+#include "../SoftRF.h"
 
 unsigned long UpdateTrafficTimeMarker = 0;
 
@@ -473,7 +474,9 @@ void Traffic_Update(ufo_t *fop)
   fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(adj_alt_diff);
 
   /* follow FLARM docs: do not issue alarms about non-airborne traffic */
-  if (fop->protocol == RF_PROTOCOL_LEGACY && fop->airborne == 0) {
+  /* - except in the first minute, for testing */
+  if ((fop->protocol == RF_PROTOCOL_LEGACY && fop->airborne == 0)
+       && (millis() - SetupTimeMarker > 60000)) {
     fop->alarm_level = ALARM_LEVEL_NONE;
     return;
   }

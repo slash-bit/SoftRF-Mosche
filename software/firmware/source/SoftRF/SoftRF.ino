@@ -121,9 +121,10 @@ hardware_info_t hw_info = {
   .imu      = IMU_NONE
 };
 
-unsigned long LEDTimeMarker = 0;
-unsigned long ExportTimeMarker = 0;
-unsigned long GNSSTimeMarker = 0;
+uint32_t LEDTimeMarker = 0;
+uint32_t ExportTimeMarker = 0;
+uint32_t GNSSTimeMarker = 0;
+uint32_t SetupTimeMarker = 0;
 
 void setup()
 {
@@ -277,6 +278,8 @@ Serial.println("calling Sound_setup()");
 //Serial.print(hw_info.model);
 //Serial.print(", revision=");
 //Serial.println(hw_info.revision);
+
+  SetupTimeMarker = millis();
 }
 
 void loop()
@@ -359,56 +362,42 @@ void loop()
   yield();
 }
 
-void reboot()
+void shutparts()
 {
 #if !defined(SERIAL_FLUSH)
 #define SERIAL_FLUSH()       Serial.flush()
 #endif
   SERIAL_FLUSH();
   SoC->swSer_enableRx(false);
-//  SoC->swSer_enableRx(true);
+  if (SoC->Bluetooth_ops)
+     SoC->Bluetooth_ops->fini();
   Sound_fini();
   Strobe_fini();
   RF_Shutdown();
+  SoC->WDT_fini();
+  NMEA_fini();
+  Web_fini();
+  if (SoC->USB_ops)
+     SoC->USB_ops->fini();
+  WiFi_fini();
+  if (settings->mode != SOFTRF_MODE_UAV)
+    GNSS_fini();
   delay(1000);
-  SoC->reset();
 }
 
 void shutdown(int reason)
 {
 //Serial.println("shutdown()...");
-
-  SoC->WDT_fini();
-
-  SoC->swSer_enableRx(false);
-
-  Sound_fini();
-  Strobe_fini();
-  NMEA_fini();
-  Web_fini();
-
-  if (SoC->Bluetooth_ops) {
-     SoC->Bluetooth_ops->fini();
-  }
-
-  if (SoC->USB_ops) {
-     SoC->USB_ops->fini();
-  }
-
-  WiFi_fini();
-
-  if (settings->mode != SOFTRF_MODE_UAV) {
-    GNSS_fini();
-  }
-
-//Serial.println("calling Display_fini()");
+  shutparts();
   SoC->Display_fini(reason);
-
-  RF_Shutdown();
-
   SoC->Button_fini();
-
   SoC_fini(reason);
+}
+
+void reboot()
+{
+  shutparts();
+  SoC->reset();
 }
 
 
@@ -418,6 +407,8 @@ static uint32_t lastsuccess = 0;
 
 void normal()
 {
+  static bool firstfix = true;
+
   bool success;
 
   Baro_loop();
@@ -434,8 +425,14 @@ void normal()
   static uint32_t nextprev_ms = 0;
 
   bool validfix = isValidFix();
-  
+
   if (validfix) {
+
+    if (firstfix) {
+        firstfix = false;
+        SetupTimeMarker = millis();
+        /* start a minute of non-airborne collision warnings */
+    }
 
     /* also store a more precise GPS time stamp (millisecond resolution):  */
     /* - alas gnss.time returns whole seconds not centiseconds as promised */

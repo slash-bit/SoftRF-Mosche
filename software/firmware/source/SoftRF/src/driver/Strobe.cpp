@@ -139,10 +139,10 @@ void Strobe_loop(void)
     /* not currently flashing, flash again after pause */
 
       bool self_test = (millis() - StrobeSetupMarker < 1000 * STROBE_INITIAL_RUN);
-      if (self_test)
-          alarm_level = ((millis() & 0x6000) == 0x6000) ? ALARM_LEVEL_LOW : ALARM_LEVEL_NONE;
-      else
-          alarm_level = max_alarm_level;
+//      if (self_test)
+//          alarm_level = ((millis() & 0x6000) == 0x6000) ? ALARM_LEVEL_LOW : ALARM_LEVEL_NONE;
+//      else
+            alarm_level = max_alarm_level;
       uint32_t pause_ms = 0;
       if (self_test) {
             pause_ms = alarm_level > ALARM_LEVEL_CLOSE ? STROBE_MS_PAUSE_ALARM : STROBE_MS_PAUSE_NOALARM;

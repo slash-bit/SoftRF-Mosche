@@ -35,11 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-//one of the following two must be #defined:  (not used any more)
-//#define DEFAULT_REGION_EU
-//#define DEFAULT_REGION_US
-
-#define SOFTRF_FIRMWARE_VERSION "MB09f"
+#define SOFTRF_FIRMWARE_VERSION "MB09h"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -314,11 +310,11 @@ static inline uint32_t DevID_Mapper(uint32_t id)
 extern ufo_t ThisAircraft;
 extern hardware_info_t hw_info;
 extern const float txrx_test_positions[90][2] PROGMEM;
+extern uint32_t SetupTimeMarker; 
+extern uint32_t GNSSTimeMarker;
 
-extern unsigned long GNSSTimeMarker;
-
-extern void reboot(void);
-extern void shutdown(int);
+void reboot(void);
+void shutdown(int);
 
 #define TXRX_TEST_NUM_POSITIONS (sizeof(txrx_test_positions) / sizeof(float) / 2)
 #define TXRX_TEST_ALTITUDE    438.0

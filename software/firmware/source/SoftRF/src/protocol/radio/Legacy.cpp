@@ -251,7 +251,6 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
         fop->addr, fop->gnsstime_ms,
         bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
-        // fop->airborne, vs10, pkt->_unk2);   // this line compiled in MB08e only (with %d,%d,%d added).
       NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 #endif
     }
@@ -296,7 +295,11 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 //    if (this_aircraft->prevtime_ms != 0) {
       /* Compute NS & EW speed components for future time points. */
       project_this(this_aircraft);       /* which also calls airborne() */
-      pkt->airborne = this_aircraft->airborne;
+      if (millis() - SetupTimeMarker < 60000) {
+          pkt->airborne = 1;    /* post-boot testing */
+      } else {
+          pkt->airborne = this_aircraft->airborne;
+      }
       for (int i=0; i<4; i++) {
          pkt->ns[i] = (int8_t) (this_aircraft->fla_ns[i] >> smult);
          pkt->ew[i] = (int8_t) (this_aircraft->fla_ew[i] >> smult);

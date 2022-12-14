@@ -278,7 +278,6 @@ void NMEA_loop()
                altitude, isValidGNSSFix() ? '3' : '1'); /* feet , 3D fix */
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-
     NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_LK8EX1)
@@ -292,7 +291,6 @@ void NMEA_loop()
             str_Vcc);
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-
     NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #endif /* EXCLUDE_LK8EX1 */
@@ -544,7 +542,6 @@ void NMEA_Export()
                       PFLAA_EXT1_ARGS );
 
               NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-
               NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
               /* Most close traffic is treated as highest priority target */
@@ -592,7 +589,6 @@ void NMEA_Export()
       }
 
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-
       NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
@@ -602,7 +598,6 @@ void NMEA_Export()
               rx_packets_counter,tx_packets_counter,(int)(voltage*100));
 
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-
       NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
     }
@@ -756,18 +751,25 @@ void NMEA_GGA()
 //#define SERIAL_FLUSH()       Serial.flush()
 //#endif
 
-uint8_t C_NMEA_Source;
+uint8_t NMEA_Source;
+
+void nmea_cfg_send()
+{
+    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+#if !defined(USE_NMEA_CFG)
+    uint8_t dest = settings->nmea_out;
+#else
+    uint8_t dest = NMEA_Source;
+#endif /* USE_NMEA_CFG */
+    NMEA_Out(dest, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+}
 
 static void nmea_cfg_restart()
 {
   Serial.println();
   Serial.println(F("Restart is in progress. Please, wait..."));
   Serial.println();
-//  SERIAL_FLUSH();
   reboot();
-//  Sound_fini();
-//  RF_Shutdown();
-//  SoC->reset();
 }
 
 void NMEA_Process_SRF_SKV_Sentences()
@@ -779,9 +781,8 @@ void NMEA_Process_SRF_SKV_Sentences()
         } else if (strncmp(C_Version.value(), "OFF", 3) == 0) {
           shutdown(SOFTRF_SHUTDOWN_NMEA);
         } else if (strncmp(C_Version.value(), "?", 1) == 0) {
-          char psrfc_buf[MAX_PSRFC_LEN];
 
-          snprintf_P(psrfc_buf, sizeof(psrfc_buf),
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PSRFC,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
               PSRFC_VERSION,        settings->mode,     settings->rf_protocol,
               settings->band,       settings->aircraft_type, settings->alarm,
@@ -791,15 +792,7 @@ void NMEA_Process_SRF_SKV_Sentences()
               settings->d1090,      settings->stealth,  settings->no_track,
               settings->power_save );
 
-          NMEA_add_checksum(psrfc_buf, sizeof(psrfc_buf) - strlen(psrfc_buf));
-
-#if !defined(USE_NMEA_CFG)
-          uint8_t dest = settings->nmea_out;
-#else
-          uint8_t dest = C_NMEA_Source;
-#endif /* USE_NMEA_CFG */
-
-          NMEA_Out(dest, (byte *) psrfc_buf, strlen(psrfc_buf), false);
+          nmea_cfg_send();
 
         } else if (atoi(C_Version.value()) == PSRFC_VERSION) {
           bool cfg_is_updated = false;
@@ -925,15 +918,15 @@ void NMEA_Process_SRF_SKV_Sentences()
       if (D_Version.isUpdated()) {
         if (strncmp(D_Version.value(), "?", 1) == 0) {
           char psrfd_buf[MAX_PSRFD_LEN];
-          snprintf_P(psrfd_buf, sizeof(psrfd_buf),
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d*"),
               PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
               settings->ignore_id,      settings->follow_id,  settings->baud_rate,
               settings->power_external, settings->nmea_d,     settings->debug_flags,
               settings->nmea_out2,      settings->nmea2_g,    settings->nmea2_p,
               settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d);
-          NMEA_add_checksum(psrfd_buf, sizeof(psrfd_buf) - strlen(psrfd_buf));
-          NMEA_Out(C_NMEA_Source, (byte *) psrfd_buf, strlen(psrfd_buf), false);
+
+          nmea_cfg_send();
 
         } else if (atoi(D_Version.value()) == PSRFD_VERSION) {
           bool cfg_is_updated = false;
@@ -1040,16 +1033,17 @@ void NMEA_Process_SRF_SKV_Sentences()
 #if defined(USE_OGN_ENCRYPTION)
       if (S_Version.isUpdated()) {
         if (strncmp(S_Version.value(), "?", 1) == 0) {
-          char psrfs_buf[MAX_PSRFS_LEN];
 
-          snprintf_P(psrfs_buf, sizeof(psrfs_buf),
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PSRFS,%d,%08X%08X%08X%08X*"),
-              PSRFS_VERSION, settings->igc_key[0], settings->igc_key[1],
-                             settings->igc_key[2], settings->igc_key[3]);
+              PSRFS_VERSION,
+              settings->igc_key[0]? 0x88888888 : 0,
+              settings->igc_key[1]? 0x88888888 : 0,
+              settings->igc_key[2]? 0x88888888 : 0,
+              settings->igc_key[3]? 0x88888888 : 0);
+              /* mask the key from prying eyes */
 
-          NMEA_add_checksum(psrfs_buf, sizeof(psrfs_buf) - strlen(psrfs_buf));
-
-          NMEA_Out(C_NMEA_Source, (byte *) psrfs_buf, strlen(psrfs_buf), false);
+          nmea_cfg_send();
 
         } else if (atoi(S_Version.value()) == PSRFS_VERSION) {
           bool cfg_is_updated = false;
@@ -1089,9 +1083,8 @@ void NMEA_Process_SRF_SKV_Sentences()
 #if defined(USE_SKYVIEW_CFG)
       if (V_Version.isUpdated()) {
         if (strncmp(V_Version.value(), "?", 1) == 0) {
-          char pskvc_buf[MAX_PSKVC_LEN];
 
-          snprintf_P(pskvc_buf, sizeof(pskvc_buf),
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PSKVC,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%X*"),
               PSKVC_VERSION,  ui->adapter,      ui->connection,
               ui->units,      ui->zoom,         ui->protocol,
@@ -1101,9 +1094,7 @@ void NMEA_Process_SRF_SKV_Sentences()
               ui->aghost,     ui->filter,       ui->power_save,
               ui->team);
 
-          NMEA_add_checksum(pskvc_buf, sizeof(pskvc_buf) - strlen(pskvc_buf));
-
-          NMEA_Out(C_NMEA_Source, (byte *) pskvc_buf, strlen(pskvc_buf), false);
+          nmea_cfg_send();
 
         } else if (atoi(V_Version.value()) == PSKVC_VERSION) {
           bool cfg_is_updated = false;

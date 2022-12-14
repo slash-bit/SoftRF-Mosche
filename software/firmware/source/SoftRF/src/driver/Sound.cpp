@@ -153,6 +153,7 @@ void Sound_loop(void)
     return;
   }
 
+#if 0
   /* strobe does a self test, do something similar with sound */
   uint32_t t = millis();
   if (t < StrobeSetupMarker + 1000 * STROBE_INITIAL_RUN) {
@@ -164,6 +165,7 @@ void Sound_loop(void)
           Sound_Notify(level);
       }
   }
+#endif
 }
 
 void Sound_fini(void)

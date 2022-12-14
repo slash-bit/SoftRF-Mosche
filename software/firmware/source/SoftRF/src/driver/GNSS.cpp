@@ -1116,7 +1116,7 @@ byte GNSS_setup() {
   }
 
 #if defined(USE_NMEA_CFG)
-  C_NMEA_Source = settings->nmea_out;
+  NMEA_Source = settings->nmea_out;
 #endif /* USE_NMEA_CFG */
 
   return (byte) gnss_id;
@@ -1228,13 +1228,13 @@ void PickGNSSFix()
     if (SoC->Bluetooth_ops && SoC->Bluetooth_ops->available() > 0) {
       c = SoC->Bluetooth_ops->read();
 
-      C_NMEA_Source = NMEA_BLUETOOTH;
+      NMEA_Source = NMEA_BLUETOOTH;
 
     /* USB input is second */
     } else if (SoC->USB_ops && SoC->USB_ops->available() > 0) {
       c = SoC->USB_ops->read();
 
-      C_NMEA_Source = NMEA_USB;
+      NMEA_Source = NMEA_USB;
 
 #if defined(ARDUINO_NUCLEO_L073RZ)
       /* This makes possible to configure S76x's built-in SONY GNSS from aside */
@@ -1247,7 +1247,7 @@ void PickGNSSFix()
     } else if (SerialOutput.available() > 0) {
       c = SerialOutput.read();
 
-      C_NMEA_Source = NMEA_UART;
+      NMEA_Source = NMEA_UART;
 
 #if 0
       /* This makes possible to configure HTCC-AB02S built-in GOKE GNSS from aside */

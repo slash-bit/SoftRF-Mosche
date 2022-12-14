@@ -774,23 +774,27 @@ void handleSettings() {
     size -= len;
   }
 
-  snprintf_P ( offset, size,
-    PSTR("\
+  if (settings->nmea_d || settings->nmea2_d) {
+    snprintf_P ( offset, size,
+      PSTR("\
 <tr>\
 <th align=left>Debug flags (2 HEX digits)</th>\
 <td align=right>\
 <INPUT type='text' name='debug_flags' maxlength='2' size='2' value='%02X'>\
 </td>\
 </tr>"),
-  settings->debug_flags);
+    settings->debug_flags);
 
-  len = strlen(offset);
-  offset += len;
-  size -= len;
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+  }
+  // else start with all debug message types enabled by default
 
 #if defined(USE_OGN_ENCRYPTION)
-  snprintf_P ( offset, size,
-    PSTR("\
+  if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+    snprintf_P ( offset, size,
+      PSTR("\
 <tr>\
 <th align=left>IGC key (HEX)</th>\
 <td align=right>\
@@ -798,15 +802,16 @@ void handleSettings() {
 </td>\
 </tr>"),
   // settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]);
-  settings->igc_key[0]? 0x88888888 : settings->igc_key[0],
-  settings->igc_key[1]? 0x88888888 : settings->igc_key[1],
-  settings->igc_key[2]? 0x88888888 : settings->igc_key[2],
-  settings->igc_key[3]? 0x88888888 : settings->igc_key[3]);
-     /* mask the key from prying eyes */
+    settings->igc_key[0]? 0x88888888 : 0,
+    settings->igc_key[1]? 0x88888888 : 0,
+    settings->igc_key[2]? 0x88888888 : 0,
+    settings->igc_key[3]? 0x88888888 : 0);
+       /* mask the key from prying eyes */
 
-  len = strlen(offset);
-  offset += len;
-  size -= len;
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+  }
 #endif
 
   /* Common part 7 */
@@ -1181,7 +1186,6 @@ Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
   SoC->WDT_fini();
   if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
   EEPROM_store();
-  // delay(1000);
   reboot();
 }
 
