@@ -35,6 +35,10 @@ eeprom_t eeprom_block;
 settings_t *settings;
 
 /* variables copied from settings */
+
+uint8_t temp_connection;
+uint8_t temp_bridge;
+
 uint16_t  gap_alarm;
 uint16_t  flashes_alarm;
 uint16_t  ms_alarm;
@@ -176,6 +180,7 @@ void EEPROM_defaults()
 
   settings->connection  = CON_SERIAL;
   settings->bridge      = BRIDGE_NONE;
+
   settings->baudrate    = B38400;
   settings->protocol    = PROTOCOL_NMEA;
 
@@ -222,16 +227,20 @@ void EEPROM_setup()
 
     } else {
       read_settings();
-
     }
   }
-}
 
-uint8_t temp_connection;
-uint8_t temp_bridge;
+  temp_connection = settings->connection;
+  temp_bridge = settings->bridge;
+}
 
 void EEPROM_store()
 {
+  /* only do this now, to prevent BT crash in preceding seconds */
+  /* - assumes system will be made to reboot right after this */
+  settings->connection = temp_connection;
+  settings->bridge     = temp_bridge;
+
   for (int i=0; i<sizeof(eeprom_t); i++) {
     EEPROM.write(i, eeprom_block.raw[i]);  
   }
@@ -366,19 +375,21 @@ bool notcmd(char *label, const char *trial,
 
 void backdoor(char *sentence, int len)
 {
-    if (len < 6) {
+    /*if (len < 6) {
         invalid();
         return;
     }
     sentence[6] = '\0';
     strupr(sentence);   // excludes the value
 
-    if (sentence[1] != 'B' || sentence[2] != 'D') {
+     if (sentence[1] != 'B' || sentence[2] != 'D') {
         invalid();
         return;
-    }
+    } */        // already done that in callback_buffer() in NMEAHelper
 
-    char *label = &sentence[3];
+    char *label = &sentence[3];   // skips "$BD"
+    label[3] = '\0';
+    strupr(label);
 
     char *value = NULL;
     if (len > 7) {

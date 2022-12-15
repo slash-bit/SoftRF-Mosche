@@ -2,8 +2,8 @@ SkyStrobe documentation
 =======================
 
 By Moshe Braner
-This version last updated December 12, 2022
-To fit SkyStrobe version 02.
+This version last updated December 15, 2022
+To fit SkyStrobe version 02b.
 
 
 WHAT IS SKYSTROBE
@@ -81,7 +81,7 @@ Here are the settings available in the current version:
 
 * Source Id: this is the network name (SSID), and password, if connecting via WiFi.  If using Bluetooth, this is the Bluetooth ID of the device sending the data - same as the SSID, in the case of SoftRF.  (You can leave the password in place when using Bluetooth.)
 
-* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their sharing the same hardware in the ESP32.  The difference between bridge settings "none" and "serial" is that with "none" some informational messages are sent to the serial and USB ports interleaved with the NMEA sentences.  With "serial" only NMEA sentences appear, although they include Skystrobe's special sentences announcing flashing of the strobe and the output of sound (buzzer) notifications.
+* Data bridge: wireless inputs always get mirrored to the serial output (as well as USB).  Serial input can be mirrored to a wireless output if called for in this setting.  Bridging between WiFi and Bluetooth is not possible, due to their sharing the same hardware in the ESP32.  Bridging between serial and Bluetooth is bidirectional.  Bridging between serial and UDP is one-way.  The difference between bridge settings "none" and "serial" is that with "none" some informational messages are sent to the serial and USB ports interleaved with the NMEA sentences.  With "serial" only NMEA sentences appear, although they include Skystrobe's special sentences announcing flashing of the strobe and the output of sound (buzzer) notifications.
 
 * For the "gear warning" Switch 1 and Switch 2: each can be selected as absent, normally-open, or normally-closed.  And the logic of the warning can be AND (if both switches are NOT in their normal position then an alarm sounds), OR (either switch can trigger the alarm), or XOR - exclusive OR (alarm is triggered by either switch by itself, but not both at the same time).  An absent switch is considered to be a phantom switch in normal position, so choose "OR" logic to make one switch operate the alarm.  Leave each switch setting as "absent" unless a pull-up resistor is in place.
 

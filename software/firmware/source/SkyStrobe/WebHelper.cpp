@@ -444,12 +444,10 @@ void handleInput() {
     return;
   }
 
-  temp_connection = settings->connection;
-  temp_bridge     = settings->bridge;
-
   for ( uint8_t i = 0; i < server.args(); i++ ) {
     if (server.argName(i).equals("connection")) {
       temp_connection = server.arg(i).toInt();
+      // postpone the actual change in settings until just before rebooting
     } else if (server.argName(i).equals("bridge")) {
       temp_bridge = server.arg(i).toInt();
     } else if (server.argName(i).equals("protocol")) {

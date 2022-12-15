@@ -1,6 +1,11 @@
 # Release notes
 
 
+### revision MB02c
+
+Data bridge between serial and Bluetooth is now bidirectional.
+
+
 ### revision MB02a
 
 Added gear-warning buzzer control logic.

@@ -192,7 +192,6 @@ void Sound_Done()
 void Sound_setup(void)
 {
   toneAC_setup(SOC_GPIO_PIN_BUZZER, SOC_GPIO_PIN_BUZZER2);
-//  toneAC_setup(255, 255);
 
   if (SOC_GPIO_PIN_DCBUZZ != SOC_UNUSED_PIN) {
     pinMode(SOC_GPIO_PIN_DCBUZZ, OUTPUT);

@@ -397,14 +397,14 @@ void NMEA_bridge_buffer(char c)
         n = 0;
 }
 
+/* write responses to the same destination as the data bridge */
+/*   - i.e., responding to backdoor messages */
 void backdoor_write(const char *buf)
 {
 
     if (settings->bridge == BRIDGE_BT_SPP
      || settings->bridge == BRIDGE_BT_LE) {
         if (SoC->Bluetooth) {
-//Serial.print("calling backdoor BT_write(): ");
-//Serial.print(buf);
             SoC->Bluetooth->write((uint8_t *) buf, (size_t) strlen(buf));
         }
     } else if (settings->bridge == BRIDGE_SERIAL) {
@@ -412,10 +412,30 @@ void backdoor_write(const char *buf)
     }
 }
 
-void backdoor_buffer(char c)
+/* copy messages from the bridge device to the data input device */
+/* - e.g., from XCsoar (bridge destination) to FLARM (data source) */
+// should find out whether possible to *reply* to UDP, also should implement TCP
+void frontdoor_write(const char *buf, int len)
 {
-    static char buf[128];
+
+    if (settings->connection == CON_BLUETOOTH_SPP
+     || settings->connection == CON_BLUETOOTH_LE) {
+        if (SoC->Bluetooth) {
+            SoC->Bluetooth->write((uint8_t *) buf, (size_t) len);
+        }
+    } else if (settings->connection == CON_SERIAL) {
+        Serial.print(buf);
+    }
+}
+
+/* handle input back from the bridge destination */
+void callback_buffer(char c)
+{
+    static char buf[128+3];
     static int n = 0;
+
+    if (c=='\r' || c=='\n')
+        return;
 
     if (n == 0 && c != '$')
         return;
@@ -423,7 +443,9 @@ void backdoor_buffer(char c)
     if (c == '$')
         n = 0;
 
-    if (c == '*') {
+    if (c == '*' && n > 5
+     && (buf[1]=='B' || buf[1]=='b')
+     && (buf[2]=='D' || buf[2]=='d')) {
         buf[n] = '\0';
         backdoor(buf, n);   // in EEPROMHelper.cpp - interprets the command
         n = 0;
@@ -431,6 +453,17 @@ void backdoor_buffer(char c)
     }
 
     buf[n++] = c;
+
+    if (n < 5)
+        return;
+
+    if (buf[n-3] == '*') {
+        buf[n++] = '\r';
+        buf[n++] = '\n';
+        buf[n]   = '\0';
+        frontdoor_write(buf,n);  /* bidirectional bridge */
+        n = 0;
+    }
 
     if (n >= 128)
         n = 0;
@@ -516,13 +549,13 @@ void NMEA_loop()
       if (SoC->Bluetooth) {
         while (SoC->Bluetooth->available() > 0) {
           char c = SoC->Bluetooth->read();
-          backdoor_buffer(c);
+          callback_buffer(c);
         }
       }
   } else if (settings->bridge == BRIDGE_SERIAL) {
       while (Serial.available() > 0) {
           char c = Serial.read();
-          backdoor_buffer(c);
+          callback_buffer(c);
       }
   }
 }
