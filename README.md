@@ -3,14 +3,6 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ## Features of this fork:
 
-Latest additions:
-
-* Very new: Modified version of SkyView
-* Very new: SkyStrobe - a controller for a visibility strobe (and more)
-* Very new: louder buzzer via 2-pin differential drive, or external
-* New: Includes strobe-control logic within SoftRF
-* New: Can adjust SoftRF settings within T-Echo (without an app)
-
 Beyond Lyusupov's version 1.0:
 
 * Collision prediction for circling aircraft
@@ -21,7 +13,15 @@ Beyond Lyusupov's version 1.0:
 * Estimates wind while circling, uses for collision prediction
 * Corrected frequency hopping and time slots
 
-Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.  [Binary for SkyView](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView).  [Binary for SkyStrobe](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyStrobe).
+Latest additions:
+
+* Louder buzzer via 2-pin differential drive, or external
+* Includes strobe-control logic within SoftRF
+* Can adjust SoftRF settings within T-Echo (without an app)
+* Modified version of [SkyView](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView)
+* [SkyStrobe](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyStrobe) - a controller for a visibility strobe (and more)
+
+Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
 <br>
 <br>
 New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).

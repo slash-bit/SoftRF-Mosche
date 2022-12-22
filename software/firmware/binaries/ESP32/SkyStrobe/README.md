@@ -3,6 +3,11 @@
 
 ### revision MB02c
 
+Corrected handling of this aircraft's time stamp, affects sound notifications.
+
+
+### revision MB02b
+
 Data bridge between serial and Bluetooth is now bidirectional.
 
 

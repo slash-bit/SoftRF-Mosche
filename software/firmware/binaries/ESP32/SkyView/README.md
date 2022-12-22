@@ -1,12 +1,27 @@
 # Release notes
 
+
+## revision MB03
+
+### Major improvements
+
+Corrected handling of this aircraft's time stamp, which affects voice notifications.
+
+
+## revision MB02
+
+### Major improvements
+
+Corrected Bluetooth code, based on SoftRF v1.2, now works.
+
+
 ## revision MB01b
 
 ### Major improvements
 
 #### ESP32
 
-This version, by Moshe Braner, Dec. 5, 2022
+This version, by Moshe Braner, Dec. 22, 2022
 
 Skyview gives voice notifications about nearby traffic.  The original version behaves as follows: as soon as another aircraft (with a compatible device transmitting) gets closer than 10 km from this aircraft, a voice notification announces it's relative position (bearing, distance and altitude).  After that, no further notifications are given about the same aircraft, unless it travels out of range and later comes back.
 

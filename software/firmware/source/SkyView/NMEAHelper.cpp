@@ -73,6 +73,10 @@ static void NMEA_Parse_Character(char c)
       if (nmea.speed.isUpdated()) {
         ThisAircraft.GroundSpeed = nmea.speed.knots();
       }
+      if (nmea.time.isUpdated()) {
+        ThisAircraft.timestamp = now();
+      }
+
       if (T_ID.isUpdated()) {
         fo = EmptyFO;
 

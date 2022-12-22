@@ -73,7 +73,7 @@ void Traffic_Add()
         return;
       }
 
-      if (now() - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+      if (ThisAircraft.timestamp > Container[i].timestamp + ENTRY_EXPIRATION_TIME) {
         Container[i] = fo;            // overwrite expired
         return;
       }
@@ -157,7 +157,7 @@ static void Traffic_Sound()
   for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].ID) {
 
-       if ((now() - Container[i].timestamp) <= SOUND_EXPIRATION_TIME) {
+       if ((ThisAircraft.timestamp <= Container[i].timestamp + SOUND_EXPIRATION_TIME)) {
 
          /* find the maximum alarm level, whether to be alerted or not */
          if (Container[i].alarm_level > max_alarm_level) {
@@ -205,9 +205,9 @@ void Traffic_loop()
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       traffic_t *fop = &Container[i];
       if (fop->ID) {
-        if ((ThisAircraft.timestamp - fop->timestamp) > ENTRY_EXPIRATION_TIME) {    // 5s
+        if (ThisAircraft.timestamp > fop->timestamp + ENTRY_EXPIRATION_TIME) {    // 5s
             *fop = EmptyFO;
-        } else if ((ThisAircraft.timestamp - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL) {  // 2s
+        } else if (ThisAircraft.timestamp >= fop->timestamp + TRAFFIC_VECTOR_UPDATE_INTERVAL) {  // 2s
             Traffic_Update(fop);
         }
       }
@@ -225,7 +225,8 @@ void Traffic_loop()
 void Traffic_ClearExpired()
 {
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-    if (Container[i].ID && (now() - Container[i].timestamp) > ENTRY_EXPIRATION_TIME) {
+    if (Container[i].ID &&
+        (ThisAircraft.timestamp > Container[i].timestamp + ENTRY_EXPIRATION_TIME)) {
       Container[i] = EmptyFO;
     }
   }

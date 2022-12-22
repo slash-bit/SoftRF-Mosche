@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated December 13, 2022
+This version last updated December 17, 2022
 to fit software version MB09h based on v1.0 with some parts of v1.2
 
 
@@ -78,7 +78,7 @@ Often T-Beams are sold with a small "OLED" display that one needs to solder to t
 One needs to arrange a case for the T-Beam board.  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  It is easiest to use a 3D-printed case.  There are many designs available online as STL files for that purpose.  Some of these files make a case that is too small, hard to use, or won't fit a gopro mount.  One modified 3D model is available here:
 https://drive.google.com/drive/folders/1hdEJ-nRVz4D_sYihwv1Re2S-p8_nsYaM?usp=sharing
 which is a bit larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
-Or you can find a slightly deeper case here: https://www.dropbox.com/sh/iav5bai4vxluv5s/AADZT4aboAOxVr0VuBjDEtAAa?dl=0 that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case from treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  But better yet cut out the middleman and go here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
+Or you can find a slightly deeper case here: https://www.dropbox.com/sh/iav5bai4vxluv5s/AADZT4aboAOxVr0VuBjDEtAAa?dl=0 that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case via treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  But better yet cut out the middleman and go here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
 
 A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, should give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is busy with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
 
