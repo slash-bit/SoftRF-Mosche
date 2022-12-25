@@ -364,11 +364,16 @@ void Traffic_setup()
 
 void Traffic_loop()
 {
+  time_t timenow = now();
+  if (timenow > ThisAircraft.timestamp + ENTRY_EXPIRATION_TIME) {
+      return;    /* data stream broken */
+  }
+
   if (isTimeToUpdateTraffic()) {
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       traffic_t *fop = &Container[i];
       if (fop->ID) {
-        if (ThisAircraft.timestamp > fop->timestamp + ENTRY_EXPIRATION_TIME) {    // 5s
+        if (timenow > fop->timestamp + ENTRY_EXPIRATION_TIME) {    // 5s
             *fop = EmptyFO;
         } else if (ThisAircraft.timestamp >= fop->timestamp + TRAFFIC_VECTOR_UPDATE_INTERVAL) {  // 2s
             Traffic_Update(fop);
@@ -388,9 +393,10 @@ void Traffic_loop()
 
 void Traffic_ClearExpired()
 {
+  time_t timenow = now();
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].ID &&
-        (ThisAircraft.timestamp > Container[i].timestamp + ENTRY_EXPIRATION_TIME)) {
+        (timenow > Container[i].timestamp + ENTRY_EXPIRATION_TIME)) {
       Container[i] = EmptyFO;
     }
   }

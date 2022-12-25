@@ -38,7 +38,7 @@ void airborne_loop()
     uint32_t last_time = time_to_check_airborne;
     time_to_check_airborne = millis();
 
-    if (! hasGNSS());
+    if (! hasGNSS())
         return;
 
     if (initial_latitude == 0) {

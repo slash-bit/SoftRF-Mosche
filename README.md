@@ -20,14 +20,14 @@ Latest additions:
 * Can adjust SoftRF settings within T-Echo (without an app)
 * Modified version of [SkyView](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView)
 * [SkyStrobe](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyStrobe) - a controller for a visibility strobe (and more)
+* [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).
 
-Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
-<br>
-<br>
-New: [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).
 <br>
 <br>
 Open [discussion forum](https://gitter.im/SoftRF-open/community).
+<br>
+<br>
+Source code, and compiled binaries for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF) and [nRF52](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage) (only), are available here.
 <br>
 <br>
 Content below is from Lyusupov's Readme:

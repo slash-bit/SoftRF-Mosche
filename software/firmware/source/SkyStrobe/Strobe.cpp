@@ -150,21 +150,14 @@ void Strobe_loop(void)
       } else {
           alarm_level = max_alarm_level;
       }
-      uint32_t pause_ms = 0;
-      if (self_test_strobe) {
-            pause_ms = alarm_level > ALARM_LEVEL_NONE ? pause_alarm : pause_noalarm;
-      } else {
-        if (alarm_level > ALARM_LEVEL_NONE) {
-            pause_ms = pause_alarm;
-        } else if ((settings->strobe == STROBE_AIRBORNE && ThisAircraft.airborne)
-                 || (settings->strobe == STROBE_AIRBORNE && (! hasGNSS()))
-                 || settings->strobe == STROBE_ALWAYS) {
-            pause_ms = pause_noalarm;
-        }
+      if (settings->strobe == STROBE_ALWAYS || self_test_strobe ||
+           (settings->strobe == STROBE_AIRBORNE && 
+                (ThisAircraft.airborne ||                /* fail safe: */
+                  (hasGNSS() == false && millis() > StrobeSetupMarker + 360000)))) {
+         uint32_t pause_ms = alarm_level > ALARM_LEVEL_NONE ? pause_alarm : pause_noalarm;
+         if (millis() > StrobePauseMarker + pause_ms)
+             Strobe_Start();
       }
-
-      if (pause_ms != 0 && (millis() - StrobePauseMarker) > pause_ms)
-            Strobe_Start();
   }
 }
 

@@ -80,9 +80,6 @@ static void NMEA_Parse_Character(char c)
       if (nmea.speed.isUpdated()) {
         ThisAircraft.GroundSpeed = nmea.speed.knots();
       }
-      if (nmea.time.isUpdated()) {
-        ThisAircraft.timestamp = now();
-      }
 
       if (T_ID.isUpdated()) {
         fo = EmptyFO;
@@ -158,14 +155,13 @@ static void NMEA_Parse_Character(char c)
 //          Serial.print(F(" AcftType=")); Serial.println(fo.AcftType);
         }
 
-        fo.timestamp = now();
-
         old_level = ALARM_LEVEL_NONE;
         if (fo.alarm_level > ALARM_LEVEL_NONE) {
-            old_id = fo.ID;
+            old_id = fo.ID;    // save for processing of PFLAU
             old_level = fo.alarm_level;
         }
 
+        fo.timestamp = ThisAircraft.timestamp = now();
         Traffic_Update(&fo);
         Traffic_Add();
 
@@ -173,7 +169,6 @@ static void NMEA_Parse_Character(char c)
 
         fo = EmptyFO;    // treat PFLAU too as traffic
 
-        NMEA_Status.timestamp = now();
         NMEA_Status.RX = atoi(S_RX.value());
 
         if (S_TX.isUpdated())
@@ -244,14 +239,18 @@ static void NMEA_Parse_Character(char c)
 #endif
         } else {    // very old FLARMs don't send the ID
           if (old_level > ALARM_LEVEL_NONE && fo.alarm_level == old_level)
-              fo.ID = old_id;
-          else
+              fo.ID = old_id;   // inherited from the preceding FPLAA
+          else if (fo.alarm_level > ALARM_LEVEL_NONE)
               fo.ID = 0x123456;
         }
 
-        fo.timestamp = now();
-        Traffic_Update(&fo);
-        Traffic_Add();
+        /* PFLAU sentence may not include any traffic, update timestamp anyway */
+        fo.timestamp = ThisAircraft.timestamp = NMEA_Status.timestamp = now();
+
+        if (fo.ID) {
+            Traffic_Update(&fo);
+            Traffic_Add();
+        }
       }
 }
 

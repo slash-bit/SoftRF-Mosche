@@ -2,8 +2,8 @@ SkyStrobe documentation
 =======================
 
 By Moshe Braner
-This version last updated December 22, 2022
-To fit SkyStrobe version 02c.
+This version last updated December 25, 2022
+To fit SkyStrobe version 02d.
 
 
 WHAT IS SKYSTROBE
@@ -40,7 +40,9 @@ Although there is a 3.3V pin on this board, I have found that powering this boar
 
 For the strobe part, an LED module is needed that can be driven in short pulses with a momentary power on the order of 10 watts (or more).  Red color is preferred.  I have used this module:
 https://xpriteusa.com/collections/replacement-bulbs/products/xprite-g1-series-replacement-led-hide-a-way-lights?variant=37716161462431
-It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 parallel strings, each with 2 LEDs and a 5-ohm resistor in series.  At 0.5 amps, each LED shows a voltage of 2.6V, about 1 watt.  At 0.75 amps, each LED shows a voltage of 2.75V i.e. a momentary power of 2W.  I cut three traces in the middle of the circuit board and rewired it to make it 4 LEDs in series.  And moved one 5-ohm resistor to be in parallel with the other one.  The resulting circuit fits the available voltage better.  Given 13V power it self-limits to 0.75 amp.
+It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 parallel strings, each with 2 LEDs and a 5-ohm resistor in series.  At 0.5 amps, each LED shows a voltage of 2.6V, about 1 watt.  At 0.75 amps, each LED shows a voltage of 2.75V i.e. a momentary power of 2W.  I cut three traces in the middle of the circuit board and rewired it to make it 4 LEDs in series.  And moved one 5-ohm resistor to be in parallel with the other one.  The resulting circuit fits the available voltage better.  Given 13V power it self-limits to 0.75 amp.  Another option may be this module:
+https://xpriteusa.com/collections/visor-dash-lights/products/xprite-undercover-series-led-strobe-lights-for-dash-windshield-with-suction-cups?variant=37716154744991
+which has 8 LEDs in each half.  The reflector design offers a beam that is wider to the sides, but more focused vertically.  I have cut it in half width, and adapted the circuit in a similar way to the module mentioned above, but with two parallel circuits of 4 LEDs each, thus twice as bright.  But it is 1.7 inches high, may not fit in a given glider.  See photos of both modules, as modified, in this documentation folder.
 
 To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  A better approach is to use a power MOSFET instead.  Use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
 
