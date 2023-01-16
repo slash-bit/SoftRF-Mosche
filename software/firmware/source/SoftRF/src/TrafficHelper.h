@@ -43,6 +43,10 @@
 #define VERTICAL_SEPARATION         300  /* meters  - for alerts */
 #define VERTICAL_VISIBILITY_RANGE   900  /* this value higher than FLARM specs */
 
+/* stealth mode visibility range */
+#define STEALTH_DISTANCE 2000
+#define STEALTH_VERTICAL  300
+
 #define TRAFFIC_VECTOR_UPDATE_INTERVAL 2 /* seconds */
 #define TRAFFIC_UPDATE_INTERVAL_MS (TRAFFIC_VECTOR_UPDATE_INTERVAL * 1000)
 #define isTimeToUpdateTraffic() (millis() - UpdateTrafficTimeMarker > \

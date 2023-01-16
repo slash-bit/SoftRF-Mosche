@@ -520,150 +520,156 @@ void ParseData(void)
 
     fo = EmptyFO;  /* to ensure no data from past packets remains in any field */
 
-    if (protocol_decode && (*protocol_decode)((void *) fo_raw, &ThisAircraft, &fo)) {
+    if (protocol_decode == NULL)
+        return;
 
-      if (fo.addr == settings->ignore_id) {        /* ID told in settings to ignore */
-             return;
-      } else if (fo.addr == ThisAircraft.addr) {
-             /* received same ID as this aircraft, and not told to ignore it */
-             /* then replace this aircraft ID with a random one */
-             settings->id_method = ADDR_TYPE_ANONYMOUS;
-             generate_random_id();
-             return;
-      }
+    if (((*protocol_decode)((void *) fo_raw, &ThisAircraft, &fo)) == false)
+        return;
 
-      fo.rssi = RF_last_rssi;
+    if (fo.addr == settings->ignore_id)        /* ID told in settings to ignore */
+           return;
 
-      int i;
-      ufo_t *cip;
+    if (fo.addr == ThisAircraft.addr) {
+        /* received same ID as this aircraft, and not told to ignore it */
+        /* then replace this aircraft ID with a random one */
+        // settings->id_method = ADDR_TYPE_ANONYMOUS;
+        // generate_random_id();
+        //   - very unlikely, more useful instead:
+        //   - auto-ignore same-ID:
+        return;
+    }
 
-      /* first check whether we are already tracking this object */
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+    fo.rssi = RF_last_rssi;
 
-        cip = &Container[i];
+    int i;
+    ufo_t *cip;
 
-        if (cip->addr == fo.addr) {
+    /* first check whether we are already tracking this object */
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
-          /* ignore "new" GPS fixes that are exactly the same as before */
-          if ( /* fo.timestamp == Container[i].timestamp && */
-              fo.altitude == cip->altitude &&
-              fo.latitude == cip->latitude &&
-              fo.longitude == cip->longitude)
-                        return;
+      cip = &Container[i];
 
-          /* overwrite old entry, but preserve fields that store history */
-          /*   - they are copied into fo and then back into Container[i] */
+      if (cip->addr == fo.addr) {
 
-          if ((fo.gnsstime_ms - cip->gnsstime_ms > 1200)
-            /* packets spaced far enough apart, store new history */
-          || (fo.gnsstime_ms - cip->prevtime_ms > 2600)) {
-            /* previous history getting too old, drop it */
-            /* this means using the past data from < 1200 ms ago */
-            /* to avoid that would need to store data from yet another time point */
-            fo.prevtime_ms  = cip->gnsstime_ms;
-            fo.prevcourse   = cip->course;
-            fo.prevheading  = cip->heading;
-            /* fo.prevspeed = Container[i].speed; */
-            fo.prevaltitude = cip->altitude;
-          } else {
-            /* retain the older history for now */
-            fo.prevtime_ms  = cip->prevtime_ms;
-            fo.prevcourse   = cip->prevcourse;
-            fo.prevheading  = cip->prevheading;
-            /* fo.prevspeed = cip->prevspeed; */
-            fo.prevaltitude = cip->prevaltitude;
-            /* >>> may want to also retain info needed to compute velocity vector at t=0 */
-          }
-          fo.turnrate    = cip->turnrate;   /* keep the old turn rate */
-          fo.alert       = cip->alert;
-          fo.alert_level = cip->alert_level;
-       /* fo.callsign    = cip->callsign; */
+        /* ignore "new" GPS fixes that are exactly the same as before */
+        if ( /* fo.timestamp == Container[i].timestamp && */
+            fo.altitude == cip->altitude &&
+            fo.latitude == cip->latitude &&
+            fo.longitude == cip->longitude)
+                      return;
 
-          *cip = fo;   /* copies the whole object/structure */
+        /* overwrite old entry, but preserve fields that store history */
+        /*   - they are copied into fo and then back into Container[i] */
 
-          /* Now old alert_level is in same structure, can update alarm_level:  */
-          Traffic_Update(cip);
-
-          return;
+        if ((fo.gnsstime_ms - cip->gnsstime_ms > 1200)
+          /* packets spaced far enough apart, store new history */
+        || (fo.gnsstime_ms - cip->prevtime_ms > 2600)) {
+          /* previous history getting too old, drop it */
+          /* this means using the past data from < 1200 ms ago */
+          /* to avoid that would need to store data from yet another time point */
+          fo.prevtime_ms  = cip->gnsstime_ms;
+          fo.prevcourse   = cip->course;
+          fo.prevheading  = cip->heading;
+          /* fo.prevspeed = Container[i].speed; */
+          fo.prevaltitude = cip->altitude;
+        } else {
+          /* retain the older history for now */
+          fo.prevtime_ms  = cip->prevtime_ms;
+          fo.prevcourse   = cip->prevcourse;
+          fo.prevheading  = cip->prevheading;
+          /* fo.prevspeed = cip->prevspeed; */
+          fo.prevaltitude = cip->prevaltitude;
+          /* >>> may want to also retain info needed to compute velocity vector at t=0 */
         }
-      }
+        fo.turnrate    = cip->turnrate;   /* keep the old turn rate */
+        fo.alert       = cip->alert;
+        fo.alert_level = cip->alert_level;
+     /* fo.callsign    = cip->callsign; */
 
-      /* new object, try and find a slot for it */
+        *cip = fo;   /* copies the whole object/structure */
 
-      /* first get distance and alarm_level */
-      Traffic_Update(&fo);
+        /* Now old alert_level is in same structure, can update alarm_level:  */
+        Traffic_Update(cip);
 
-      /* replace an empty or expired object if found */
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].addr == 0) {
-          Container[i] = fo;
-          return;
-        }
-      }
-      time_t timenow = now();
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (timenow - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
-          Container[i] = fo;
-          return;
-        }
-      }
-
-      /* may need to replace a non-expired object:   */
-      /* identify the least important current object */
-
-      uint32_t follow_id = settings->follow_id;
-
-      /* replace an object of lower alarm level if found */
-
-      if (fo.alarm_level > ALARM_LEVEL_NONE) {
-        int min_level_ndx = 0;
-        int min_level = fo.alarm_level;
-        for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-          if (Container[i].alarm_level < min_level) {
-            min_level_ndx = i;
-            min_level = Container[i].alarm_level;
-          } else if (Container[min_level_ndx].addr == follow_id
-                       && min_level < fo.alarm_level
-                       && Container[i].alarm_level == min_level) {
-            min_level_ndx = i;
-          }
-        }
-        if (min_level < fo.alarm_level) {
-            Container[min_level_ndx] = fo;
-            return;
-        }
-      }
-
-      /* identify the farthest-away non-"followed" object */
-      /*    (distance adjusted for altitude difference)   */
-
-      int max_dist_ndx = MAX_TRACKING_OBJECTS;
-      float max_adj_dist = 0;
-      float adj_distance;
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].alarm_level == ALARM_LEVEL_NONE
-            && Container[i].addr != follow_id) {
-          adj_distance = Container[i].distance;
-          if (Container[i].adj_distance > adj_distance)
-                adj_distance = Container[i].adj_distance;
-          if (adj_distance > max_adj_dist)  {
-            max_dist_ndx = i;
-            max_adj_dist = adj_distance;
-          }
-        }
-      }
-
-      /* replace the farthest currently-tracked object, */
-      /* but only if the new object is closer (or "followed") */
-      adj_distance = fo.adj_distance;
-      if (max_dist_ndx < MAX_TRACKING_OBJECTS
-        && (adj_distance < max_adj_dist || fo.addr == follow_id)) {
-        Container[max_dist_ndx] = fo;
         return;
       }
-
-       /* otherwise, no slot found, ignore the new object */
     }
+
+    /* new object, try and find a slot for it */
+
+    /* first get distance and alarm_level */
+    Traffic_Update(&fo);
+
+    /* replace an empty or expired object if found */
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (Container[i].addr == 0) {
+        Container[i] = fo;
+        return;
+      }
+    }
+    time_t timenow = now();
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (timenow - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+        Container[i] = fo;
+        return;
+      }
+    }
+
+    /* may need to replace a non-expired object:   */
+    /* identify the least important current object */
+
+    uint32_t follow_id = settings->follow_id;
+
+    /* replace an object of lower alarm level if found */
+
+    if (fo.alarm_level > ALARM_LEVEL_NONE) {
+      int min_level_ndx = 0;
+      int min_level = fo.alarm_level;
+      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        if (Container[i].alarm_level < min_level) {
+          min_level_ndx = i;
+          min_level = Container[i].alarm_level;
+        } else if (Container[min_level_ndx].addr == follow_id
+                     && min_level < fo.alarm_level
+                     && Container[i].alarm_level == min_level) {
+          min_level_ndx = i;
+        }
+      }
+      if (min_level < fo.alarm_level) {
+          Container[min_level_ndx] = fo;
+          return;
+      }
+    }
+
+    /* identify the farthest-away non-"followed" object */
+    /*    (distance adjusted for altitude difference)   */
+
+    int max_dist_ndx = MAX_TRACKING_OBJECTS;
+    float max_adj_dist = 0;
+    float adj_distance;
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (Container[i].alarm_level == ALARM_LEVEL_NONE
+          && Container[i].addr != follow_id) {
+        adj_distance = Container[i].distance;
+        if (Container[i].adj_distance > adj_distance)
+              adj_distance = Container[i].adj_distance;
+        if (adj_distance > max_adj_dist)  {
+          max_dist_ndx = i;
+          max_adj_dist = adj_distance;
+        }
+      }
+    }
+
+    /* replace the farthest currently-tracked object, */
+    /* but only if the new object is closer (or "followed") */
+    adj_distance = fo.adj_distance;
+    if (max_dist_ndx < MAX_TRACKING_OBJECTS
+      && (adj_distance < max_adj_dist || fo.addr == follow_id)) {
+      Container[max_dist_ndx] = fo;
+      return;
+    }
+
+    /* otherwise, no slot found, ignore the new object */
 }
 
 void Traffic_setup()

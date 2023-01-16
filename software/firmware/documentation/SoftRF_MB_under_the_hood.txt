@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated November 15, 2022
-to fit software version MB09c based on v1.0 with some parts of v1.2
+This version last updated January 16, 2023
+to fit software version MB09i based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -152,6 +152,10 @@ Improved audio alarms
 
 Incorporated the ToneAC library to get the beeping signal to appear in opposite phases on 2 GPIO pins (14&15) on the T-Beam.  Attaching a passive piezo buzzer between those 2 pins results in higher volume than when attaching between one pin and ground.  Also added a settings option for DC (+3V) output on one pin (14) to trigger an external active buzzer powered by higher voltage.
 
+Stealth Mode
+
+Masked additional data fields in stealth mode to fit FLARM specifications.
+
 
 KNOWN ISSUES
 
@@ -160,3 +164,8 @@ Packets-transmitted count on OLED sometimes increments by dozens or hundreds at 
 Reception of FLARM signals can be further improved by shifting our clock (for frequency hopping) by about 50 ms.  Not clear why.
 
 Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.
+
+
+Compiling SoftRF
+
+At this time I compile it under Ubuntu 20.04 using the Arduino IDE verion 1.8.16, and the ESP32 board support version 2.0.3.  If you use any other versions, especially of the ESP32 support, expect to spend some time fixing library incompatibilities.

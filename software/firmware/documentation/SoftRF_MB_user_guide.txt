@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated December 17, 2022
-to fit software version MB09h based on v1.0 with some parts of v1.2
+This version last updated January 16, 2023
+to fit software version MB09i based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -156,7 +156,7 @@ ICAO ID: you can enter any ID you want (6 HEX digits), but normally this would b
 
 ID type to use: You can choose Random, ICAO (the ID entered above), Device (the fixed device ID), or Anonymous.  The latter is random but is fixed for the flight, while Random changes during the flight.  If you choose ICAO (best), or device ID, you can register your chosen ID on http://ddb.glidernet.org/ as your aircraft.  If you don't register it then only the cryptic ID will show up on OGN viewers such as https://glidertracker.org/ instead of your N number or tail number.
 
-Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT want to include in traffic data (and collision warnings) reported by SoftRF.  E.g., if your towplane has FLARM and you tend to get unnecessary collision warning during the tow.  Leave as 000000 to not use this feature.
+Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT want to include in traffic data (and collision warnings) reported by SoftRF.  E.g., if your towplane has FLARM and you tend to get unnecessary collision warning during the tow.  Leave as 000000 to not use this feature.  Note: signals from an aircraft ID identical to this one are always ignored, no need to enter that here.  E.g., if using two SoftRF and/or FLARM devices in the same aircraft, set both to the same ICAO ID - should probably also set Tx Power of one of them to "off".
 
 Aircraft ID to follow: You can enter an aircraft (or device) ID to give priority to in traffic reports.  E.g., your flying buddy in another aircraft.  Leave as 000000 to not use this feature.  Normally SoftRF reports up to 8 aircraft, selecting the closest ones.  If an ID to follow is specified, it will be shown even if it is not one of the 8 closest.  An close-by aircraft that is a collision danger will always take priority though.
 
@@ -341,5 +341,4 @@ https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README
 
 
 PART 2: UNDER THE HOOD - see separate document
-
 

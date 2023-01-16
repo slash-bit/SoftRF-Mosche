@@ -166,11 +166,12 @@ void setup()
 
   SoC->Button_setup();
 
-  if (settings->id_method == ADDR_TYPE_ICAO && settings->aircraft_id != 0) {
-    ThisAircraft.addr = settings->aircraft_id;
-  } else if (settings->id_method == ADDR_TYPE_RANDOM
+  if (settings->stealth
+        || settings->id_method == ADDR_TYPE_RANDOM
         || settings->id_method == ADDR_TYPE_ANONYMOUS) {
     ThisAircraft.addr = 0;  /* will be filled in later */
+  } else if (settings->id_method == ADDR_TYPE_ICAO && settings->aircraft_id != 0) {
+    ThisAircraft.addr = settings->aircraft_id;
   } else {
     uint32_t id = SoC->getChipId() & 0x00FFFFFF;
     /* remap address to avoid overlapping with congested FLARM range */
