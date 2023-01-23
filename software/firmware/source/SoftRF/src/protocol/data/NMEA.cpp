@@ -105,7 +105,8 @@ TinyGPSCustom D_NMEA2_gnss;
 TinyGPSCustom D_NMEA2_private;
 TinyGPSCustom D_NMEA2_legacy;
 TinyGPSCustom D_NMEA2_sensors;
-TinyGPSCustom D_NMEA2_debug;  /* 15 */
+TinyGPSCustom D_NMEA2_debug;
+TinyGPSCustom D_norelay;  /* 16 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -205,7 +206,8 @@ void NMEA_setup()
   D_NMEA2_private.begin (gnss, psrf_d, term_num++);
   D_NMEA2_legacy.begin  (gnss, psrf_d, term_num++);
   D_NMEA2_sensors.begin (gnss, psrf_d, term_num++);
-  D_NMEA2_debug.begin   (gnss, psrf_d, term_num++); /* 15 */
+  D_NMEA2_debug.begin   (gnss, psrf_d, term_num++);
+  D_norelay.begin       (gnss, psrf_d, term_num++); /* 16 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -1120,6 +1122,11 @@ void NMEA_Process_SRF_SKV_Sentences()
           if (D_NMEA2_debug.isUpdated()) {
             settings->nmea2_d = atoi(D_NMEA2_debug.value());
             Serial.print(F("NMEA2_debug = ")); Serial.println(settings->nmea_d);
+            cfg_is_updated = true;
+          }
+          if (D_norelay.isUpdated()) {
+            settings->norelay = atoi(D_norelay.value());
+            Serial.print(F("Norelay = ")); Serial.println(settings->norelay);
             cfg_is_updated = true;
           }
 

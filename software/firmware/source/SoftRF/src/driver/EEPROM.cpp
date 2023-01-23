@@ -118,6 +118,8 @@ void EEPROM_defaults()
     eeprom_block.field.settings.pointer     = LED_OFF;
   }
 
+  eeprom_block.field.settings.norelay    = false;
+
   eeprom_block.field.settings.nmea_g     = true;
   eeprom_block.field.settings.nmea_p     = false;
   eeprom_block.field.settings.nmea_l     = true;

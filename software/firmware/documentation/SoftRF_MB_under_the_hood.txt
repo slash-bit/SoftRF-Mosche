@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated January 16, 2023
-to fit software version MB09i based on v1.0 with some parts of v1.2
+This version last updated January 23, 2023
+to fit software version MB09k based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -106,7 +106,7 @@ Besides basing the decision on the distance modified to take altitude separation
 
 Settable aircraft IDs
 
-Added ability to ignore one aircraft ID - intended for self, from another device, or towplane.  Also added ability to set this aircraft ID (e.g., to ICAO), and always ignore incoming radio packets with same ID.  Also allow setting the "follow" ID.  Main files affected: TrafficHelper, protocol/radio/Legacy legacy_decode(), driver/EEPROM, ui/Web.
+Added ability to ignore one aircraft ID - e.g., from another device in same aircraft, or in towplane.  Incoming radio packets with same ID as this aircraft are always ignored.  Also added ability to set this aircraft ID (e.g., to ICAO).  Also allow setting the "follow" ID.  Main files affected: TrafficHelper, protocol/radio/Legacy legacy_decode(), driver/EEPROM, ui/Web.
 
 Modified computation of lat/lon in Legacy protocol
 
@@ -155,6 +155,10 @@ Incorporated the ToneAC library to get the beeping signal to appear in opposite 
 Stealth Mode
 
 Masked additional data fields in stealth mode to fit FLARM specifications.
+
+Air Relay
+
+Added one-hop relay of radio packets from landed aircraft.  The relayed packets are marked by a different "address (ID) type".  Main file changed: TrafficHelper.cpp.  Also changed EEPROM.* and Web.cpp (for the no-relay setting), NMEA.cpp (for norelay setting), and SoftRF.ino (added pauses between transmissions). 
 
 
 KNOWN ISSUES

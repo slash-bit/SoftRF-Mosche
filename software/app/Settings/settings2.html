@@ -36,7 +36,8 @@ function UpdateChecksum()
       + document.getElementById("priv2").value + ","
       + document.getElementById("legacy2").value + ","
       + document.getElementById("sens2").value + ","
-      + document.getElementById("debug2").value;
+      + document.getElementById("debug2").value + ","
+      + document.getElementById("norelay").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -189,6 +190,17 @@ function SelDebug2()
   UpdateChecksum();
 }
 
+function SelNorelay()
+{
+  var norelay = document.getElementsByName('norelay');
+  for (var i = 0; i < norelay.length; i++) {
+      if (norelay[i].type == "radio" && norelay[i].checked) {
+        document.getElementById("norelay").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
 function InitSettings()
 {
 //  document.getElementById("ver").value = 1;
@@ -206,6 +218,7 @@ function InitSettings()
   document.getElementById("legacy2").value     = 1;
   document.getElementById("sens2").value       = 1;
   document.getElementById("debug2").value      = 0;
+  document.getElementById("norelay").value     = 0;
 
   UpdateChecksum();
 }
@@ -358,6 +371,13 @@ If you are affected - please, consider to update
 <input type='radio' name='nmea2_d' value='1' onchange="SelDebug2()">On
 </td>
 </tr>
+<tr>
+<th align=left>Air Relay</th>
+<td align=right>
+<input type='radio' name='norelay' value='0' onchange="SelNorelay()" checked>Enable
+<input type='radio' name='norelay' value='1' onchange="SelNorelay()">Disable
+</td>
+</tr>
 
 </table>
 
@@ -375,6 +395,7 @@ If you are affected - please, consider to update
 <!-- Legacy2:   --><input type="hidden" id="legacy2" size="1">
 <!-- Sensors2:  --><input type="hidden" id="sens2" size="1">
 <!-- Debug2:    --><input type="hidden" id="debug2" size="1">
+<!-- Norelay:   --><input type="hidden" id="norelay" size="1">
 
 <h4 align=center>NMEA control sentence:</h4>
 <hr>
@@ -382,3 +403,4 @@ If you are affected - please, consider to update
 </form>
 </body>
 </html>
+

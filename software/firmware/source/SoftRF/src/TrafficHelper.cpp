@@ -497,6 +497,61 @@ void Traffic_Update(ufo_t *fop)
   }
 }
 
+/* relay landed-traffic if we are airborne */
+void air_relay()
+{
+    static uint32_t lastrelay = 0;
+
+    /* only relay once in a while (5 seconds for any, 15 for same aircraft) */
+    if (millis() < lastrelay + 1000*ANY_RELAY_TIME)
+        return;
+    if (fo.timerelayed + ENTRY_RELAY_TIME > fo.timestamp)
+        return;
+    if (settings->norelay)
+        return;
+
+    // need to flag relayed packets so they won't be relayed again:
+    // change the "address type" field without affecting bit parity 
+    legacy_packet_t* pkt = (legacy_packet_t *) fo_raw;
+    if (pkt->addr_type == 1)         // ADDR_TYPE_ICAO
+        pkt->addr_type = 4;          // ADDR_TYPE_P3I
+    else if (pkt->addr_type == 2)    // ADDR_TYPE_FLARM
+        pkt->addr_type = 7;          // ADDR_TYPE_7
+    else if (pkt->addr_type == 0)    // ADDR_TYPE_RANDOM
+        pkt->addr_type = 5;          // ADDR_TYPE_FANET
+    else if (pkt->addr_type == 3)    // ADDR_TYPE_ANONYMOUS
+        pkt->addr_type = 6;          // ADDR_TYPE_6
+    else
+        return;                     // should not happen
+
+    /* no need to re-encrypt etc */
+    memcpy((void *) &TxBuffer[0], (void *) &fo_raw[0], sizeof(legacy_packet_t));
+
+    bool relayed = RF_Transmit(sizeof(legacy_packet_t), true);
+
+    if (relayed) {
+        fo.timerelayed = ThisAircraft.timestamp;
+        lastrelay = millis();
+        // Serial.print("Relayed packet from ");
+        // Serial.println(fo.addr, HEX);
+        if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags)) {
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PSARL,1,%06X,%ld\r\n"),
+            fo.addr, fo.timerelayed);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        }
+    } else {
+#if 0
+        if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags)) {
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PSARL,0,%06X,%ld\r\n"),
+            fo.addr, ThisAircraft.timestamp);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        }
+#endif
+    }
+}
+
 void ParseData(void)
 {
     size_t rx_size = RF_Payload_Size(settings->rf_protocol);
@@ -539,6 +594,27 @@ void ParseData(void)
         return;
     }
 
+    /* relay landed-traffic if we are airborne (or in first-minute test) */
+    bool do_relay = false;
+    if (fo.protocol == RF_PROTOCOL_LEGACY
+        && (! fo.airborne)
+        && (ThisAircraft.airborne || millis() < SetupTimeMarker + 60000)
+        && fo.addr_type < ADDR_TYPE_P3I    // not a relayed packet
+        && (! settings->norelay))
+            do_relay = true;
+
+    /* restore addr_type of received relayed packets */
+    if (fo.protocol == RF_PROTOCOL_LEGACY) {
+        if (fo.addr_type == ADDR_TYPE_P3I)
+            fo.addr_type = ADDR_TYPE_ICAO;
+        else if (fo.addr_type == ADDR_TYPE_7)
+            fo.addr_type = ADDR_TYPE_FLARM;
+        else if (fo.addr_type == ADDR_TYPE_6)
+            fo.addr_type = ADDR_TYPE_ANONYMOUS;
+        else if (fo.addr_type == ADDR_TYPE_FANET)
+            fo.addr_type = ADDR_TYPE_RANDOM;
+    }
+
     fo.rssi = RF_last_rssi;
 
     int i;
@@ -551,12 +627,17 @@ void ParseData(void)
 
       if (cip->addr == fo.addr) {
 
+        fo.timerelayed = cip->timerelayed;
+        if (do_relay)  air_relay();
+        // this updates fo.timerelayed, to be copied later into container[]
+
         /* ignore "new" GPS fixes that are exactly the same as before */
-        if ( /* fo.timestamp == Container[i].timestamp && */
-            fo.altitude == cip->altitude &&
+        if (fo.altitude == cip->altitude &&
             fo.latitude == cip->latitude &&
-            fo.longitude == cip->longitude)
+            fo.longitude == cip->longitude) {
+                      cip->timerelayed = fo.timerelayed;
                       return;
+        }
 
         /* overwrite old entry, but preserve fields that store history */
         /*   - they are copied into fo and then back into Container[i] */
@@ -597,7 +678,11 @@ void ParseData(void)
 
     /* new object, try and find a slot for it */
 
-    /* first get distance and alarm_level */
+    // timerelayed started out as 0 (from empty_fo)
+    if (do_relay)  air_relay();
+    // this updates fo.timerelayed, to be copied later into container[]
+
+    /* get distance and alarm_level */
     Traffic_Update(&fo);
 
     /* replace an empty or expired object if found */
@@ -661,10 +746,12 @@ void ParseData(void)
     }
 
     /* replace the farthest currently-tracked object, */
-    /* but only if the new object is closer (or "followed") */
+    /* but only if the new object is closer (or "followed", or relayed) */
     adj_distance = fo.adj_distance;
     if (max_dist_ndx < MAX_TRACKING_OBJECTS
-      && (adj_distance < max_adj_dist || fo.addr == follow_id)) {
+      && (adj_distance < max_adj_dist
+          || fo.addr == follow_id
+          || (do_relay && fo.timerelayed > 0))) {
       Container[max_dist_ndx] = fo;
       return;
     }

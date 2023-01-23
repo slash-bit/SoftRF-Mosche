@@ -115,7 +115,8 @@ typedef struct Settings {
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
     uint8_t  strobe:2;
-    uint8_t  resvd5:6;
+    uint8_t  resvd5:5;
+    uint8_t  norelay:1;
     uint32_t follow_id:24;
 
     bool     nmea2_g:1;

@@ -47,7 +47,9 @@ enum
 	ADDR_TYPE_FLARM,
 	ADDR_TYPE_ANONYMOUS, /* FLARM stealth, OGN */
 	ADDR_TYPE_P3I,       /* not available in id_method settings field */
-	ADDR_TYPE_FANET      /* not available in id_method settings field */
+	ADDR_TYPE_FANET,     /* not available in id_method settings field */
+	ADDR_TYPE_6,
+	ADDR_TYPE_7          /* added for air-relay */
 };
 
 enum

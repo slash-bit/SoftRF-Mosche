@@ -15,6 +15,7 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
+* Airborne devices relay radio packets from landed aircraft 
 * Louder buzzer via 2-pin differential drive, or external
 * Includes strobe-control logic within SoftRF
 * Can adjust SoftRF settings within T-Echo (without an app)

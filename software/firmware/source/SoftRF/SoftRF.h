@@ -35,11 +35,13 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB09i"
+#define SOFTRF_FIRMWARE_VERSION "MB09k"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
-#define ENTRY_EXPIRATION_TIME   10 /* seconds */
+#define ENTRY_EXPIRATION_TIME  10 /* seconds */
+#define ENTRY_RELAY_TIME       15 /* seconds */
+#define ANY_RELAY_TIME          5 /* seconds */
 #define LED_EXPIRATION_TIME     5 /* seconds */
 #define EXPORT_EXPIRATION_TIME  5 /* seconds */
 
@@ -124,6 +126,7 @@ typedef struct UFO {
     int8_t    alert_level;
 
     time_t    timestamp;
+    time_t    timerelayed;
     uint32_t  addr;
     float     latitude;
     float     longitude;

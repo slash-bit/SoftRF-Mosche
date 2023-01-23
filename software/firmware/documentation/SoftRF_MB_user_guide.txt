@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated January 16, 2023
-to fit software version MB09i based on v1.0 with some parts of v1.2
+This version last updated January 23, 2023
+to fit software version MB09k based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -201,6 +201,8 @@ Dump1090: yet another local data transfer protocol, usually leave Off.
 Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
 
 Power source: select "External" only if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, leave this setting as "Battery".
+
+Air Relay: Enable (default) or disable the relaying of radio packets from landed aircraft by airborne aircraft.  The relaying is transparent and happens in total no more than once every 5 seconds, and once every 15 seconds for a given landed aircraft.
 
 Stealth: if set to "On", your aircraft will not be shown on other aircraft' display, AND VICE VERSA (except at close range and in the case of collision danger).  This is opting out of long-range "FLARM RADAR" mutual visibility.
 

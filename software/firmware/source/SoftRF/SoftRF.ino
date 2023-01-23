@@ -8,7 +8,7 @@
  *
  * Credits:
  *   Arduino core for ESP8266 is developed/supported by ESP8266 Community (support-esp8266@esp8266.com)
- *   AVR/Arduino nRF905 Library/Driver is developed by Zak Kemble, contact@zakkemble.co.uk
+ *   AVR/Arduino nRF905 Librarrfy/Driver is developed by Zak Kemble, contact@zakkemble.co.uk
  *   flarm_decode is developed by Stanislaw Pusep, http://github.com/creaktive
  *   Arduino Time Library is developed by Paul Stoffregen, http://github.com/PaulStoffregen
  *   "Aircraft" and MAVLink Libraries are developed by Andy Little
@@ -552,9 +552,13 @@ void normal()
     /* try and transmit, between "newfix" times, */
     /*    since it is waiting for the time slot, */
     /*  and also repeat to help ensure reception */
-
-    RF_Transmit(RF_Encode(&ThisAircraft), true);
-    /* - this only actually transmits when some preset time intervals are reached */
+    static uint32_t try_tx = 0;
+    if (millis() > try_tx) {
+      RF_Transmit(RF_Encode(&ThisAircraft), true);
+      /* - this only actually transmits when some preset time intervals are reached */
+      /* - but don't try too often, to give air-relay a chance to happen */
+      try_tx = millis() + 66;
+    }
 
   } else if (GNSSTimeMarker) {      /* not validfix but had fix before */
 
@@ -600,8 +604,8 @@ void normal()
   TTN_loop();
 #endif
 
-  /* handle the known traffic - only if we know where we are */
   if (validfix) {
+    /* handle the known traffic - only if we know where we are */
     Traffic_loop();
   }
 
