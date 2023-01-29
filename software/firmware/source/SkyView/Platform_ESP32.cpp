@@ -34,8 +34,9 @@
 #include "SkyView.h"
 
 #include <battery.h>
-#include <sqlite3.h>
 #include <SD.h>
+
+#include "uCDB.hpp"
 
 #include "driver/i2s.h"
 
@@ -114,13 +115,11 @@ static union {
   uint64_t chipmacid;
 };
 
-static sqlite3 *fln_db  = NULL;
-static sqlite3 *ogn_db  = NULL;
-static sqlite3 *icao_db = NULL;
-
 static uint8_t sdcard_files_to_open = 0;
 
 SPIClass uSD_SPI(HSPI);
+
+uCDB<SDFileSystemClass, SDFile> ucdb(SD);
 
 /* variables hold file, state of process wav file and wav file properties */
 wavProperties_t wavProps;
@@ -565,6 +564,8 @@ static int ESP32_WiFi_clients_count()
   }
 }
 
+static bool ADB_is_open = false;
+
 static bool ESP32_DB_init()
 {
   bool rval = false;
@@ -578,7 +579,7 @@ static bool ESP32_DB_init()
   sdcard_files_to_open += (settings->adb   == DB_FLN    ? 1 : 0);
   sdcard_files_to_open += (settings->adb   == DB_OGN    ? 1 : 0);
   sdcard_files_to_open += (settings->adb   == DB_ICAO   ? 1 : 0);
-  sdcard_files_to_open += (settings->voice != VOICE_OFF ? 1 : 0);
+  sdcard_files_to_open += (settings->voice != VOICE_OFF ? 2 : 0);   // we use voice1 & voice3
 
   if (!SD.begin(SOC_SD_PIN_SS_T5S, uSD_SPI, 4000000, "/sd", sdcard_files_to_open)) {
     Serial.println(F("ERROR: Failed to mount microSD card."));
@@ -589,151 +590,109 @@ static bool ESP32_DB_init()
     return rval;
   }
 
-  sqlite3_initialize();
-
   if (settings->adb == DB_FLN) {
-    sqlite3_open("/sd/Aircrafts/fln.db", &fln_db);
-
-    if (fln_db == NULL)
-    {
-      Serial.println(F("Failed to open FlarmNet DB\n"));
-    }  else {
+    if (ucdb.open("/Aircrafts/fln.cdb") == CDB_OK) {
+      Serial.print("FLN records: ");
+      Serial.println(ucdb.recordsNumber());
       rval = true;
+    } else {
+      Serial.println(F("Failed to open FlarmNet DB\n"));
     }
   }
 
   if (settings->adb == DB_OGN) {
-    sqlite3_open("/sd/Aircrafts/ogn.db", &ogn_db);
-
-    if (ogn_db == NULL)
-    {
-      Serial.println(F("Failed to open OGN DB\n"));
-    }  else {
+    if (ucdb.open("/Aircrafts/ogn.cdb") == CDB_OK) {
+      Serial.print("OGN records: ");
+      Serial.println(ucdb.recordsNumber());
       rval = true;
+    } else {
+      Serial.println(F("Failed to open OGN DB\n"));
     }
   }
 
   if (settings->adb == DB_ICAO) {
-    sqlite3_open("/sd/Aircrafts/icao.db", &icao_db);
-
-    if (icao_db == NULL)
-    {
-      Serial.println(F("Failed to open ICAO DB\n"));
-    }  else {
+    if (ucdb.open("/Aircrafts/icao.cdb") == CDB_OK) {
+      Serial.print("ICAO records: ");
+      Serial.println(ucdb.recordsNumber());
       rval = true;
+    } else {
+      Serial.println(F("Failed to open ICAO DB\n"));
     }
   }
 #endif /* BUILD_SKYVIEW_HD */
+
+  if (rval)
+    ADB_is_open = true;
 
   return rval;
 }
 
 static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
 {
-  sqlite3_stmt *stmt;
-  char *query = NULL;
-  int error;
+  // The 'type' argument is for selecting which DB (OGN, FLN, etc).
+  // For now we ignore it.  Only ogn.cdb is supported.
+
+  char key[8];
+  char out[64];
+  uint8_t tokens[3] = { 0 };
+  cdbResult rt;
+  int c, i = 0, token_cnt = 0;
   bool rval = false;
-  const char *reg_key, *db_key;
-  sqlite3 *db;
 
-  if (settings->adapter != ADAPTER_TTGO_T5S) {
-    return false;
+  if (!ADB_is_open) {
+    return rval;
   }
 
-#if !defined(BUILD_SKYVIEW_HD)
+  snprintf(key, sizeof(key),"%06X", id);
 
-  switch (type)
-  {
-  case DB_OGN:
-    switch (settings->idpref)
-    {
-    case ID_TAIL:
-      reg_key = "accn";
-      break;
-    case ID_MAM:
-      reg_key = "acmodel";
-      break;
-    case ID_REG:
-    default:
-      reg_key = "acreg";
-      break;
-    }
-    db_key  = "devices";
-    db      = ogn_db;
-    break;
-  case DB_ICAO:
-    switch (settings->idpref)
-    {
-    case ID_TAIL:
-      reg_key = "owner";
-      break;
-    case ID_MAM:
-      reg_key = "type";
-      break;
-    case ID_REG:
-    default:
-      reg_key = "registration";
-      break;
-    }
-    db_key  = "aircrafts";
-    db      = icao_db;
-    break;
-  case DB_FLN:
-  default:
-    switch (settings->idpref)
-    {
-    case ID_TAIL:
-      reg_key = "tail";
-      break;
-    case ID_MAM:
-      reg_key = "type";
-      break;
-    case ID_REG:
-    default:
-      reg_key = "registration";
-      break;
-    }
-    db_key  = "aircrafts";
-    db      = fln_db;
-    break;
-  }
+  rt = ucdb.findKey(key, strlen(key));
 
-  if (db == NULL) {
-    return false;
-  }
-
-  error = asprintf(&query, "select %s from %s where id = %d",reg_key, db_key, id);
-
-  if (error == -1) {
-    return false;
-  }
-
-  sqlite3_prepare_v2(db, query, strlen(query), &stmt, NULL);
-
-  while (sqlite3_step(stmt) != SQLITE_DONE) {
-    if (sqlite3_column_type(stmt, 0) == SQLITE3_TEXT) {
-
-      size_t len = strlen((char *) sqlite3_column_text(stmt, 0));
-
-      if (len > 0) {
-        len = len > size ? size : len;
-        strncpy(buf, (char *) sqlite3_column_text(stmt, 0), len);
-        if (len < size) {
-          buf[len] = 0;
-        } else if (len == size) {
-          buf[len-1] = 0;
+  switch (rt) {
+    case KEY_FOUND:
+      while ((c = ucdb.readValue()) != -1 && i < (sizeof(out) - 1)) {
+        if (c == '|') {
+          if (token_cnt < (sizeof(tokens) - 1)) {
+            token_cnt++;
+            tokens[token_cnt] = i+1;
+          }
+          c = 0;
         }
-        rval = true;
+        out[i++] = (char) c;
       }
-    }
+      out[i] = 0;
+
+      // this code is specific to ogn.cdb
+      // if we ever use fln.cdb need specific code
+      switch (settings->idpref)
+      {
+      case ID_TAIL:
+        snprintf(buf, size, "%s",
+          strlen(out + tokens[2]) ? out + tokens[2] :
+          strlen(out + tokens[1]) ? out + tokens[1] :
+          strlen(out + tokens[0]) ? out + tokens[0] : "");
+        break;
+      case ID_MAM:
+        snprintf(buf, size, "%s",
+          strlen(out + tokens[0]) ? out + tokens[0] :
+          strlen(out + tokens[2]) ? out + tokens[2] :
+          strlen(out + tokens[1]) ? out + tokens[1] : "");
+        break;
+      case ID_REG:
+      default:
+        snprintf(buf, size, "%s",
+          strlen(out + tokens[1]) ? out + tokens[1] :
+          strlen(out + tokens[2]) ? out + tokens[2] :
+          strlen(out + tokens[0]) ? out + tokens[0] : "");
+        break;
+      }
+
+      rval = (buf[0] != '\0');
+      break;
+
+    case KEY_NOT_FOUND:
+    default:
+      break;
   }
-
-  sqlite3_finalize(stmt);
-
-  free(query);
-
-#endif /* BUILD_SKYVIEW_HD */
 
   return rval;
 }
@@ -743,20 +702,9 @@ static void ESP32_DB_fini()
 #if !defined(BUILD_SKYVIEW_HD)
   if (settings->adapter == ADAPTER_TTGO_T5S) {
 
-    if (settings->adb != DB_NONE) {
-      if (fln_db != NULL) {
-        sqlite3_close(fln_db);
-      }
-
-      if (ogn_db != NULL) {
-        sqlite3_close(ogn_db);
-      }
-
-      if (icao_db != NULL) {
-        sqlite3_close(icao_db);
-      }
-
-      sqlite3_shutdown();
+    if (ADB_is_open) {
+      ucdb.close();
+      ADB_is_open = false;
     }
 
     SD.end();

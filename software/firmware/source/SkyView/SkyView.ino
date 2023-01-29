@@ -19,6 +19,7 @@
  *   Adafruit GFX library is developed by Adafruit Industries
  *   GDL90 decoder is developed by Ryan David
  *   Sqlite3 Arduino library for ESP32 is developed by Arundale Ramanathan
+ *   uCDB library is developed by Ioulianos Kakoulidis
  *   FLN/OGN aircrafts data is courtesy of FlarmNet/GliderNet
  *   Adafruit SSD1306 library is developed by Adafruit Industries
  *   ESP32 I2S WAV player example is developed by Tuan Nha

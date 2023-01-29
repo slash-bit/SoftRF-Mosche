@@ -1,6 +1,15 @@
 # Release notes
 
 
+## revision MB05
+
+### Major improvements
+
+Switched from SQLITE to CDB format for aircrafts database (only OGN suppported).
+Data folder includes ogn.cdb from January 28, 2023.
+Fixed bug in voice settings.
+
+
 ## revision MB03
 
 ### Major improvements

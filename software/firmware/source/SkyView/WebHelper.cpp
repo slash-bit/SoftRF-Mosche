@@ -70,6 +70,7 @@ static const char about_html[] PROGMEM = "<html>\
 <p>URL: http://github.com/lyusupov/SoftRF</p>\
 <p>Author: <b>Linar Yusupov</b></p>\
 <p>E-mail: linar.r.yusupov@gmail.com</p>\
+<p>This version: https://github.com/moshe-braner/SoftRF</p>\
 <h2 align=center>Credits</h2>\
 <p align=center>(in historical order)</p>\
 <table width=100%%>\
@@ -82,7 +83,7 @@ static const char about_html[] PROGMEM = "<html>\
 <tr><th align=left>Jean-Marc Zingg</th><td align=left>GxEPD2 library</td></tr>\
 <tr><th align=left>Adafruit Industries</th><td align=left>SSD1306 and GFX libraries</td></tr>\
 <tr><th align=left>Ryan David</th><td align=left>GDL90 decoder</td></tr>\
-<tr><th align=left>Arundale Ramanathan</th><td align=left>Sqlite3 Arduino library</td></tr>\
+<tr><th align=left>Arundale Ramanathan</th><td align=left>uCDB Arduino library</td></tr>\
 <tr><th align=left>FlarmNet<br>GliderNet</th><td align=left>aircrafts data</td></tr>\
 <tr><th align=left>Shenzhen Xin Yuan<br>(LilyGO) ET company</th><td align=left>TTGO T5S V1.9 board</td></tr>\
 <tr><th align=left>Tuan Nha</th><td align=left>ESP32 I2S WAV player</td></tr>\
@@ -369,8 +370,8 @@ void handleSettings() {
 //<option %s value='%d'>voice 1</option>\
 //<option %s value='%d'>voice 2</option>\
 //<option %s value='%d'>voice 3</option>
-    (settings->voice == VOICE_OFF  ? "selected" : ""), VOICE_OFF,
-    (settings->voice == VOICE_1    ? "selected" : ""), VOICE_ON
+    (settings->voice == VOICE_OFF ? "selected" : ""), VOICE_OFF,
+    (settings->voice != VOICE_OFF ? "selected" : ""), VOICE_ON
 //    (settings->voice == VOICE_1    ? "selected" : ""), VOICE_1,
 //    (settings->voice == VOICE_2    ? "selected" : ""), VOICE_2,
 //    (settings->voice == VOICE_3    ? "selected" : ""), VOICE_3

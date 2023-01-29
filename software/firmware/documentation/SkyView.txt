@@ -2,7 +2,7 @@ SkyView documentation
 =====================
 
 By Moshe Braner
-This version last updated December 4, 2022
+This version last updated January 29, 2023 to fit version MB05
 
 
 This document only mentions what I have changed in SkyView.  For general information about what SkyView is, how to build it, and how to use it, can be found here:  https://github.com/lyusupov/SoftRF/wiki/SkyView-EZ
@@ -27,7 +27,5 @@ In addition, I made the following further changes:
 * Reduced the volume of the advisories 6dB to make it about level with the female voice.
 * The settings now only allow voice on or off, no choice of voices - see above.
 
-Skyview also offers the option of loading into its SD card a database of aircraft, so that they can be displayed on the screen with the tail (competition) number, make and model, etc.  The data is sourced from FLARMnet, the OGN device database, and ICAO.  But I could not find information on how to construct the data files in the right format (which appears to be sqlite3).  The data files available online here:
-   https://github.com/lyusupov/SoftRF/tree/master/software/data/Aircrafts
-are 3 years old.  (The somewhat newer ogn.cdb is for the T-Echo, not Skyview.)  If anybody has more information on this let me know.
- 
+Skyview also offers the option of loading into its SD card a database of aircraft, so that they can be displayed on the screen with the tail (competition) number, registration, or make and model.  I have replaced the use of SQLITE in SkyView.  Instead, it now uses uCDB, similar to the "Badge Edition" of SoftRF.  Put the file ogn.cdb in the Aircrafts folder on the SD card.  A recent copy of ogn.cdb is in the software/data/Aircrafts folder.  An up to date copy can be downloaded at any time from http://soaringweather.no-ip.info/ADB/data  At this time only the OGN data is available in this format, not the Flarmnet data nor ICAO.
+
