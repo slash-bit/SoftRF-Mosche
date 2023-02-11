@@ -166,6 +166,34 @@ void setup()
 
   SoC->Button_setup();
 
+  if (settings->baud_rate != BAUD_DEFAULT) {
+    Serial.print("Switching baud rate to ");
+    Serial.println(settings->baud_rate);
+    // Serial.end();
+    delay(2000);
+    switch (settings->baud_rate) {
+      case BAUD_4800:
+        Serial.begin(4800, SERIAL_OUT_BITS);
+        break;
+      case BAUD_9600:
+        Serial.begin(9600, SERIAL_OUT_BITS);
+        break;
+      case BAUD_19200:
+        Serial.begin(19200, SERIAL_OUT_BITS);
+        break;
+      case BAUD_57600:
+        Serial.begin(57600, SERIAL_OUT_BITS);
+        break;
+      case BAUD_115200:
+        Serial.begin(115200, SERIAL_OUT_BITS);
+        break;
+      case BAUD_38400:
+      default:
+        Serial.begin(38400, SERIAL_OUT_BITS);
+        break;
+    }
+  }
+
   if (settings->stealth
         || settings->id_method == ADDR_TYPE_RANDOM
         || settings->id_method == ADDR_TYPE_ANONYMOUS) {
