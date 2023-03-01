@@ -130,6 +130,10 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
     legacy_packet_t *pkt = (legacy_packet_t *) legacy_pkt;
 
+    // FLARM seems to send some other type of data packet occasionally, ignore it
+    if (pkt->_unk0 != 0)
+        return false;
+
     float ref_lat = this_aircraft->latitude;
     float ref_lon = this_aircraft->longitude;
     float geo_separ = this_aircraft->geoid_separation;
