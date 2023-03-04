@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB09n"
+#define SOFTRF_FIRMWARE_VERSION "MB09o"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -65,8 +65,8 @@
 // KEY:  12345678
 // IP: 192.168.1.1
 // NETMASK: 255.255.255.0
-#define MY_ACCESSPOINT_SSID ""
-#define MY_ACCESSPOINT_PSK  ""
+#define MY_ACCESSPOINT_SSID "www xxx yyy zzz"
+#define MY_ACCESSPOINT_PSK  "xxxxxx"
 
 #define RELAY_DST_PORT  12390
 #define RELAY_SRC_PORT  (RELAY_DST_PORT - 1)

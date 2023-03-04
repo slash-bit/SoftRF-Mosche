@@ -44,7 +44,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B09
+#define SOFTRF_EEPROM_VERSION 0x00000B0A
 
 enum
 {
@@ -125,6 +125,9 @@ typedef struct Settings {
     bool     nmea2_s:1;
     bool     nmea2_d:1;
     uint8_t  nmea_out2:3;     /* second NMEA output route */
+
+    char    ssid[19];
+    char    psk[17];
 
 } __attribute__((packed)) settings_t;
 

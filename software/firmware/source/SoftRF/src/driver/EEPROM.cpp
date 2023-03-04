@@ -58,6 +58,8 @@ void EEPROM_setup()
     eeprom_block.raw[i] = EEPROM.read(i);
   }
 
+  settings = &eeprom_block.field.settings;
+
   if (eeprom_block.field.magic != SOFTRF_EEPROM_MAGIC) {
     Serial.println(F("WARNING! User defined settings are not initialized yet. Loading defaults..."));
 
@@ -74,7 +76,6 @@ void EEPROM_setup()
       cmd = EEPROM_EXT_DEFAULTS;
     }
   }
-  settings = &eeprom_block.field.settings;
 
 //#if defined(DEFAULT_REGION_US)
 //      settings->band = RF_BAND_US;
@@ -85,65 +86,66 @@ void EEPROM_setup()
 
 void EEPROM_defaults()
 {
-  eeprom_block.field.magic                  = SOFTRF_EEPROM_MAGIC;
-  eeprom_block.field.version                = SOFTRF_EEPROM_VERSION;
-  eeprom_block.field.settings.mode          = SOFTRF_MODE_NORMAL;
-  eeprom_block.field.settings.rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
-                                              RF_PROTOCOL_FANET : RF_PROTOCOL_LEGACY;
+  eeprom_block.field.magic   = SOFTRF_EEPROM_MAGIC;
+  eeprom_block.field.version = SOFTRF_EEPROM_VERSION;
+
+  settings->mode          = SOFTRF_MODE_NORMAL;
+  settings->rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
+                              RF_PROTOCOL_FANET : RF_PROTOCOL_LEGACY;
 #if defined(DEFAULT_REGION_US)
-  eeprom_block.field.settings.band          = RF_BAND_US;
+  settings->band          = RF_BAND_US;
 #else
-  eeprom_block.field.settings.band          = RF_BAND_EU;
+  settings->band          = RF_BAND_EU;
 #endif
-  eeprom_block.field.settings.aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
+  settings->aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                               AIRCRAFT_TYPE_STATIC :
                                               AIRCRAFT_TYPE_GLIDER;
-  eeprom_block.field.settings.txpower       = RF_TX_POWER_FULL;
-  eeprom_block.field.settings.bluetooth     = BLUETOOTH_OFF;
-  eeprom_block.field.settings.alarm         = TRAFFIC_ALARM_LEGACY;
+  settings->txpower       = RF_TX_POWER_FULL;
+  settings->bluetooth     = BLUETOOTH_OFF;
+  settings->alarm         = TRAFFIC_ALARM_LEGACY;
 
   /* This will speed up 'factory' boot sequence on Editions other than Standalone */
   if (hw_info.model == SOFTRF_MODEL_STANDALONE
    || hw_info.model == SOFTRF_MODEL_PRIME) {
-    eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
-    eeprom_block.field.settings.strobe      = STROBE_OFF;
-    eeprom_block.field.settings.pointer     = DIRECTION_NORTH_UP;
+    settings->volume      = BUZZER_VOLUME_FULL;
+    settings->strobe      = STROBE_OFF;
+    settings->pointer     = DIRECTION_NORTH_UP;
   } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    eeprom_block.field.settings.volume      = BUZZER_VOLUME_FULL;
-    eeprom_block.field.settings.strobe      = STROBE_ALARM;
-    eeprom_block.field.settings.pointer     = LED_OFF;
+    settings->volume      = BUZZER_VOLUME_FULL;
+    settings->strobe      = STROBE_ALARM;
+    settings->pointer     = LED_OFF;
   } else {
-    eeprom_block.field.settings.volume      = BUZZER_OFF;
-    eeprom_block.field.settings.strobe      = STROBE_OFF;
-    eeprom_block.field.settings.pointer     = LED_OFF;
+    settings->volume      = BUZZER_OFF;
+    settings->strobe      = STROBE_OFF;
+    settings->pointer     = LED_OFF;
   }
 
-  eeprom_block.field.settings.norelay    = false;
+  settings->norelay    = false;
 
-  eeprom_block.field.settings.nmea_g     = true;
-  eeprom_block.field.settings.nmea_p     = false;
-  eeprom_block.field.settings.nmea_l     = true;
-  eeprom_block.field.settings.nmea_s     = true;
-  eeprom_block.field.settings.nmea_d     = false;
+  settings->nmea_g     = true;
+  settings->nmea_p     = false;
+  settings->nmea_l     = true;
+  settings->nmea_s     = true;
+  settings->nmea_d     = false;
 
-  eeprom_block.field.settings.nmea2_g     = true;
-  eeprom_block.field.settings.nmea2_p     = false;
-  eeprom_block.field.settings.nmea2_l     = true;
-  eeprom_block.field.settings.nmea2_s     = true;
-  eeprom_block.field.settings.nmea2_d     = false;
+  settings->nmea2_g     = true;
+  settings->nmea2_p     = false;
+  settings->nmea2_l     = true;
+  settings->nmea2_s     = true;
+  settings->nmea2_d     = false;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
-  eeprom_block.field.settings.nmea_out   = NMEA_USB;
-  eeprom_block.field.settings.nmea_out2  = NMEA_OFF;
+  settings->nmea_out   = NMEA_USB;
+  settings->nmea_out2  = NMEA_OFF;
 #else
-  eeprom_block.field.settings.nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
+  settings->nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              NMEA_BLUETOOTH :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
                                              NMEA_UDP :
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
                                              NMEA_UDP :
                                            NMEA_UART));
-  eeprom_block.field.settings.nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
+  settings->nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              NMEA_USB :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
                                              NMEA_UART :
@@ -152,29 +154,34 @@ void EEPROM_defaults()
                                            NMEA_OFF));
 #endif
 
-  eeprom_block.field.settings.gdl90      = GDL90_OFF;
-  eeprom_block.field.settings.d1090      = D1090_OFF;
-  eeprom_block.field.settings.json       = JSON_OFF;
-  eeprom_block.field.settings.stealth    = false;
-  eeprom_block.field.settings.no_track   = false;
-  eeprom_block.field.settings.power_save = hw_info.model == SOFTRF_MODEL_BRACELET ?
+  settings->gdl90      = GDL90_OFF;
+  settings->d1090      = D1090_OFF;
+  settings->json       = JSON_OFF;
+  settings->stealth    = false;
+  settings->no_track   = false;
+  settings->power_save = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                            POWER_SAVE_NORECEIVE : POWER_SAVE_NONE;
-  eeprom_block.field.settings.power_external = 0;
-  eeprom_block.field.settings.freq_corr  = 0;
-  eeprom_block.field.settings.baud_rate  = BAUD_DEFAULT;
-  eeprom_block.field.settings.igc_key[0] = 0;
-  eeprom_block.field.settings.igc_key[1] = 0;
-  eeprom_block.field.settings.igc_key[2] = 0;
-  eeprom_block.field.settings.igc_key[3] = 0;
+  settings->power_external = 0;
+  settings->freq_corr  = 0;
+  settings->baud_rate  = BAUD_DEFAULT;
+  settings->igc_key[0] = 0;
+  settings->igc_key[1] = 0;
+  settings->igc_key[2] = 0;
+  settings->igc_key[3] = 0;
 
   /* added to allow setting aircraft ID and also an ID to ignore */
-  eeprom_block.field.settings.aircraft_id = 0;
-  eeprom_block.field.settings.ignore_id = 0;
-  eeprom_block.field.settings.follow_id = 0;
-  eeprom_block.field.settings.id_method = ADDR_TYPE_FLARM;
-  eeprom_block.field.settings.debug_flags = 0x3F;
+  settings->aircraft_id = 0;
+  settings->ignore_id = 0;
+  settings->follow_id = 0;
+  settings->id_method = ADDR_TYPE_FLARM;
+  settings->debug_flags = 0x3F;
       // if and when debug output will be turned on,
       // allow all debug message types by default
+
+  strncpy(settings->ssid, "www xxx yyy zzz", sizeof(settings->ssid)-1);
+  settings->ssid[sizeof(settings->ssid)-1] = '\0';
+  strncpy(settings->psk, "xxxxxx", sizeof(settings->psk)-1);
+  settings->psk[sizeof(settings->psk)-1] = '\0';
 }
 
 void EEPROM_store()

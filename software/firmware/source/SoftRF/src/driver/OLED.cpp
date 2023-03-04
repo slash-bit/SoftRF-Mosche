@@ -29,6 +29,7 @@
 #include "GNSS.h"
 #include "Baro.h"
 #include "Battery.h"
+#include "WiFi.h"
 #include "../TrafficHelper.h"
 
 enum
@@ -38,6 +39,9 @@ enum
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
   OLED_PAGE_BARO,
 #endif /* EXCLUDE_OLED_BARO_PAGE */
+#if !defined(EXCLUDE_OLED_WIFI_PAGE)
+  OLED_PAGE_WIFI,
+#endif /* EXCLUDE_OLED_WIFI_PAGE */
   OLED_PAGE_COUNT
 };
 
@@ -446,6 +450,44 @@ static void OLED_baro()
 }
 #endif /* EXCLUDE_OLED_BARO_PAGE */
 
+#if !defined(EXCLUDE_OLED_WIFI_PAGE)
+static void OLED_wifi()
+{
+  char buf[16];
+
+  if (!OLED_display_titles) {
+
+    u8x8->clear();
+
+    u8x8->drawString( 0, 2, "WiFi SSID:");
+    //if(WiFi.status() == WL_CONNECTED) {
+        if (WiFi.getMode() == WIFI_STA)
+            u8x8->drawString( 0, 3, WiFi.SSID().c_str());
+        else if (WiFi.getMode() == WIFI_AP)
+            u8x8->drawString( 0, 3, host_name.c_str());
+        else
+            u8x8->drawString( 2, 3, "--------");
+    //} else {
+    //    u8x8->drawString( 0, 3, "-not connected-");
+    //}
+
+    u8x8->drawString( 0, 5, "IP address:");
+    if(WiFi.status() == WL_CONNECTED) {
+        if (WiFi.getMode() == WIFI_STA)
+            u8x8->drawString( 0, 6, WiFi.localIP().toString().c_str());
+        else if (WiFi.getMode() == WIFI_AP)
+            u8x8->drawString( 0, 6, WiFi.softAPIP().toString().c_str());
+        else
+            u8x8->drawString( 2, 6, "--------");
+    } else {
+        u8x8->drawString( 0, 6, "-not connected-");
+    }
+
+    OLED_display_titles = true;
+  }
+}
+#endif /* EXCLUDE_OLED_WIFI_PAGE */
+
 #if !defined(EXCLUDE_OLED_049)
 
 void OLED_049_func()
@@ -681,6 +723,11 @@ void OLED_loop()
           OLED_baro();
           break;
 #endif /* EXCLUDE_OLED_BARO_PAGE */
+#if !defined(EXCLUDE_OLED_WIFI_PAGE)
+        case OLED_PAGE_WIFI:
+          OLED_wifi();
+          break;
+#endif /* EXCLUDE_OLED_WIFI_PAGE */
         case OLED_PAGE_RADIO:
         default:
           OLED_radio();
@@ -796,6 +843,12 @@ void OLED_Next_Page()
       OLED_current_page = (OLED_current_page + 1) % page_count;
     }
 #endif /* EXCLUDE_OLED_049 */
+
+#if defined(EXCLUDE_OLED_WIFI_PAGE)
+    if (OLED_current_page == OLED_PAGE_WIFI) {
+      OLED_current_page = (OLED_current_page + 1) % page_count;
+    }
+#endif /* EXCLUDE_OLED_WIFI_PAGE */
 
     OLED_display_titles = false;
   }

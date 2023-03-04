@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated January 23, 2023
-to fit software version MB09k based on v1.0 with some parts of v1.2
+This version last updated March 3, 2023
+to fit software version MB09o based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -104,7 +104,7 @@ After several weeks in the apparently "off" mode, the battery installed in a T-B
 
 Turning the device on and off
 
-To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing, and the third button is a reset button.
+To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing, and the third button is a reset button.  After booting, the first button serves to switch between pages on the OLED display.
 
 The Power Management Unit (PMU) on the T-Beam is always active.  The on/off button just sends instructions to the PMU.  The PMU can turn the power to individual parts of the board (e.g., the CPU, or the GNSS module) on or off.  There are 3 LEDs on the board.  The bright blue LED near the PMU is controlled by the PMU (with indirect instructions from the CPU).  The dim red LED near it signifies that the CPU is powered (I think).  The red LED near the GNSS module, when blinking, is indicating that the GNSS module has a "fix", i.e., is receiving signals from enough satellites.  If any of the 3 LEDs are lit, the board is not as close to "off" as it can be.
 
@@ -131,7 +131,7 @@ The T-Echo usually includes a "bootloader" which makes it easy to update the fir
 
 The Web Interface (T-Beam only)
 
-After startup, SoftRF on a T-Beam creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to that network.  Look for the network name SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1.  It will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
+After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
 
 Choosing the operational settings
@@ -182,6 +182,8 @@ The "alarm" and "airborne" modes also flash in the first 2 minutes after turning
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 
 Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).
+
+External WiFi (optional): after booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  Either way, other devices can connect, to change settings or update the firmware.  In the case of an external network, the IP address can be seen in the third OLED screen.
 
 NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
 

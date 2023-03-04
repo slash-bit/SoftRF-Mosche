@@ -1,6 +1,6 @@
 /*
  * WiFiHelper.cpp
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 bool udp_is_ready = 0;
 
 #if defined(EXCLUDE_WIFI)
-void WiFi_setup()    {}
+void WiFi_setup()   {}
 void WiFi_loop()    {}
 void WiFi_fini()    {}
 #else
@@ -73,6 +73,7 @@ char UDPpacketBuffer[256]; // buffer to hold incoming and outgoing packets
 static unsigned long WiFi_No_Clients_Time_ms = 0;
 #endif
 
+#if 0
 /**
  * @brief Read WiFi connection information from file system.
  * @param ssid String pointer for storing SSID.
@@ -167,6 +168,7 @@ bool saveConfig(String *ssid, String *pass)
 
   return true;
 } // saveConfig
+#endif
 
 size_t Raw_Receive_UDP(uint8_t *buf)
 {
@@ -229,15 +231,19 @@ void WiFi_setup()
     delay(10);
   }
 
+  // use SSID and PSK from settings
+  station_ssid = settings->ssid;
+  station_psk  = settings->psk;
+
   // ... Compare file config with sdk config.
   if (WiFi.SSID() != station_ssid || WiFi.psk() != station_psk)
   {
-    Serial.println(F("WiFi config changed."));
+    //Serial.println(F("WiFi config changed."));
 
     // ... Try to connect to WiFi station.
     WiFi.begin(station_ssid.c_str(), station_psk.c_str());
 
-    // ... Pritn new SSID
+    // ... Print new SSID
     Serial.print(F("new SSID: "));
     Serial.println(WiFi.SSID());
 
@@ -251,6 +257,7 @@ void WiFi_setup()
   }
 
   // Set Hostname.
+  host_name += "-";
   host_name += String((SoC->getChipId() & 0xFFFFFF), HEX);
   SoC->WiFi_hostname(host_name);
 
@@ -273,6 +280,8 @@ void WiFi_setup()
   if(WiFi.status() == WL_CONNECTED)
   {
     // ... print IP Address
+    Serial.print(F("Connected to: "));
+    Serial.println(WiFi.SSID());
     Serial.print(F("IP address: "));
     Serial.println(WiFi.localIP());
   }

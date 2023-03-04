@@ -456,12 +456,26 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
+<th align=left>External WiFi (optional):</th>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;SSID:</th>\
+<td align=right>\
+<INPUT type='text' name='ssid' maxlength='18' value='%s' size='20' ></td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;PSK:</th>\
+<td align=right>\
+<INPUT type='password' name='psk' maxlength='16' value='%s' size='20' ></td>\
+</tr>\
+<tr>\
 <th align=left>NMEA primary output</th>\
 <td align=right>\
 <select name='nmea_out'>\
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>\
 <option %s value='%d'>UDP</option>"),
+  settings->ssid, "hidepass",
   (settings->nmea_out == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
   (settings->nmea_out == NMEA_UART ? "selected" : ""), NMEA_UART,
   (settings->nmea_out == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
@@ -980,6 +994,15 @@ void handleInput() {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
       settings->bluetooth = server.arg(i).toInt();
+    } else if (server.argName(i).equals("ssid")) {
+      strncpy(settings->ssid, server.arg(i).c_str(), sizeof(settings->ssid)-1);
+      settings->ssid[sizeof(settings->ssid)-1] = '\0';
+    } else if (server.argName(i).equals("psk")) {
+        //if (strcmp(server.arg(i).c_str()),"hidepass")
+        if (! server.arg(i).equals("hidepass")) {
+            strncpy(settings->psk, server.arg(i).c_str(), sizeof(settings->psk)-1);
+            settings->psk[sizeof(settings->psk)-1] = '\0';
+        }
     } else if (server.argName(i).equals("nmea_out")) {
       settings->nmea_out = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_g")) {
@@ -1101,6 +1124,7 @@ PSTR("<html>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
+<tr><th align=left>SSID</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Out 1</th><td align=right>%d</td></tr>\
 <tr><th align=left>NMEA GNSS</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Private</th><td align=right>%s</td></tr>\
@@ -1132,7 +1156,8 @@ PSTR("<html>\
   settings->ignore_id, settings->follow_id,
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
-  settings->volume, settings->strobe, settings->pointer, settings->bluetooth,
+  settings->volume, settings->strobe, settings->pointer,
+  settings->bluetooth, settings->ssid,
   settings->nmea_out,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
@@ -1165,6 +1190,8 @@ Serial.print(" Volume ");Serial.println(settings->volume);
 Serial.print(" Strobe ");Serial.println(settings->strobe);
 Serial.print(" LED pointer ");Serial.println(settings->pointer);
 Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
+Serial.print(" SSID ");Serial.println(settings->ssid);
+Serial.print(" PSK ");Serial.println(settings->psk);
 Serial.print(" NMEA Out 1 ");Serial.println(settings->nmea_out);
 Serial.print(" NMEA GNSS ");Serial.println(settings->nmea_g);
 Serial.print(" NMEA Private ");Serial.println(settings->nmea_p);
