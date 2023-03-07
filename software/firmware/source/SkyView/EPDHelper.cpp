@@ -37,7 +37,11 @@ GxEPD2_GFX *display;
 const char EPD_SkyView_text1[] = "Sky";
 const char EPD_SkyView_text2[] = "View";
 const char EPD_SkyView_text3[] = "Presented by";
+#if defined(BUILD_SKYVIEW_HD)
 const char EPD_SkyView_text4[] = "SoftRF project";
+#else
+const char EPD_SkyView_text4[] = "SoftRF/LilyGO";
+#endif
 const char EPD_SkyView_text5[] = "and LilyGO";
 const char EPD_SkyView_text6[] = "SkyView";
 const char EPD_SkyView_text7[] = "Author:";
@@ -120,18 +124,18 @@ byte EPD_setup(bool splash_screen)
 
       {
         uint16_t x = (display->width() - tbw1) / 2;
-        uint16_t y = (display->height() + tbh1) / 2;
+        uint16_t y = (display->height() + tbh1) / 2 - 4;
         display->setCursor(x - (tbw1 / 3), y - tbh1);
         display->print(EPD_SkyView_text1);
         x = (display->width() - tbw2) / 2;
-        y = (display->height() + tbh2) / 2;
+        y = (display->height() + tbh2) / 2 - 4;
         display->setCursor(x + (tbw2 / 7), y - (tbh2 - tbh1) );
         display->print(EPD_SkyView_text2);
 
         display->setFont(&FreeMonoOblique9pt7b);
         display->getTextBounds(EPD_SkyView_text3, 0, 0, &tbx3, &tby3, &tbw3, &tbh3);
         x = (display->width() - tbw3) / 2;
-        y = (display->height() + tbh3) * 3 / 4;
+        y = (display->height() + tbh3) * 3 / 4 - 4;
         display->setCursor(x, y);
         display->print(EPD_SkyView_text3);
         display->setFont(&FreeMonoBoldOblique9pt7b);
@@ -142,13 +146,17 @@ byte EPD_setup(bool splash_screen)
         display->setCursor(x, y);
         display->print(EPD_SkyView_text4);
 
+        char buf[16];
+        strcpy(buf,"version:");
+        strcat(buf,SKYVIEW_FIRMWARE_VERSION);
+
         if (hw_info.revision == HW_REV_T5S_1_9 || hw_info.revision == HW_REV_T5S_2_8) {
-          display->getTextBounds(EPD_SkyView_text5, 0, 0, &tbx5, &tby5, &tbw5, &tbh5);
+          display->getTextBounds(buf, 0, 0, &tbx5, &tby5, &tbw5, &tbh5);
           x = (display->width() - tbw5) / 2;
           y += tbh4;
-          y += 3;
+          y += 7;
           display->setCursor(x, y);
-          display->print(EPD_SkyView_text5);
+          display->print(buf);
         }
       }
     }

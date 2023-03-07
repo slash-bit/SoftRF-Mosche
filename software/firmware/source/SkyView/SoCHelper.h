@@ -47,7 +47,7 @@ typedef struct SoC_ops_struct {
   void (*WiFi_Transmit_UDP)(int, byte *, size_t);
   int  (*WiFi_clients_count)();
   bool (*DB_init)();
-  bool (*DB_query)(uint8_t, uint32_t, char *, size_t);
+  bool (*DB_query)(uint8_t, uint32_t, char *, size_t, char *, size_t);
   void (*DB_fini)();
   void (*TTS)(char *);
   void (*Button_setup)();

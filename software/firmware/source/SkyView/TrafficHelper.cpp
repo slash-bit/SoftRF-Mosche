@@ -23,6 +23,7 @@
 #include "NMEAHelper.h"
 #include "EEPROMHelper.h"
 #include "EPDHelper.h"
+#include "ApproxMath.h"
 
 #include "SkyView.h"
 
@@ -36,6 +37,8 @@ int max_alarm_level = ALARM_LEVEL_NONE;
 
 void Traffic_Add()
 {
+    // Traffic_Update(&fo);    // already done in NMEAHelper.cpp
+
     float fo_distance = fo.distance;
 
     if (fo_distance > ALARM_ZONE_NONE) {
@@ -48,12 +51,33 @@ void Traffic_Add()
       int i;
 
       for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].ID == fo.ID) {
-          uint8_t alert_bak = Container[i].alert;
-          uint8_t alert_level = Container[i].alert_level;
-          Container[i] = fo;
-          Container[i].alert = alert_bak;
-          Container[i].alert_level = alert_level;
+        traffic_t *cip = &Container[i];
+        if (cip->ID == fo.ID) {
+          fo.alert = cip->alert;
+          fo.alert_level = cip->alert_level;
+          if (fo.packet_type == 2) {  // PFLAU
+            time_t interval = fo.timestamp - cip->timestamp;
+            if (interval <= 3) {
+              if (cip->packet_type == 1) {
+                // PFLAU following PFLAA, use the track from the previous packet
+                fo.Track = cip->Track;
+              } else {
+                // compute track from the two distance/bearing points
+                // also taking into account that this aircraft has moved too
+                float our_move = ThisAircraft.GroundSpeed * 0.5 /*MPS_PER_KNOT*/ * interval;
+                    // - VERY approximate since the time interval units are coarse
+                fo.Track = approxHypotenuse(our_move * sin_approx(ThisAircraft.Track)
+                               + fo.distance * sin_approx(fo.RelativeBearing)
+                               - cip->distance * sin_approx(cip->RelativeBearing),
+                                            our_move * cos_approx(ThisAircraft.Track)
+                               + fo.distance * cos_approx(fo.RelativeBearing) 
+                               - cip->distance * cos_approx(cip->RelativeBearing));
+              }
+            } else {
+              // if PFLAU with no recent history, track remains unknown
+            }
+          }
+          *cip = fo;
           return;
         }
       }
@@ -102,34 +126,38 @@ void Traffic_Update(traffic_t *fop)
 
   if (settings->protocol == PROTOCOL_GDL90) {
 
-    distance = nmea.distanceBetween( ThisAircraft.latitude,
-                                     ThisAircraft.longitude,
-                                     fop->latitude,
-                                     fop->longitude);
+    /* use an approximation for distance & bearing between 2 points */
+    float x, y;
+    y = 111300.0 * (fop->latitude - ThisAircraft.latitude);         /* meters */
+    x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
+    distance = approxHypotenuse(x, y);      /* meters  */
 
-    bearing  = nmea.courseTo( ThisAircraft.latitude,
-                              ThisAircraft.longitude,
-                              fop->latitude,
-                              fop->longitude);
+    fop->RelativeNorth     = y;
+    fop->RelativeEast      = x;
 
-    fop->RelativeNorth     = distance * cos(radians(bearing));
-    fop->RelativeEast      = distance * sin(radians(bearing));
     fop->RelativeVertical  = fop->altitude - ThisAircraft.altitude;
 
     fop->RelativeBearing = bearing;
     fop->distance = distance;
     fop->adj_dist = fabs(distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
-  } else if (fop->distance != 0) {    /* a PFLAU sentence: distance & bearing known */
+  } else if (fop->packet_type == 2) {    /* a PFLAU sentence: distance & bearing known */
 
     fop->adj_dist = fabs(fop->distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
+    fop->RelativeNorth     = fop->distance * cos_approx(fop->RelativeBearing);
+    fop->RelativeEast      = fop->distance * sin_approx(fop->RelativeBearing);
+
+    fop->Track = -360;   // unknown track, will display same as 0 (North)
+
   } else {           /* a PFLAA sentence */
 
-    distance = sqrtf(fop->RelativeNorth * fop->RelativeNorth + fop->RelativeEast * fop->RelativeEast);
+    distance = approxHypotenuse(fop->RelativeNorth, fop->RelativeEast);
+
     fop->distance = distance;
     fop->adj_dist = fabs(distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
+    fop->RelativeBearing = atan2_approx(fop->RelativeNorth, fop->RelativeEast);
   }
 
   if (fop->alarm_level < fop->alert_level)     /* if gone farther then...   */

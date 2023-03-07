@@ -26,28 +26,30 @@ extern "C" {
 }
 
 typedef struct traffic_struct {
+
     time_t    timestamp;
+    uint8_t   packet_type;   // 1=PFLAA, 2=PFLAU
 
 /* -------------------------------+------------------------------ */
 /*            FLARM FTD-12        |      GDL90 equivalent         */
 /* -------------------------------+------------------------------ */
     int8_t    alarm_level;        // trafficAlertStatus
                                   //
-    int8_t    IDType;             // addressType
+    int8_t    IDType;             // addressType                // PFLAA only
     uint32_t  ID;                 // address
-    uint16_t  Track;              // trackOrHeading
-    int16_t   TurnRate;
-    uint16_t  GroundSpeed;        // horizontalVelocity
-    float     ClimbRate;          // verticalVelocity
-    int8_t    AcftType;           // emitterCategory
+    uint16_t  Track;              // trackOrHeading             // PFLAA only
+    int16_t   TurnRate;                                         // PFLAA only
+    uint16_t  GroundSpeed;        // horizontalVelocity         // PFLAA only
+    float     ClimbRate;          // verticalVelocity           // PFLAA only
+    int8_t    AcftType;           // emitterCategory            // PFLAA only
 
     uint8_t   alert_level;        // minimum alarm level to generate voice warning
 
 /*            Legacy              */
-    float     RelativeNorth;
-    float     RelativeEast;
+    float     RelativeNorth;                                   // PFLAA only
+    float     RelativeEast;                                    // PFLAA only
     float     RelativeVertical;
-    int       RelativeBearing;    // PFLAU only
+    int       RelativeBearing;                                 // PFLAU only
 
     float     distance;
     float     adj_dist;

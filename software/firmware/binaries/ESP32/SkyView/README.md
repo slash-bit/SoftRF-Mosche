@@ -1,6 +1,14 @@
 # Release notes
 
 
+## revision MB06
+
+### Major improvements
+
+Aircraft icons in radar view rotate to show track directions (thanks, Nick Bonniere).
+Show two data fields from DB at once on traffic text info screen.
+
+
 ## revision MB05
 
 ### Major improvements

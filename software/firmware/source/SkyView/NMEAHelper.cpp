@@ -161,6 +161,7 @@ static void NMEA_Parse_Character(char c)
         }
 
         fo.timestamp = ThisAircraft.timestamp = now();
+        fo.packet_type = 1;
         Traffic_Update(&fo);
         Traffic_Add();
 
@@ -245,6 +246,7 @@ static void NMEA_Parse_Character(char c)
 
         /* PFLAU sentence may not include any traffic, update timestamp anyway */
         fo.timestamp = ThisAircraft.timestamp = NMEA_Status.timestamp = now();
+        fo.packet_type = 2;
 
         if (fo.ID) {
             Traffic_Update(&fo);

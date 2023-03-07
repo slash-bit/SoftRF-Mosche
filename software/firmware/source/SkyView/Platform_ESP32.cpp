@@ -627,28 +627,27 @@ static bool ESP32_DB_init()
   return rval;
 }
 
-static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
+static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
+                            char *buf2=NULL, size_t size2=0)
 {
   // The 'type' argument is for selecting which DB (OGN, FLN, etc).
   // For now we ignore it.  Only ogn.cdb is supported.
 
   char key[8];
   char out[64];
-  uint8_t tokens[3] = { 0 };
+  uint8_t tokens[4] = { 0 };    // was [3] - allow room for future inclusion of aircraft type
   cdbResult rt;
   int c, i = 0, token_cnt = 0;
-  bool rval = false;
+  int nothing;
 
-  if (!ADB_is_open) {
-    return rval;
-  }
+  if (!ADB_is_open)
+    return false;
 
   snprintf(key, sizeof(key),"%06X", id);
 
   rt = ucdb.findKey(key, strlen(key));
 
-  switch (rt) {
-    case KEY_FOUND:
+  if (rt == KEY_FOUND) {
       while ((c = ucdb.readValue()) != -1 && i < (sizeof(out) - 1)) {
         if (c == '|') {
           if (token_cnt < (sizeof(tokens) - 1)) {
@@ -660,41 +659,84 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
         out[i++] = (char) c;
       }
       out[i] = 0;
+      nothing = i;
+      if (token_cnt < 2)  tokens[1] = nothing;
+      if (token_cnt < 3)  tokens[2] = nothing;
+      if (token_cnt < 4)  tokens[3] = nothing;
 
       // this code is specific to ogn.cdb
-      // if we ever use fln.cdb need specific code
+      // if we ever use fln.cdb need specific code for that
+
+      int pref1, pref2, pref3;
       switch (settings->idpref)
       {
       case ID_TAIL:
-        snprintf(buf, size, "%s",
-          strlen(out + tokens[2]) ? out + tokens[2] :
-          strlen(out + tokens[1]) ? out + tokens[1] :
-          strlen(out + tokens[0]) ? out + tokens[0] : "");
+        pref1 = tokens[2];   // CN
+        pref2 = tokens[0];   // M&M
+        pref3 = tokens[1];   // reg
         break;
       case ID_MAM:
-        snprintf(buf, size, "%s",
-          strlen(out + tokens[0]) ? out + tokens[0] :
-          strlen(out + tokens[2]) ? out + tokens[2] :
-          strlen(out + tokens[1]) ? out + tokens[1] : "");
+        pref1 = tokens[0];
+        pref2 = tokens[1];
+        pref3 = tokens[2];
         break;
       case ID_REG:
+        pref1 = tokens[1];
+        pref2 = tokens[0];
+        pref3 = tokens[2];
+        break;
       default:
-        snprintf(buf, size, "%s",
-          strlen(out + tokens[1]) ? out + tokens[1] :
-          strlen(out + tokens[2]) ? out + tokens[2] :
-          strlen(out + tokens[0]) ? out + tokens[0] : "");
+        pref1 = nothing;
+        pref2 = nothing;
+        pref3 = nothing;
         break;
       }
-
-      rval = (buf[0] != '\0');
-      break;
-
-    case KEY_NOT_FOUND:
-    default:
-      break;
+      // try and show BOTH first and second preference
+      // data fields, e.g., contest number AND M&M:
+#if 0
+// single line
+      if (buf2) buf2[0] = 0;
+      if (strlen(out + pref1)) {
+        snprintf(buf, size, "%s:%s",
+          out + pref1,
+          (strlen(out + pref2) ? out + pref2 :
+           strlen(out + pref3) ? out + pref3 : ""))
+      } else if (strlen(out + pref2)) {
+        snprintf(buf, size, "%s:%s",
+          out + pref2,
+          (strlen(out + pref3) ? out + pref3 : ""))
+      } else if (strlen(out + pref3)) {
+        snprintf(buf, size, "%s", out + pref3);
+      } else {
+        buf[0] = 0;
+        return false;
+      }
+#else
+// will be two lines on the display
+      if (out[pref1]) {
+        snprintf(buf, size, "%s", &out[pref1]);
+        if (buf2)
+          snprintf(buf2, size2, "%s",
+            (out[pref2] ? &out[pref2] :
+             out[pref3] ? &out[pref3] : ""));
+      } else if (out[pref2]) {
+        snprintf(buf, size, "%s", &out[pref2]);
+        if (buf2)
+          snprintf(buf2, size2, "%s",
+            (out[pref3] ? &out[pref3] : ""));
+      } else if (out[pref3]) {
+        snprintf(buf, size, "%s", &out[pref3]);
+        if (buf2)  buf2[0] = 0;
+      } else {
+        buf[0] = 0;
+        if (buf2)  buf2[0] = 0;
+        return false;
+      }
+#endif
+      return true;
   }
 
-  return rval;
+  return false;
 }
 
 static void ESP32_DB_fini()

@@ -38,6 +38,7 @@ static void EPD_Draw_Text()
   int bearing;
   char info_line [TEXT_VIEW_LINE_LENGTH];
   char id_text   [TEXT_VIEW_LINE_LENGTH];
+  char id2_text  [TEXT_VIEW_LINE_LENGTH];
 
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].ID && (now() - Container[i].timestamp) <= EPD_EXPIRATION_TIME) {
@@ -147,7 +148,7 @@ static void EPD_Draw_Text()
     uint32_t id = traffic[EPD_current - 1].fop->ID;
 
     long start = micros();
-    if (SoC->DB_query(db, id, id_text, sizeof(id_text))) {
+    if (SoC->DB_query(db, id, id_text, sizeof(id_text), id2_text, sizeof(id2_text))) {
 #if 0
       Serial.print(F("Registration of "));
       Serial.print(id);
@@ -156,6 +157,7 @@ static void EPD_Draw_Text()
 #endif
     } else {
       snprintf(id_text, sizeof(id_text), "ID: %06X", id);
+      id2_text[0] = 0;
     }
 #if 0
      Serial.print(F("Time taken: "));
@@ -248,6 +250,16 @@ static void EPD_Draw_Text()
       display->setCursor(x, y);
       display->print(id_text);
 //      Serial.println(id_text);
+
+// >>> added one more line, may or may not fit
+      if (id2_text[0]) {
+          y += TEXT_VIEW_LINE_SPACING;
+          display->getTextBounds(id2_text, 0, 0, &tbx, &tby, &tbw, &tbh);
+          y += tbh;
+          display->setCursor(x, y);
+          display->print(id2_text);
+//        Serial.println(id2_text);
+      }
 
 //      Serial.println();
     }
