@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 3, 2023
-to fit software version MB09o based on v1.0 with some parts of v1.2
+This version last updated March 10, 2023
+to fit software version MB09r based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -183,6 +183,12 @@ LED ring direction: this is for use only if you attach an LED traffic display su
 
 Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).
 
+TCP mode (if used): Can choose Server (the default) which is what is expected by, e.g., XCsoar or Tophat (if TCP connection is used - the default is UDP), or Client which is needed to connect to XCvario.
+
+Host IP (if TCP client): Enter IP address, e.g., 192.168.4.1 - only affects TCP client connection.
+
+Host port (if TCP client): Choose the port to which the TCP client connects to, either 2000 (default) or 8880 (option for stock XCvario firmware).  And allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario.
+
 External WiFi (optional): after booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  Either way, other devices can connect, to change settings or update the firmware.  In the case of an external network, the IP address can be seen in the third OLED screen.
 
 NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
@@ -190,7 +196,7 @@ NMEA output: this selects the method by which the data is sent out: Off (no data
 NMEA sentences: Data is sent to connected devices via text "sentences" in the NMEA format.  You can turn on or off each of the following types of sentences:  GNSS (position data), Private (SoftRF debugging, leave off), 
 Legacy (traffic data in the same format used by FLARM), Sensors (e.g., barometric sensor, if you attach such to the board), and Debug (debugging of my SoftRF version, leave off).
 
-NMEA secondary output: two output routes are allowed simultaneously, e.g., Bluetooth and USB.
+NMEA secondary output: two output routes are allowed simultaneously, e.g., Bluetooth and USB.  Or, UDP and TCP.
 
 NMEA secondary output sentences: same choices as for the primary NMEA output.  E.g., can send GNSS data to the primary and traffic messages to the secondary.  By default both output get the same sentences: GNSS, traffic and sensors.
 
@@ -298,12 +304,16 @@ Here are step by step instructions for OTA firmware update:
 * Connect your PC/Tablet/Cellphone to the Wi-Fi Access Point created by SoftRF
     SSID: SoftRF-XXXXXX
     Key: 12345678
+  (If SoftRF is already set up to connect as a client to an external WiFi network, and if this network is in range, you can skip this step, and leave the PC/Tablet/Cellphone connected to the same external network.) 
 
 * Open up a browser and proceed to the URL: http://192.168.1.1
+  (If using an external network, press the button for the third OLED screen to see the needed IP address.)
 
-* Inspect the firmware version listed in that status page.
+* Inspect the firmware version listed in the Status web page that opens up.
 
-* Go to the Settings page and Write down your SoftRF settings, or take a screen shot of the SoftRF web-interface settings page from your browser.  Return to the status page.
+* Go to the Settings page by clicking the button at the bottom-left of the Status page.
+
+* Write down your SoftRF settings, or take a screen shot of the SoftRF web-interface settings page from your browser.  Return to the status page.
 
 * Click the "Firmware update" button in the SoftRF status web page.
 
@@ -319,9 +329,9 @@ ATTENTION! The update progress indicator shows file transfer completion only. So
 
 * Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.
 
-* Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be set, or all of them will need to be selected again (when different from the defaults).
+* Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be set, or all of them will need to be selected again (where different from the defaults).
 
-If this firmware update method fails, proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
+If this firmware update method fails (and it always fails if starting from the "rc9" firmware version), proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
 
 See similar instructions with screen shots here: https://github.com/lyusupov/SoftRF/wiki/Firmware-update-%28Web-method%29#esp32
 
@@ -342,6 +352,12 @@ Note that this "virtual disk" is not really a disk.  You will never see the drag
 See similar instructions here:
 https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#nrf52840
 
+
+Connecting to XCvario
+
+The most reliable way to connect SoftRF to other devices is through a serial cable.  But this requires adding hardware to, at least, attach the cable, and often also a converter from TTL (T-Beam uses 3.3V) to RS-232.  Another option is a wireless connection.  Connecting to XCsoar or Tophat on an Android device, for example, is straightforward.  Choose (usually) UDP output in SoftRF, and in XCsoar or Tophat select UDP and port 10110.
+
+But a wireless connection to XCvario is more difficult.  With the stock XCvario firmware (as of early 2023) and this version of SoftRF (MB09r) there is now a way to do it:  In SoftRF select WiFi client (SSID XCVario-XXXX, password xcvario-21), and TCP Client output to port 8880.  Activate TCP output as the primary NMEA output.  Also activate UDP output as the secondary NMEA output.  In XCvario make sure that "wireless" is WiFi (Master or Standalone, and not Bluetooth) and that the wireless data route is connected to "vario".  In XCsoar connect to the same XCvario WiFi network.  Configure two "devices" in XCsoar.  One a TCP client on port 8880, using XCvario protocol.  The other a UDP listener on port 10110, using FLARM protocol.  Magically, it works!  With custom firmware (and possibly a future official version) XCvario can also accept the data on port 2000, which frees port 8880 to serve other functions in XCvario.
 
 
 PART 2: UNDER THE HOOD - see separate document

@@ -33,9 +33,99 @@
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
 
 #if defined(NMEA_TCP_SERVICE)
+
 WiFiServer NmeaTCPServer(NMEA_TCP_PORT);
 NmeaTCP_t NmeaTCP[MAX_NMEATCP_CLIENTS];
-#endif
+
+// TCP-client code copied from OGNbase
+// see also https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFi/examples
+
+// #include <ESP32Ping.h>
+#include <WiFiClient.h>
+
+WiFiClient   client;
+
+static int WiFi_connect_TCP()
+{
+    // if (Ping.ping(host, 2))
+    {
+        if (!client.connect(settings->host_ip,
+                            settings->tcpport? NMEA_ALT_PORT : NMEA_TCP_PORT,
+                            5000)) {
+//Serial.println("Failed to connect as TCP client");
+            return 0;
+        }
+//Serial.println("Connected as TCP client");
+        return 1;
+    }
+Serial.println("TCP host not responding to ping");
+    return 0;
+}
+
+static int WiFi_disconnect_TCP()
+{
+    client.stop();
+    return 0;
+}
+
+static int WiFi_transmit_TCP(const byte *buf, size_t size)
+{
+    if (client.connected())
+    {
+        client.write(buf, size);
+if (size > 1 && (settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2)) {
+Serial.print("TCP<");
+Serial.print((char *)buf);
+}
+        return 0;
+    }
+    return 0;
+}
+
+static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
+{
+    int i = 0;
+
+    if (client.connected())
+    {
+        while (client.available() && i < RXbuffer_size - 1) {
+            RXbuffer[i] = client.read();
+            i++;
+            RXbuffer[i] = '\0';
+        }
+if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_RESVD2)) {
+Serial.print("TCP>");
+Serial.print(RXbuffer);
+}
+        return i;
+    }
+    client.stop();
+    return -1;
+}
+
+static void WiFi_flush_TCP()
+{
+static bool db;
+db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2));
+    if (client.connected())
+    {
+if (db && client.available())
+Serial.println("TCP_input_flushed");
+        while (client.available()) {
+            char c = client.read();
+            yield();
+        }
+        return;
+    }
+    client.stop();
+}
+
+static int WiFi_isconnected_TCP()
+{
+    return client.connected();
+}
+
+#endif // defined(NMEA_TCP_SERVICE)
 
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
 
@@ -246,11 +336,20 @@ void NMEA_setup()
 
 #if defined(NMEA_TCP_SERVICE)
   if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-    NmeaTCPServer.begin();
-    Serial.print(F("NMEA TCP server has started at port: "));
-    Serial.println(NMEA_TCP_PORT);
-
-    NmeaTCPServer.setNoDelay(true);
+    if (settings->tcpmode == TCP_MODE_SERVER) {
+        NmeaTCPServer.begin();
+        Serial.print(F("NMEA TCP server has started at port: "));
+        Serial.println(NMEA_TCP_PORT);
+        NmeaTCPServer.setNoDelay(true);
+    } else if (settings->tcpmode == TCP_MODE_CLIENT) {
+        if (WiFi_connect_TCP()) {
+            Serial.print(F("Connected as TCP client to port 2000 on host: "));
+            Serial.println(settings->host_ip);
+        } else {
+            Serial.print(F("Failed to connect to port 2000 on host: "));
+            Serial.println(settings->host_ip);
+        }
+    }
   }
 #endif /* NMEA_TCP_SERVICE */
 
@@ -310,9 +409,19 @@ void NMEA_loop()
 #endif /* ENABLE_AHRS */
 
 #if defined(NMEA_TCP_SERVICE)
-  uint8_t i;
 
   if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+
+    switch (settings->tcpmode)
+    {
+    case TCP_MODE_CLIENT:
+
+    WiFi_flush_TCP();
+    break;
+
+    case TCP_MODE_SERVER:
+  
+    uint8_t i;
 
     if (NmeaTCPServer.hasClient()) {
       for(i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
@@ -350,6 +459,13 @@ void NMEA_loop()
           NmeaTCP[i].ack = true;
       }
     }
+
+    break;
+
+    default:
+      // should not happen
+      break;
+  }
   }
 #endif
 }
@@ -358,7 +474,10 @@ void NMEA_fini()
 {
 #if defined(NMEA_TCP_SERVICE)
   if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-    NmeaTCPServer.stop();
+    if (settings->tcpmode == TCP_MODE_SERVER)
+        NmeaTCPServer.stop();
+    else if (settings->tcpmode == TCP_MODE_CLIENT)
+        WiFi_disconnect_TCP();
   }
 #endif /* NMEA_TCP_SERVICE */
 }
@@ -398,6 +517,7 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
   case NMEA_TCP:
     {
 #if defined(NMEA_TCP_SERVICE)
+    if (settings->tcpmode == TCP_MODE_SERVER) {
       for (uint8_t acc_ndx = 0; acc_ndx < MAX_NMEATCP_CLIENTS; acc_ndx++) {
         if (NmeaTCP[acc_ndx].client && NmeaTCP[acc_ndx].client.connected()){
           if (NmeaTCP[acc_ndx].ack) {
@@ -407,6 +527,12 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
           }
         }
       }
+    }
+    else if (settings->tcpmode == TCP_MODE_CLIENT) {
+        WiFi_transmit_TCP(buf, size);
+        if (nl)
+          WiFi_transmit_TCP((const byte *)"\n", 1);
+    }
 #endif
     }
     break;

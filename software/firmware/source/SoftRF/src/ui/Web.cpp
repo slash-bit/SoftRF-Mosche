@@ -131,7 +131,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 
 void handleSettings() {
 
-  size_t size = 9000;
+  size_t size = 9600;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -441,10 +441,38 @@ void handleSettings() {
 <option %s value='%d'>LE</option>\
 </select>\
 </td>\
+</tr>\
+<tr>\
+<th align=left>TCP mode (if used)</th>\
+<td align=right>\
+<select name='tcpmode'>\
+<option %s value='%d'>Server</option>\
+<option %s value='%d'>Client</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Host IP (if TCP client):</th>\
+<td align=right>\
+<INPUT type='text' name='host_ip' maxlength='15' value='%s' size='16' ></td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Host port (if TCP client):</th>\
+<td align=right>\
+<select name='tcpport'>\
+<option %s value='%d'>2000</option>\
+<option %s value='%d'>8880</option>\
+</select>\
+</td>\
 </tr>"),
     (settings->bluetooth == BLUETOOTH_OFF ? "selected" : ""), BLUETOOTH_OFF,
     (settings->bluetooth == BLUETOOTH_SPP ? "selected" : ""), BLUETOOTH_SPP,
-    (settings->bluetooth == BLUETOOTH_LE_HM10_SERIAL ? "selected" : ""), BLUETOOTH_LE_HM10_SERIAL
+    (settings->bluetooth == BLUETOOTH_LE_HM10_SERIAL ? "selected" : ""), BLUETOOTH_LE_HM10_SERIAL,
+    (settings->tcpmode == TCP_MODE_SERVER ? "selected" : ""), TCP_MODE_SERVER,
+    (settings->tcpmode == TCP_MODE_CLIENT ? "selected" : ""), TCP_MODE_CLIENT,
+     settings->host_ip,
+    (settings->tcpport == 0 ? "selected" : ""), 0,
+    (settings->tcpport == 1 ? "selected" : ""), 1
     );
 
     len = strlen(offset);
@@ -461,12 +489,12 @@ void handleSettings() {
 <tr>\
 <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;SSID:</th>\
 <td align=right>\
-<INPUT type='text' name='ssid' maxlength='18' value='%s' size='20' ></td>\
+<INPUT type='text' name='ssid' maxlength='18' value='%s' size='16' ></td>\
 </tr>\
 <tr>\
 <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;PSK:</th>\
 <td align=right>\
-<INPUT type='password' name='psk' maxlength='16' value='%s' size='20' ></td>\
+<INPUT type='password' name='psk' maxlength='16' value='%s' size='16' ></td>\
 </tr>\
 <tr>\
 <th align=left>NMEA primary output</th>\
@@ -994,6 +1022,10 @@ void handleInput() {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
       settings->bluetooth = server.arg(i).toInt();
+    } else if (server.argName(i).equals("tcpmode")) {
+      settings->tcpmode = server.arg(i).toInt();
+    } else if (server.argName(i).equals("tcpport")) {
+      settings->tcpport = server.arg(i).toInt();
     } else if (server.argName(i).equals("ssid")) {
       strncpy(settings->ssid, server.arg(i).c_str(), sizeof(settings->ssid)-1);
       settings->ssid[sizeof(settings->ssid)-1] = '\0';
@@ -1003,6 +1035,9 @@ void handleInput() {
             strncpy(settings->psk, server.arg(i).c_str(), sizeof(settings->psk)-1);
             settings->psk[sizeof(settings->psk)-1] = '\0';
         }
+    } else if (server.argName(i).equals("host_ip")) {
+      strncpy(settings->host_ip, server.arg(i).c_str(), sizeof(settings->host_ip)-1);
+      settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
     } else if (server.argName(i).equals("nmea_out")) {
       settings->nmea_out = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_g")) {
@@ -1090,14 +1125,22 @@ void handleInput() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     if ((nmea1==NMEA_UART || nmea1==NMEA_USB)
      && (nmea2==NMEA_UART || nmea2==NMEA_USB))
-        nmea2 = NMEA_OFF;      // USB & UART wired together
+        nmea2 = NMEA_OFF;      // a duplicate, USB & UART are wired together
   }
-  bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
-  bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
-  if (wireless1 && wireless2)
-        nmea2 = NMEA_OFF;      // only one wireless output route possible
+//  bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
+//  bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
+  bool wifi1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP);
+  bool wifi2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP);
+  if (wifi1 && nmea2==NMEA_BLUETOOTH)
+        nmea2 = NMEA_OFF;      // only one wireless output type possible
+  if (wifi2 && nmea1==NMEA_BLUETOOTH)
+        nmea2 = NMEA_OFF;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
   settings->nmea_out2 = nmea2;
+  if (nmea1==NMEA_BLUETOOTH || nmea2==NMEA_BLUETOOTH) {
+      if (settings->bluetooth == BLUETOOTH_OFF)
+          settings->bluetooth = BLUETOOTH_SPP;
+  }
 
   /* show new settings before rebooting */
   snprintf_P ( Input_temp, size,
@@ -1124,7 +1167,10 @@ PSTR("<html>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
+<tr><th align=left>TCP mode</th><td align=right>%d</td></tr>\
+<tr><th align=left>TCP port</th><td align=right>%d</td></tr>\
 <tr><th align=left>SSID</th><td align=right>%s</td></tr>\
+<tr><th align=left>Host IP</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Out 1</th><td align=right>%d</td></tr>\
 <tr><th align=left>NMEA GNSS</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Private</th><td align=right>%s</td></tr>\
@@ -1157,7 +1203,7 @@ PSTR("<html>\
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->strobe, settings->pointer,
-  settings->bluetooth, settings->ssid,
+  settings->bluetooth, settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
   settings->nmea_out,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
@@ -1190,8 +1236,11 @@ Serial.print(" Volume ");Serial.println(settings->volume);
 Serial.print(" Strobe ");Serial.println(settings->strobe);
 Serial.print(" LED pointer ");Serial.println(settings->pointer);
 Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
+Serial.print(" TCP mode ");Serial.println(settings->tcpmode);
+Serial.print(" TCP port ");Serial.println(settings->tcpport);
 Serial.print(" SSID ");Serial.println(settings->ssid);
 Serial.print(" PSK ");Serial.println(settings->psk);
+Serial.print(" Host IP ");Serial.println(settings->host_ip);
 Serial.print(" NMEA Out 1 ");Serial.println(settings->nmea_out);
 Serial.print(" NMEA GNSS ");Serial.println(settings->nmea_g);
 Serial.print(" NMEA Private ");Serial.println(settings->nmea_p);

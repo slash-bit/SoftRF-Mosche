@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 3, 2023
-to fit software version MB09o based on v1.0 with some parts of v1.2
+This version last updated March 10, 2023
+to fit software version MB09r based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -160,9 +160,9 @@ Air Relay
 
 Added one-hop relay of radio packets from landed aircraft.  The relayed packets are marked by a different "address (ID) type".  Main file changed: TrafficHelper.cpp.  Also changed EEPROM.* and Web.cpp (for the no-relay setting), NMEA.cpp (for norelay setting), and SoftRF.ino (added pauses between transmissions).
 
-WiFi Client
+WiFi Client Mode
 
-Revived the option of connecting to an external WiFi network.  Can enter the SSID & PSK via the settings page in the web UI.  After booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  The IP address can be seen in the third OLED screen.  The hope is to use this to connect wirelessly to XCvario.
+Revived the option of connecting to an external WiFi network.  Can enter the SSID & PSK via the settings page in the web UI.  After booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  The IP address can be seen in the third OLED screen.  Also added the ability to choose the IP address, and the port to which the TCP client connects to, either 2000 or 8880.  And allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario (and potentially other devices that, like XCvario, create their own WiFi network).
 
 
 KNOWN ISSUES

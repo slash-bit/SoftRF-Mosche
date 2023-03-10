@@ -460,27 +460,23 @@ static void OLED_wifi()
     u8x8->clear();
 
     u8x8->drawString( 0, 2, "WiFi SSID:");
-    //if(WiFi.status() == WL_CONNECTED) {
-        if (WiFi.getMode() == WIFI_STA)
-            u8x8->drawString( 0, 3, WiFi.SSID().c_str());
-        else if (WiFi.getMode() == WIFI_AP)
-            u8x8->drawString( 0, 3, host_name.c_str());
-        else
-            u8x8->drawString( 2, 3, "--------");
-    //} else {
-    //    u8x8->drawString( 0, 3, "-not connected-");
-    //}
+    if (WiFi.getMode() == WIFI_STA)
+        u8x8->drawString( 0, 3, WiFi.SSID().c_str());
+    else if (WiFi.getMode() == WIFI_AP)
+        u8x8->drawString( 0, 3, host_name.c_str());
+    else
+        u8x8->drawString( 2, 3, "--------");
 
     u8x8->drawString( 0, 5, "IP address:");
-    if(WiFi.status() == WL_CONNECTED) {
-        if (WiFi.getMode() == WIFI_STA)
+    if (WiFi.getMode() == WIFI_STA) {
+        if(WiFi.status() == WL_CONNECTED)
             u8x8->drawString( 0, 6, WiFi.localIP().toString().c_str());
-        else if (WiFi.getMode() == WIFI_AP)
-            u8x8->drawString( 0, 6, WiFi.softAPIP().toString().c_str());
         else
-            u8x8->drawString( 2, 6, "--------");
+            u8x8->drawString( 0, 6, "-not connected-");
+    } else if (WiFi.getMode() == WIFI_AP) {
+        u8x8->drawString( 0, 6, WiFi.softAPIP().toString().c_str());
     } else {
-        u8x8->drawString( 0, 6, "-not connected-");
+        u8x8->drawString( 2, 6, "--------");
     }
 
     OLED_display_titles = true;

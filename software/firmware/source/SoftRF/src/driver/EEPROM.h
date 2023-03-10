@@ -44,7 +44,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B0A
+#define SOFTRF_EEPROM_VERSION 0x00000B0B
 
 enum
 {
@@ -70,6 +70,12 @@ enum
 	BAUD_38400,
 	BAUD_57600,
 	BAUD_115200
+};
+
+enum
+{
+	TCP_MODE_SERVER=0,
+	TCP_MODE_CLIENT
 };
 
 typedef struct Settings {
@@ -115,7 +121,9 @@ typedef struct Settings {
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
     uint8_t  strobe:2;
-    uint8_t  resvd5:5;
+    uint8_t  resvd5:3;
+    uint8_t  tcpport:1;       /* 0=2000, 1=8880 */
+    uint8_t  tcpmode:1;
     uint8_t  norelay:1;
     uint32_t follow_id:24;
 
@@ -128,6 +136,7 @@ typedef struct Settings {
 
     char    ssid[19];
     char    psk[17];
+    char    host_ip[16];
 
 } __attribute__((packed)) settings_t;
 

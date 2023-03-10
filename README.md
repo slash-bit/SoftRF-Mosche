@@ -12,10 +12,6 @@ Beyond Lyusupov's version 1.0:
 * Settable baud rate for serial output
 * Estimates wind while circling, uses for collision prediction
 * Corrected frequency hopping and time slots
-
-Latest additions:
-
-* Option to connect to ambient WiFi network instead of creating one
 * Airborne devices relay radio packets from landed aircraft 
 * Louder buzzer via 2-pin differential drive, or external
 * Includes strobe-control logic within SoftRF
@@ -23,6 +19,14 @@ Latest additions:
 * Modified version of [SkyView](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView)
 * [SkyStrobe](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyStrobe) - a controller for a visibility strobe (and more)
 * [Documentation files](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation).
+
+Latest additions:
+
+* Option to connect to ambient WiFi network instead of creating one
+* Option to send data as TCP client instead of TCP server
+* Specify server's IP address for TCP client, and choice of 2 ports
+* Ability to use WiFi TCP & UDP NMEA outputs simultaneously
+* These new WiFi options allow wireless output to XCvario
 <br>
 
 Open [discussion forum](https://gitter.im/SoftRF-open/community).

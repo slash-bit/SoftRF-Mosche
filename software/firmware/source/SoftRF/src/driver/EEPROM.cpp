@@ -178,10 +178,14 @@ void EEPROM_defaults()
       // if and when debug output will be turned on,
       // allow all debug message types by default
 
-  strncpy(settings->ssid, "www xxx yyy zzz", sizeof(settings->ssid)-1);
+  strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
   settings->ssid[sizeof(settings->ssid)-1] = '\0';
-  strncpy(settings->psk, "xxxxxx", sizeof(settings->psk)-1);
+  strncpy(settings->psk, MY_ACCESSPOINT_PSK, sizeof(settings->psk)-1);
   settings->psk[sizeof(settings->psk)-1] = '\0';
+  settings->tcpmode = TCP_MODE_SERVER;
+  strncpy(settings->host_ip, NMEA_TCP_IP, sizeof(settings->host_ip)-1);
+  settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
+  settings->tcpport = 0;   // 2000
 }
 
 void EEPROM_store()
