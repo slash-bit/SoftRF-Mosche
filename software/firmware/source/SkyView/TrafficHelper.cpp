@@ -64,14 +64,13 @@ void Traffic_Add()
               } else {
                 // compute track from the two distance/bearing points
                 // also taking into account that this aircraft has moved too
+                //  (very approximate since the time interval units are coarse)
                 float our_move = ThisAircraft.GroundSpeed * 0.5 /*MPS_PER_KNOT*/ * interval;
-                    // - VERY approximate since the time interval units are coarse
-                fo.Track = approxHypotenuse(our_move * sin_approx(ThisAircraft.Track)
-                               + fo.distance * sin_approx(fo.RelativeBearing)
-                               - cip->distance * sin_approx(cip->RelativeBearing),
-                                            our_move * cos_approx(ThisAircraft.Track)
-                               + fo.distance * cos_approx(fo.RelativeBearing) 
-                               - cip->distance * cos_approx(cip->RelativeBearing));
+                float x = fo.distance * sin_approx(fo.RelativeBearing)
+                             - cip->distance * sin_approx(cip->RelativeBearing);
+                float y = our_move + fo.distance * cos_approx(fo.RelativeBearing) 
+                             - cip->distance * cos_approx(cip->RelativeBearing);
+                fo.Track = atan2_approx(y,x) + ThisAircraft.Track;
               }
             } else {
               // if PFLAU with no recent history, track remains unknown
@@ -131,22 +130,22 @@ void Traffic_Update(traffic_t *fop)
     y = 111300.0 * (fop->latitude - ThisAircraft.latitude);         /* meters */
     x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
     distance = approxHypotenuse(x, y);      /* meters  */
+    bearing = atan2_approx(y, x);
 
-    fop->RelativeNorth     = y;
-    fop->RelativeEast      = x;
-
-    fop->RelativeVertical  = fop->altitude - ThisAircraft.altitude;
-
-    fop->RelativeBearing = bearing;
+    fop->RelativeNorth    = y;
+    fop->RelativeEast     = x;
+    fop->RelativeBearing  = bearing - ThisAircraft.Track;
+    fop->RelativeVertical = fop->altitude - ThisAircraft.altitude;
     fop->distance = distance;
     fop->adj_dist = fabs(distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
-  } else if (fop->packet_type == 2) {    /* a PFLAU sentence: distance & bearing known */
+  } else if (fop->packet_type == 2) {    /* a PFLAU sentence: distance & relative bearing known */
 
     fop->adj_dist = fabs(fop->distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
-    fop->RelativeNorth     = fop->distance * cos_approx(fop->RelativeBearing);
-    fop->RelativeEast      = fop->distance * sin_approx(fop->RelativeBearing);
+    bearing = fop->RelativeBearing + ThisAircraft.Track;
+    fop->RelativeNorth = fop->distance * cos_approx(bearing);
+    fop->RelativeEast  = fop->distance * sin_approx(bearing);
 
     fop->Track = -360;   // unknown track, will display same as 0 (North)
 
@@ -157,7 +156,8 @@ void Traffic_Update(traffic_t *fop)
     fop->distance = distance;
     fop->adj_dist = fabs(distance) + VERTICAL_SLOPE * fabs(fop->RelativeVertical);
 
-    fop->RelativeBearing = atan2_approx(fop->RelativeNorth, fop->RelativeEast);
+    bearing = atan2_approx(fop->RelativeNorth, fop->RelativeEast);
+    fop->RelativeBearing = bearing - ThisAircraft.Track;
   }
 
   if (fop->alarm_level < fop->alert_level)     /* if gone farther then...   */
@@ -176,32 +176,10 @@ static void Traffic_Voice_One(traffic_t *fop)
     char how_far[32];
     char elev[32];
 
-    if (settings->protocol == PROTOCOL_GDL90) {
+    bearing = fop->RelativeBearing;
 
-        bearing = fop->RelativeBearing;
-
-    } else if (fop->RelativeNorth == 0) {   // PFLAU
-
-        bearing = fop->RelativeBearing;
-
-    } else {   // PFLAA
-
-        bearing = (int) (atan2f(fop->RelativeNorth,
-                                fop->RelativeEast) * 180.0 / PI);  /* -180 ... 180 */
-        /* convert from math angle into course relative to north */
-        bearing = (bearing <= 90 ? 90 - bearing :
-                                  450 - bearing);
-
-        /* This bearing is always relative to current ground track */
-//      if (settings->orientation == DIRECTION_TRACK_UP) {
-            bearing -= ThisAircraft.Track;
-//      }
-
-    }
-
-    if (bearing < 0) {
-        bearing += 360;
-    }
+    if (bearing < 0)    bearing += 360;
+    if (bearing > 360)  bearing -= 360;
 
     int oclock = ((bearing + 15) % 360) / 30;
 

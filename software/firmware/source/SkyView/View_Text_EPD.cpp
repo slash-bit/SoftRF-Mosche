@@ -61,22 +61,11 @@ static void EPD_Draw_Text()
     if (EPD_current > j) {
       EPD_current = j;
     }
+    
+    bearing = (int) (traffic[EPD_current - 1].fop->RelativeBearing);  // relative to our track
 
-    bearing = (int) atan2f(traffic[EPD_current - 1].fop->RelativeNorth,
-                           traffic[EPD_current - 1].fop->RelativeEast) * 180.0 / PI;  /* -180 ... 180 */
-
-    /* convert from math angle into course relative to north */
-    bearing = (bearing <= 90 ? 90 - bearing :
-                              450 - bearing);
-
-    /* This bearing is always relative to current ground track */
-//  if (settings->orientation == DIRECTION_TRACK_UP) {
-      bearing -= ThisAircraft.Track;
-//  }
-
-    if (bearing < 0) {
-      bearing += 360;
-    }
+    if (bearing < 0)    bearing += 360;
+    if (bearing > 360)  bearing -= 360;
 
     int oclock = ((bearing + 15) % 360) / 30;
 
