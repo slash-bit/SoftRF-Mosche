@@ -2,8 +2,13 @@ SkyStrobe documentation
 =======================
 
 By Moshe Braner
-This version last updated December 25, 2022
-To fit SkyStrobe version 02d.
+This version last updated March 18, 2023
+Corresponds to SkyStrobe version 03a.
+
+*************
+Note: Some GPIO pin assignments are different in this version 03x from versions 02x!
+      In particular, the strobe control is now via pin 33.
+*************
 
 
 WHAT IS SKYSTROBE
@@ -17,7 +22,7 @@ Skystrobe can also serve as a data bridge.  Data arriving via a wireless connect
 
 ALTERNATIVES TO SKYSTROBE
 
-My current version of SoftRF has strobe-control capability built-in.  One can connect the GPIO25 pin to a simple (non-computerized) strobe circuit.  See example circuit diagrams here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg.  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
+My current version of SoftRF has strobe-control capability built-in.  One can connect the GPIO33 pin to a simple (non-computerized) strobe circuit.  See example circuit diagrams here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg.  But this approach cannot be used when the data source is a FLARM device rather than SoftRF, or when a wireless connection is preferred.
 
 
 SKYSTROBE HARDWARE
@@ -44,15 +49,15 @@ It has 4 LEDs, each with a lens that focuses the light somewhat.  It has 2 paral
 https://xpriteusa.com/collections/visor-dash-lights/products/xprite-undercover-series-led-strobe-lights-for-dash-windshield-with-suction-cups?variant=37716154744991
 which has 8 LEDs in each half.  The reflector design offers a beam that is wider to the sides, but more focused vertically.  I have cut it in half width, and adapted the circuit in a similar way to the module mentioned above, but with two parallel circuits of 4 LEDs each, thus twice as bright.  But it is 1.7 inches high, may not fit in a given glider.  See photos of both modules, as modified, in this documentation folder.
 
-To drive the LED module, using the output signal from pin 25 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  A better approach is to use a power MOSFET instead.  Use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
+To drive the LED module, using the output signal from pin 33 of the ESP32, some extra circuitry is needed.  At the least, a single transistor (of a type that can conduct more than an amp).  Since the signal current from the processor is limited to only about 10-20 mA, the gain of that transistor must be at least 50-100 to conduct an amp through the LEDs.  Use a high-gain transistor, or a Darlington type, or add another small transistor ahead of the power transistor.  A better approach is to use a power MOSFET instead.  Use an N-channel power MOSFET with low gate threshold, suggest the IRLZ34.  The 8-LED Xprite windshield half-board mentioned above has a low-side MOSFET already present that seems to function well enough with 3V input.  Or use a small NPN transistor to drive a P-channel power MOSFET such as the IRF9540.  See https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/documentation/drivers.jpg for MOSFET circuit diagrams.  The top one is a bit simpler, but requires a MOSFET that goes into full conductance with a fairly low gate input voltage (under 3.3 volts from the ESP32), which is not the case for most.  The bottom one gives the MOSFET plenty of gate input voltage (I even included the 220 ohm resistor to cut it down from 12V to 8V), but requires a P-channel MOSFET (less commonly found in junk boxes).  It also allows keeping one side of the LED module grounded.
 
 These circuits do not limit the current, only a small resistor in series with the LEDs (built into the module I use) limits the current.  As the battery slowly depletes and the supply voltage decreases, the current through the LEDs - and the brightness of the flashing - will decline somewhat.  This may be seen as a good thing, as it will extend the battery life somewhat.  If desired, a constant-current circuit can be used instead, see ______________.  But the LED module I used is self-limited by the LED voltage drop rising with the current, and the strobe pulses are short, thus no current limiting is needed.
 
 For the sound alarms, I've used a small passive piezo beeper, of this type:
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
-It will beep with useful volume if simply connected (in series with a 100-ohm resistor) between pins 26 and 27 of the processor.  For more volume, an amplifier circuit is needed.  A suitable amplifier can be built with 2 small transistors and a couple of resistors, see _____________.  Or, drive an external 12V *active* buzzer from pin 33 via a transistor.  That pin offers +3VDC during buzzing times.
+It will beep with useful volume if simply connected (in series with a 100-ohm resistor) between pins 14 and 15 of the processor.  For more volume, an amplifier circuit is needed.  A suitable amplifier can be built with 2 small transistors and a couple of resistors, see _____________.  Or, drive an external 12V *active* buzzer from pin 32 via a transistor.  That pin offers +3VDC during buzzing times.
 
-For the connections between the ESP32 board and the LED & buzzer circuits, see the diagram here: __________.  Note: the pin numbers are different from those used on the T-Beam with my version of SoftRF.  
+For the connections between the ESP32 board and the LED & buzzer circuits, see the diagram here: __________.  Note: the pin numbers are a bit different from those used on the T-Beam with my version of SoftRF.  
 
 For microswitches, connect "switch 1" between ground and pin 34, and "switch 2" between ground and pin 35.  Each of these pins, if used, should also be fitted with a pull-up resistor to the +3.3V line.
 
@@ -129,3 +134,7 @@ For the geeks
 
 Hopefully the low-level default settings, such as the duration of each flash (in milliseconds), are OK.  But yes it is possible to change them, via a Bluetooth terminal app.  Read through EEPROMHelper.cpp.
 
+
+Future development
+
+Coming next: voice traffic warnings in SkyStrobe, as has been done in my version of SoftRF.  That is, words such as "traffic, 8 o-clock, high", instead of just beeping.  To do that, need to add an audio amplifier that can drive a speaker.

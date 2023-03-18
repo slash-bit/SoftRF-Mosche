@@ -1,6 +1,11 @@
 # Release notes
 
 
+### revision MB03a
+
+Revised GPIO (ESP32 board) pin assignments, in preparation for future voice output.
+
+
 ### revision MB02c
 
 Corrected handling of this aircraft's time stamp, affects sound notifications.

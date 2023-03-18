@@ -25,7 +25,7 @@
 #include <Arduino.h>
 #endif /* ARDUINO */
 
-#define SKYSTROBE_FIRMWARE_VERSION  "0.2d"
+#define SKYSTROBE_FIRMWARE_VERSION  "0.3a"
 #define SKYSTROBE_IDENT     "SkyStrobe-"
 
 #define EXCLUDE_BUTTONS

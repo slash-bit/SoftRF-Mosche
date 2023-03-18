@@ -28,16 +28,63 @@
 /* assume no useful buttons on the board used for SkyStrobe */
 #define EXCLUDE_BUTTONS
 
-#if defined(ESP32)
+/* These are defined in Platform_ESP32.h:
+#define SOC_GPIO_PIN_BUZZER    14
+#define SOC_GPIO_PIN_BUZZER2   15
+#define SOC_GPIO_PIN_LED_RED   16
+#define SOC_GPIO_PIN_LED_GREEN 17
+#define SOC_GPIO_PIN_LED_BLUE  18
+#define SOC_GPIO_PIN_I2S_DATA  25
+#define SOC_GPIO_PIN_I2S_BCK   26
+#define SOC_GPIO_PIN_I2S_WS    27
+#define SOC_GPIO_PIN_DCBUZZ    32
+#define SOC_GPIO_PIN_STROBE    33
+#define SOC_GPIO_PIN_SWITCH1   34   // need external pull-up resistor
+#define SOC_GPIO_PIN_SWITCH2   35   // need external pull-up resistor
+*/
+
+#if defined(SOC_GPIO_PIN_STROBE)
 #define STROBEPIN   SOC_GPIO_PIN_STROBE
-#define REDLEDPIN   SOC_GPIO_PIN_LED_RED
-#define GREENLEDPIN SOC_GPIO_PIN_LED_GREEN
-#define BLUELEDPIN  SOC_GPIO_PIN_LED_BLUE
 #else
 #define STROBEPIN   SOC_UNUSED_PIN
+#endif
+
+#if defined(SOC_GPIO_PIN_LED_RED)
+#define REDLEDPIN   SOC_GPIO_PIN_LED_RED
+#else
 #define REDLEDPIN   SOC_UNUSED_PIN
+#endif
+
+#if defined(SOC_GPIO_PIN_LED_GREEN)
+#define GREENLEDPIN SOC_GPIO_PIN_LED_GREEN
+#else
 #define GREENLEDPIN SOC_UNUSED_PIN
+#endif
+
+#if defined(SOC_GPIO_PIN_LED_BLUE)
+#define BLUELEDPIN  SOC_GPIO_PIN_LED_BLUE
+#else
 #define BLUELEDPIN  SOC_UNUSED_PIN
+#endif
+
+#if !defined(SOC_GPIO_PIN_I2S_BCK)
+#define SOC_GPIO_PIN_I2S_BCK   SOC_UNUSED_PIN
+#endif
+#if !defined(SOC_GPIO_PIN_I2S_WS)
+#define SOC_GPIO_PIN_I2S_WS    SOC_UNUSED_PIN
+#endif
+#if !defined(SOC_GPIO_PIN_I2S_DATA)
+#define SOC_GPIO_PIN_I2S_DATA  SOC_UNUSED_PIN
+#endif
+
+#if !defined(SOC_GPIO_PIN_BUZZER)
+#define SOC_GPIO_PIN_BUZZER   SOC_UNUSED_PIN
+#endif
+#if !defined(SOC_GPIO_PIN_BUZZER2)
+#define SOC_GPIO_PIN_BUZZER2  SOC_UNUSED_PIN
+#endif
+#if !defined(SOC_GPIO_PIN_DCBUZZ)
+#define SOC_GPIO_PIN_DCBUZZ   SOC_UNUSED_PIN
 #endif
 
 #if !defined(SOC_GPIO_PIN_SWITCH1)

@@ -44,10 +44,14 @@
 //#define SOC_GPIO_PIN_BUZZER   14   // used this on the T-Beam
 
 /* should be OK for most ESP32 boards: */
-#define SOC_GPIO_PIN_STROBE    25
-#define SOC_GPIO_PIN_BUZZER    26
-#define SOC_GPIO_PIN_BUZZER2   27
-#define SOC_GPIO_PIN_DCBUZZ    33
+/* revised pin assignment to allow using pin 25 DAC output for voice warnings: */
+#define SOC_GPIO_PIN_BUZZER    14
+#define SOC_GPIO_PIN_BUZZER2   15
+#define SOC_GPIO_PIN_I2S_DATA  25
+#define SOC_GPIO_PIN_I2S_BCK   26
+#define SOC_GPIO_PIN_I2S_WS    27
+#define SOC_GPIO_PIN_DCBUZZ    32
+#define SOC_GPIO_PIN_STROBE    33
 #define SOC_GPIO_PIN_SWITCH1   34   // need external pull-up resistor
 #define SOC_GPIO_PIN_SWITCH2   35   // need external pull-up resistor
 
