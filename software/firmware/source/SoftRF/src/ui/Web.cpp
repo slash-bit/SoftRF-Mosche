@@ -31,7 +31,8 @@ void Web_fini()     {}
 #include "Web.h"
 #include "../driver/Baro.h"
 #include "../driver/LED.h"
-#include "../driver/Sound.h"
+#include "../driver/Buzzer.h"
+#include "../driver/Voice.h"
 #include "../driver/Bluetooth.h"
 #include "../TrafficHelper.h"
 #include "../protocol/radio/Legacy.h"
@@ -433,6 +434,16 @@ void handleSettings() {
     snprintf_P ( offset, size,
       PSTR("\
 <tr>\
+<th align=left>Voice Warnings</th>\
+<td align=right>\
+<select name='voice'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Internal DAC</option>\
+<option %s value='%d'>External I2S</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
 <th align=left>Built-in Bluetooth</th>\
 <td align=right>\
 <select name='bluetooth'>\
@@ -465,6 +476,9 @@ void handleSettings() {
 </select>\
 </td>\
 </tr>"),
+    (settings->voice == VOICE_OFF ? "selected" : ""), VOICE_OFF,
+    (settings->voice == VOICE_INT ? "selected" : ""), VOICE_INT,
+    (settings->voice == VOICE_EXT ? "selected" : ""), VOICE_EXT,
     (settings->bluetooth == BLUETOOTH_OFF ? "selected" : ""), BLUETOOTH_OFF,
     (settings->bluetooth == BLUETOOTH_SPP ? "selected" : ""), BLUETOOTH_SPP,
     (settings->bluetooth == BLUETOOTH_LE_HM10_SERIAL ? "selected" : ""), BLUETOOTH_LE_HM10_SERIAL,
@@ -992,7 +1006,7 @@ void handleRoot() {
 
 void handleInput() {
 
-  size_t size = 2500;
+  size_t size = 3500;
 
   char *Input_temp = (char *) malloc(size);
   if (Input_temp == NULL) {
@@ -1020,6 +1034,8 @@ void handleInput() {
       settings->strobe = server.arg(i).toInt();
     } else if (server.argName(i).equals("pointer")) {
       settings->pointer = server.arg(i).toInt();
+    } else if (server.argName(i).equals("voice")) {
+      settings->voice = server.arg(i).toInt();
     } else if (server.argName(i).equals("bluetooth")) {
       settings->bluetooth = server.arg(i).toInt();
     } else if (server.argName(i).equals("tcpmode")) {
@@ -1142,6 +1158,14 @@ void handleInput() {
           settings->bluetooth = BLUETOOTH_SPP;
   }
 
+  /* enforce some hardware restrictions */
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      if (settings->voice == VOICE_EXT)
+          settings->volume = BUZZER_OFF;  // free up pins 14 & 15 for I2S use
+  } else {
+      settings->voice = VOICE_OFF;
+  }
+
   /* show new settings before rebooting */
   snprintf_P ( Input_temp, size,
 PSTR("<html>\
@@ -1166,6 +1190,7 @@ PSTR("<html>\
 <tr><th align=left>Volume</th><td align=right>%d</td></tr>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
+<tr><th align=left>Voice</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP mode</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP port</th><td align=right>%d</td></tr>\
@@ -1203,7 +1228,8 @@ PSTR("<html>\
   settings->rf_protocol, settings->band,
   settings->aircraft_type, settings->alarm, settings->txpower,
   settings->volume, settings->strobe, settings->pointer,
-  settings->bluetooth, settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
+  settings->voice, settings->bluetooth,
+  settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
   settings->nmea_out,
   BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
   BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
@@ -1235,6 +1261,7 @@ Serial.print(" Tx Power ");Serial.println(settings->txpower);
 Serial.print(" Volume ");Serial.println(settings->volume);
 Serial.print(" Strobe ");Serial.println(settings->strobe);
 Serial.print(" LED pointer ");Serial.println(settings->pointer);
+Serial.print(" Voice ");Serial.println(settings->voice);
 Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
 Serial.print(" TCP mode ");Serial.println(settings->tcpmode);
 Serial.print(" TCP port ");Serial.println(settings->tcpport);
@@ -1386,7 +1413,8 @@ $('form').submit(function(e){\
     server.sendHeader(String(F("Access-Control-Allow-Origin")), "*");
     server.send(200, String(F("text/plain")), (Update.hasError())?"FAIL":"OK");
 //    SoC->swSer_enableRx(true);
-    Sound_fini();
+    Buzzer_fini();
+    Voice_fini();
     RF_Shutdown();
     delay(1000);
     SoC->reset();

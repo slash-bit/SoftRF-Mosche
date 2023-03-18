@@ -31,7 +31,7 @@
 #include <axp20x.h>
 
 #include "../system/SoC.h"
-#include "../driver/Sound.h"
+#include "../driver/Buzzer.h"
 #include "../driver/EEPROM.h"
 #include "../driver/RF.h"
 #include "../driver/WiFi.h"
@@ -282,6 +282,11 @@ static void ESP32_post_init()
   else
     { Serial.print("Detected model "); Serial.println(hw_info.model); }
   Serial.print("hw_info.revision: "); Serial.println(hw_info.revision);
+
+  Serial.println();
+  Serial.print(F("CPU Freq = "));
+  Serial.print(getCpuFrequencyMhz());
+  Serial.println(F(" MHz"));
 
   Serial.println();
   Serial.println(F("Data output device(s):"));
@@ -622,48 +627,48 @@ static long ESP32_random(long howsmall, long howBig)
 
 #include <toneAC.h>
 
-static void Sound_tone(int hz, int duration)
+static void Buzzer_tone(int hz, int duration)
 {
     int volume = (settings->volume == BUZZER_VOLUME_LOW ? 2 : 10);
     toneAC(hz, volume, duration, false);
 }
 
 /* dummy function to fit the SoC_ops structure */
-static void ESP32_Sound_tone(int hz, uint8_t volume)
+static void ESP32_Buzzer_tone(int hz, uint8_t volume)
 {
-    Sound_tone(hz, 500);
+    Buzzer_tone(hz, 500);
 }
 
-void ESP32_Sound_test(int reason)
+void ESP32_Buzzer_test(int reason)
 {
-Serial.println("Sound_test() using ToneAC...");
-
     if (settings->volume == BUZZER_OFF)
         return;
     if (settings->volume == BUZZER_EXT)
         return;
 
+Serial.println("Buzzer_test() using ToneAC...");
+
     if (reason == REASON_DEFAULT_RST ||
         reason == REASON_EXT_SYS_RST ||
         reason == REASON_SOFT_RESTART) {
 Serial.println("... tone 1:");
-      Sound_tone(440, 500);
+      Buzzer_tone(440, 500);
 Serial.println("... tone 2:");
-      Sound_tone(640, 500);
+      Buzzer_tone(640, 500);
 Serial.println("... tone 3:");
-      Sound_tone(840, 500);
+      Buzzer_tone(840, 500);
 Serial.println("... tone 4:");
-      Sound_tone(1040, 600);
+      Buzzer_tone(1040, 600);
     } else if (reason == REASON_WDT_RST) {
-      Sound_tone(440,  500);
-      Sound_tone(1040, 500);
-      Sound_tone(440,  500);
-      Sound_tone(1040, 600);
+      Buzzer_tone(440,  500);
+      Buzzer_tone(1040, 500);
+      Buzzer_tone(440,  500);
+      Buzzer_tone(1040, 600);
     } else {
-      Sound_tone(1040, 500);
-      Sound_tone(840,  500);
-      Sound_tone(640,  500);
-      Sound_tone(440,  600);
+      Buzzer_tone(1040, 500);
+      Buzzer_tone(840,  500);
+      Buzzer_tone(640,  500);
+      Buzzer_tone(440,  600);
     }
 
     noToneAC();
@@ -1408,8 +1413,8 @@ const SoC_ops_t ESP32_ops = {
   ESP32_getResetReason,
   ESP32_getFreeHeap,
   ESP32_random,
-  ESP32_Sound_test,
-  ESP32_Sound_tone,
+  ESP32_Buzzer_test,
+  ESP32_Buzzer_tone,
   ESP32_maxSketchSpace,
   ESP32_WiFi_set_param,
   ESP32_WiFi_transmit_UDP,

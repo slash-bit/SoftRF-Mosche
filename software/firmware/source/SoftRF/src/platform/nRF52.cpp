@@ -40,7 +40,7 @@
 #include "../driver/Bluetooth.h"
 #include "../driver/EPD.h"
 #include "../driver/Battery.h"
-#include "../driver/Sound.h"
+#include "../driver/Buzzer.h"
 #include "../protocol/data/NMEA.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
@@ -1073,7 +1073,7 @@ static long nRF52_random(long howsmall, long howBig)
 byte note_sequence[] = {62,65,69,65,67,67,65,64,69,69,67,67,62,62};
 #endif /* USE_USB_MIDI */
 
-static void nRF52_Sound_test(int var)
+static void nRF52_Buzzer_test(int var)
 {
 #if defined(USE_USB_MIDI)
   if (USBDevice.mounted() && settings->volume != BUZZER_OFF) {
@@ -1116,7 +1116,7 @@ extern BLEMidi blemidi;
 extern midi::MidiInterface<BLEMidi> MIDI_BLE;
 #endif /* USE_BLE_MIDI */
 
-static void nRF52_Sound_tone(int hz, uint8_t volume)
+static void nRF52_Buzzer_tone(int hz, uint8_t volume)
 {
 #if defined(USE_PWM_SOUND)
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN && volume != BUZZER_OFF) {
@@ -1963,8 +1963,8 @@ const SoC_ops_t nRF52_ops = {
   nRF52_getResetReason,
   nRF52_getFreeHeap,
   nRF52_random,
-  nRF52_Sound_test,
-  nRF52_Sound_tone,
+  nRF52_Buzzer_test,
+  nRF52_Buzzer_tone,
   NULL,
   nRF52_WiFi_set_param,
   nRF52_WiFi_transmit_UDP,

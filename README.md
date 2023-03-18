@@ -1,4 +1,4 @@
-# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://gitter.im/SoftRF-open/community](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/SoftRF-open/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://github.com/lyusupov/SoftRF/actions/workflows/main.yml/badge.svg)](https://github.com/lyusupov/SoftRF/actions/workflows/main.yml "Build Status") 
+# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://gitter.im/SoftRF-open/community](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/SoftRF-open/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml/badge.svg)](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml "Build Status") 
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
 
 ## Features of this fork:
@@ -22,6 +22,7 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
+* vMB09s: collision-danger traffic VOICE warnings! (not just beeps)
 * Option to connect to ambient WiFi network instead of creating one
 * Option to send data as TCP client instead of TCP server
 * Specify server's IP address for TCP client, and choice of 2 ports

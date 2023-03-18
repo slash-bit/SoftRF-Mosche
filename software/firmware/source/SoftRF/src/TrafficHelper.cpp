@@ -22,7 +22,7 @@
 #include "driver/EEPROM.h"
 #include "driver/RF.h"
 #include "driver/GNSS.h"
-#include "driver/Sound.h"
+#include "driver/Buzzer.h"
 #include "driver/Strobe.h"
 #include "ui/Web.h"
 #include "protocol/radio/Legacy.h"
@@ -30,6 +30,12 @@
 #include "ApproxMath.h"
 #include "Wind.h"
 #include "../SoftRF.h"
+
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+#include "driver/Voice.h"
+#endif
+#endif
 
 unsigned long UpdateTrafficTimeMarker = 0;
 
@@ -836,8 +842,14 @@ void Traffic_loop()
     /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
     if (sound_alarm_level > ALARM_LEVEL_CLOSE) {
-      Sound_Notify(sound_alarm_level);
-      if (mfop != NULL) {
+      bool notified = Buzzer_Notify(sound_alarm_level);
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+      if (mfop != NULL)
+        notified |= Voice_Notify(mfop);
+#endif
+#endif
+      if (notified && mfop != NULL) {
         mfop->alert_level = mfop->alarm_level + 1;
         mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
       }

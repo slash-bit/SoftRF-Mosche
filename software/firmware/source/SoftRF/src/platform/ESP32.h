@@ -85,8 +85,10 @@ extern Adafruit_NeoPixel strip;
 /* Peripherals */
 #define SOC_GPIO_PIN_GNSS_RX    23
 #define SOC_GPIO_PIN_GNSS_TX    12
-#define SOC_GPIO_PIN_LED        25
 #define SOC_GPIO_PIN_BATTERY    36
+
+#define SOC_GPIO_PIN_LED        (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
+                                  SOC_UNUSED_PIN : 25)  // 25 now used for voice DAC
 
 #define SOC_GPIO_PIN_STATUS   (hw_info.model != SOFTRF_MODEL_PRIME_MK2 ?\
                                 SOC_UNUSED_PIN :                        \
@@ -113,8 +115,11 @@ extern Adafruit_NeoPixel strip;
 #define SOC_GPIO_PIN_BUZZER2  (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
                                 15 : SOC_UNUSED_PIN)
 
-/* MB: seems available, not tested */
-#define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 25 : SOC_UNUSED_PIN)
+/* instead of 25 which is now used for voice */
+#define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 33 : SOC_UNUSED_PIN)
+
+/* use DAC channel 1 for voice (internal I2S) */
+#define SOC_GPIO_PIN_VOICE    (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 25 : SOC_UNUSED_PIN)
 
 /* SPI (does match Heltec & TTGO LoRa32 pins mapping) */
 #define SOC_GPIO_PIN_MOSI       27

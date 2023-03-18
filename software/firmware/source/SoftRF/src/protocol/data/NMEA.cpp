@@ -972,7 +972,7 @@ void NMEA_GGA()
 
 #if defined(USE_NMEA_CFG)
 
-#include "../../driver/Sound.h"
+#include "../../driver/Buzzer.h"
 #include "../../driver/LED.h"
 #include "GDL90.h"
 #include "D1090.h"

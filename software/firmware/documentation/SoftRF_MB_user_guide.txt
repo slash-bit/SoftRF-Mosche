@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 10, 2023
-to fit software version MB09r based on v1.0 with some parts of v1.2
+This version last updated March 17, 2023
+to fit software version MB09s based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -69,8 +69,11 @@ With my version of SoftRF you have the option of attaching a passive piezo buzze
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
 The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external amplifier, or, select "external" in the buzzer volume setting to get +3v DC output on pin 14, and drive an external (12V) *active* buzzer via a transistor.  Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm happens (or could happen).
 
-You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 25.   This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  See pinout diagram here:
-  https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/T-beam_wiring_.jpg
+And now SoftRF also has the ability to generate *voice* warnings about traffic that is in danger of collision.  The audio output is from pin 25.  This is a line-level output, it needs an external amplifier to drive a speaker.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/audio_output_circuit_.jpg
+for an example connection circuit.  The resistors reduce the output signal level to what the amplifier probably wants - if it is too weak, increase the value of the 2.2K resistors.  The 10 uF capacitor (positive side towards the T-Beam) blocks the DC component.  The 10 nF capacitor tries to filter out high frequencies, from the DAC steps and from the circuit board as a whole.  The amplifier can be a standalone device (LM386 modules are small and cheap), or can feed the signal into the AUX input of the aircraft communications radio, etc.  Another option is an external I2S decoder/amplifier, such as those based on the Max98357 chip.  The connection pins are: Serial Clock (SCK) (BCK): pin 14, Word Select (WS): pin 15, and Serial Data (SD): pin 25.  Note that while using an external I2S decoder, both the internal analog signal generator (output to pin 25), and the piezo buzzer option (on pins 14,15), are not available. This method has not been tested yet, let me know if it works!
+
+You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 33 (note: moved from pin 25 to allow the voice output there).  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  See pinout diagram here:
+  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-beam_wiring_.jpg
 
 Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".  See photo of the attached OLED:
   https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/T-beam_OLED_attached.jpg
@@ -181,13 +184,15 @@ The "alarm" and "airborne" modes also flash in the first 2 minutes after turning
 
 LED ring direction: this is for use only if you attach an LED traffic display such as "FLARMview".
 
+Voice Warnings: Off, or Internal DAC (analog output via pin 25), or External I2S (pins 14, 15, 25).  Note that the external I2S option precludes use of a buzzer on pins 14 and 15.
+
 Built-in Bluetooth: leave Off, unless you want to connect to an external device (e.g., XCsoar) via Bluetooth, then choose SPP (standard BT) or LE (low energy).
 
 TCP mode (if used): Can choose Server (the default) which is what is expected by, e.g., XCsoar or Tophat (if TCP connection is used - the default is UDP), or Client which is needed to connect to XCvario.
 
 Host IP (if TCP client): Enter IP address, e.g., 192.168.4.1 - only affects TCP client connection.
 
-Host port (if TCP client): Choose the port to which the TCP client connects to, either 2000 (default) or 8880 (option for stock XCvario firmware).  And allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario.
+Host port (if TCP client): Choose the port to which the TCP client connects to, either 2000 (default) or 8880 (option for stock XCvario firmware).  The current version (MB09r or later) allows both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario (and XCsoar at the same time).
 
 External WiFi (optional): after booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  Either way, other devices can connect, to change settings or update the firmware.  In the case of an external network, the IP address can be seen in the third OLED screen.
 
@@ -283,6 +288,12 @@ Once connected, be sure to set the baud rate on the external device to match wha
 
 Note that due to the way the T-Beam is designed, the same data is sent out via both the USB interface and the UART pins.  They cannot be separated.
 
+Connecting to XCvario
+
+XCvario can be connected via a custom-built serial cable.  XCvario claims to work even at TTL levels, thus an RS232 level conversion chip is not required.
+
+A wireless connection to XCvario is more difficult.  With the stock XCvario firmware (as of early 2023) and this version of SoftRF (MB09r or later) there is now a way to do it:  In SoftRF select WiFi client (SSID XCVario-XXXX, password xcvario-21), and TCP Client output to IP address 192.168.4.1 and port 8880.  Activate TCP output as the primary NMEA output.  Also activate UDP output as the secondary NMEA output.  In XCvario make sure that "wireless" is WiFi (Master or Standalone, and not Bluetooth) and that the wireless data route is connected to "vario".  In XCsoar connect to the same XCvario WiFi network.  Configure two "devices" in XCsoar.  One a TCP client on port 8880, using XCvario protocol.  The other a UDP listener on port 10110, using FLARM protocol.  Magically, it works!  With custom firmware (and possibly a future official version) XCvario can also accept the data on port 2000, which frees port 8880 to serve other functions in XCvario.
+
 
 Updating the firmware on the T-Beam
 
@@ -352,12 +363,6 @@ Note that this "virtual disk" is not really a disk.  You will never see the drag
 See similar instructions here:
 https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#nrf52840
 
-
-Connecting to XCvario
-
-The most reliable way to connect SoftRF to other devices is through a serial cable.  But this requires adding hardware to, at least, attach the cable, and often also a converter from TTL (T-Beam uses 3.3V) to RS-232.  Another option is a wireless connection.  Connecting to XCsoar or Tophat on an Android device, for example, is straightforward.  Choose (usually) UDP output in SoftRF, and in XCsoar or Tophat select UDP and port 10110.
-
-But a wireless connection to XCvario is more difficult.  With the stock XCvario firmware (as of early 2023) and this version of SoftRF (MB09r) there is now a way to do it:  In SoftRF select WiFi client (SSID XCVario-XXXX, password xcvario-21), and TCP Client output to port 8880.  Activate TCP output as the primary NMEA output.  Also activate UDP output as the secondary NMEA output.  In XCvario make sure that "wireless" is WiFi (Master or Standalone, and not Bluetooth) and that the wireless data route is connected to "vario".  In XCsoar connect to the same XCvario WiFi network.  Configure two "devices" in XCsoar.  One a TCP client on port 8880, using XCvario protocol.  The other a UDP listener on port 10110, using FLARM protocol.  Magically, it works!  With custom firmware (and possibly a future official version) XCvario can also accept the data on port 2000, which frees port 8880 to serve other functions in XCvario.
 
 
 PART 2: UNDER THE HOOD - see separate document

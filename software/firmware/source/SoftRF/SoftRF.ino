@@ -76,7 +76,7 @@
 #include "src/driver/LED.h"
 #include "src/driver/GNSS.h"
 #include "src/driver/RF.h"
-#include "src/driver/Sound.h"
+#include "src/driver/Buzzer.h"
 #include "src/driver/Strobe.h"
 #include "src/driver/EEPROM.h"
 #include "src/driver/Battery.h"
@@ -91,6 +91,12 @@
 #include "src/TTNHelper.h"
 #include "src/TrafficHelper.h"
 #include "src/Wind.h"
+
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+#include "src/driver/Voice.h"
+#endif
+#endif
 
 #if defined(ENABLE_AHRS)
 #include "src/driver/AHRS.h"
@@ -277,10 +283,17 @@ Serial.println("... Baro_setup() returned");
     LED_test();
   }
 
-Serial.println("calling Sound_setup()");
-  Sound_setup();
-//Serial.println("calling Sound_test()");
-  SoC->Sound_test(resetInfo->reason);
+//Serial.println("calling Buzzer_setup()");
+  Buzzer_setup();
+//Serial.println("calling Buzzer_test()");
+  SoC->Buzzer_test(resetInfo->reason);
+
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+  Voice_setup();
+  Voice_test(resetInfo->reason);
+#endif
+#endif
 
   Strobe_setup();
 
@@ -400,7 +413,8 @@ void shutparts()
   SoC->swSer_enableRx(false);
   if (SoC->Bluetooth_ops)
      SoC->Bluetooth_ops->fini();
-  Sound_fini();
+  Buzzer_fini();
+  Voice_fini();
   Strobe_fini();
   RF_Shutdown();
   SoC->WDT_fini();
@@ -646,9 +660,15 @@ void normal()
     LEDTimeMarker = millis();
   }
 
-  Sound_loop();   /* may sound collision alarms */
+  Buzzer_loop();   /* may sound collision alarms */
 
   Strobe_loop();
+
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+  Voice_loop();   /* may sound collision alarms */
+#endif
+#endif
 
   if (isTimeToExport()) {
     NMEA_Export();
@@ -848,9 +868,15 @@ void txrx_test()
   led_end_ms = millis();
 #endif
 
-  Sound_loop();
+  Buzzer_loop();
 
   Strobe_loop();
+
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
+  Voice_loop();
+#endif
+#endif
 
 #if DEBUG_TIMING
   export_start_ms = millis();

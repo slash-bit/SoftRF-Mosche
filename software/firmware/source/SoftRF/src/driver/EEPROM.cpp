@@ -26,7 +26,7 @@ void EEPROM_store()    {}
 #include "EEPROM.h"
 #include "RF.h"
 #include "LED.h"
-#include "Sound.h"
+#include "Buzzer.h"
 #include "Bluetooth.h"
 #include "../TrafficHelper.h"
 #include "../protocol/radio/Legacy.h"
@@ -107,32 +107,34 @@ void EEPROM_defaults()
   /* This will speed up 'factory' boot sequence on Editions other than Standalone */
   if (hw_info.model == SOFTRF_MODEL_STANDALONE
    || hw_info.model == SOFTRF_MODEL_PRIME) {
-    settings->volume      = BUZZER_VOLUME_FULL;
-    settings->strobe      = STROBE_OFF;
-    settings->pointer     = DIRECTION_NORTH_UP;
+    settings->volume  = BUZZER_VOLUME_FULL;
+    settings->strobe  = STROBE_OFF;
+    settings->pointer = DIRECTION_NORTH_UP;
   } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    settings->volume      = BUZZER_VOLUME_FULL;
-    settings->strobe      = STROBE_ALARM;
-    settings->pointer     = LED_OFF;
+    settings->volume  = BUZZER_VOLUME_FULL;
+    settings->strobe  = STROBE_ALARM;
+    settings->pointer = LED_OFF;
   } else {
-    settings->volume      = BUZZER_OFF;
-    settings->strobe      = STROBE_OFF;
-    settings->pointer     = LED_OFF;
+    settings->volume  = BUZZER_OFF;
+    settings->strobe  = STROBE_OFF;
+    settings->pointer = LED_OFF;
   }
 
-  settings->norelay    = false;
+  settings->voice   = VOICE_OFF;
 
-  settings->nmea_g     = true;
-  settings->nmea_p     = false;
-  settings->nmea_l     = true;
-  settings->nmea_s     = true;
-  settings->nmea_d     = false;
+  settings->norelay = false;
 
-  settings->nmea2_g     = true;
-  settings->nmea2_p     = false;
-  settings->nmea2_l     = true;
-  settings->nmea2_s     = true;
-  settings->nmea2_d     = false;
+  settings->nmea_g  = true;
+  settings->nmea_p  = false;
+  settings->nmea_l  = true;
+  settings->nmea_s  = true;
+  settings->nmea_d  = false;
+
+  settings->nmea2_g = true;
+  settings->nmea2_p = false;
+  settings->nmea2_l = true;
+  settings->nmea2_s = true;
+  settings->nmea2_d = false;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   settings->nmea_out   = NMEA_USB;
