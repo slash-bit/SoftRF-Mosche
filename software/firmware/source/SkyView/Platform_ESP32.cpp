@@ -635,9 +635,10 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
 
   char key[8];
   char out[64];
-  uint8_t tokens[4] = { 0 };    // was [3] - allow room for future inclusion of aircraft type
+  uint8_t tokens[4] = { 0 };   // was [3] - allow room for future inclusion of aircraft type
   cdbResult rt;
-  int c, i = 0, token_cnt = 0;
+  int c, i = 0;
+  int token_cnt = 1;           // token[0] always exists, preset to index 0
   int nothing;
 
   if (!ADB_is_open)
@@ -650,16 +651,16 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
   if (rt == KEY_FOUND) {
       while ((c = ucdb.readValue()) != -1 && i < (sizeof(out) - 1)) {
         if (c == '|') {
-          if (token_cnt < (sizeof(tokens) - 1)) {
+          if (token_cnt < sizeof(tokens)) {
             token_cnt++;
-            tokens[token_cnt] = i+1;
+            tokens[token_cnt-1] = i+1;     // start of NEXT token
           }
-          c = 0;
+          c = '\0';    // null-terminate the previous token
         }
         out[i++] = (char) c;
       }
-      out[i] = 0;
-      nothing = i;
+      out[i] = '\0';    // null-terminate the last token
+      nothing = i;      // index of an empty string
       if (token_cnt < 2)  tokens[1] = nothing;
       if (token_cnt < 3)  tokens[2] = nothing;
       if (token_cnt < 4)  tokens[3] = nothing;
@@ -695,7 +696,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
       // data fields, e.g., contest number AND M&M:
 #if 0
 // single line
-      if (buf2) buf2[0] = 0;
+      if (buf2) buf2[0] = '\0';
       if (strlen(out + pref1)) {
         snprintf(buf, size, "%s:%s",
           out + pref1,
@@ -708,7 +709,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
       } else if (strlen(out + pref3)) {
         snprintf(buf, size, "%s", out + pref3);
       } else {
-        buf[0] = 0;
+        buf[0] = '\0';
         return false;
       }
 #else
@@ -726,10 +727,10 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
             (out[pref3] ? &out[pref3] : ""));
       } else if (out[pref3]) {
         snprintf(buf, size, "%s", &out[pref3]);
-        if (buf2)  buf2[0] = 0;
+        if (buf2)  buf2[0] = '\0';
       } else {
-        buf[0] = 0;
-        if (buf2)  buf2[0] = 0;
+        buf[0] = '\0';
+        if (buf2)  buf2[0] = '\0';
         return false;
       }
 #endif

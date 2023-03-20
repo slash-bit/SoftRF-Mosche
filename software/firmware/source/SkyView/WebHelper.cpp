@@ -69,8 +69,10 @@ static const char about_html[] PROGMEM = "<html>\
 <p>This firmware is a part of SoftRF project</p>\
 <p>URL: http://github.com/lyusupov/SoftRF</p>\
 <p>Author: <b>Linar Yusupov</b></p>\
-<p>E-mail: linar.r.yusupov@gmail.com</p>\
 <p>This version: https://github.com/moshe-braner/SoftRF</p>\
+<p>E-mail: mo\
+she.braner\
+@gmail.com</p>\
 <h2 align=center>Credits</h2>\
 <p align=center>(in historical order)</p>\
 <table width=100%%>\
