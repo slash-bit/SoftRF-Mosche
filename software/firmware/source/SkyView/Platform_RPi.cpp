@@ -294,14 +294,17 @@ static bool RPi_DB_init()
   return true;
 }
 
-static bool RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
+static int RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
+                            char *buf2=NULL, size_t size2=0)
 {
   sqlite3_stmt *stmt;
   char *query = NULL;
   int error;
-  bool rval = false;
+  int rval = 0;
   const char *reg_key, *db_key;
   sqlite3 *db;
+
+  if (buf2)  buf2[0] = '\0';
 
   switch (type)
   {
@@ -360,13 +363,13 @@ static bool RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
   }
 
   if (db == NULL) {
-    return false;
+    return -1;
   }
 
   error = asprintf(&query, "select %s from %s where id = %d",reg_key, db_key, id);
 
   if (error == -1) {
-    return false;
+    return 0;
   }
 
   sqlite3_prepare_v2(db, query, strlen(query), &stmt, NULL);
@@ -384,7 +387,7 @@ static bool RPi_DB_query(uint8_t type, uint32_t id, char *buf, size_t size)
         } else if (len == size) {
           buf[len-1] = 0;
         }
-        rval = true;
+        rval = 1;
       }
     }
   }

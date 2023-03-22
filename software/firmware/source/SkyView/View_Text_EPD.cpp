@@ -137,8 +137,11 @@ static void EPD_Draw_Text()
     uint32_t id = traffic[EPD_current - 1].fop->ID;
 
     long start = micros();
-    if (SoC->DB_query(db, id, id_text, sizeof(id_text), id2_text, sizeof(id2_text))) {
+    int found = SoC->DB_query(db, id, id_text, sizeof(id_text), id2_text, sizeof(id2_text));
+    if (found == 1) {
 #if 0
+      Serial.print(F("Time taken: "));
+      Serial.println(micros()-start);
       Serial.print(F("Registration of "));
       Serial.print(id);
       Serial.print(F(" is "));
@@ -146,12 +149,18 @@ static void EPD_Draw_Text()
 #endif
     } else {
       snprintf(id_text, sizeof(id_text), "ID: %06X", id);
-      id2_text[0] = 0;
+      if (found == 2) {
+        // found but empty record
+        strncpy(id2_text, " (blank)", sizeof(id2_text));
+      } else if (found == 0) {
+        // have database, but not found
+        strncpy(id2_text, " (no reg)", sizeof(id2_text));
+      } else {
+        // no database
+        snprintf(id_text, sizeof(id_text), "ID: %06X", id);
+        strncpy(id2_text, "! NO DB !", sizeof(id2_text));
+      }
     }
-#if 0
-     Serial.print(F("Time taken: "));
-     Serial.println(micros()-start);
-#endif
 
     display->setFont(&FreeMonoBold12pt7b);
 

@@ -159,10 +159,10 @@ static bool ESP8266_DB_init()
   return false;
 }
 
-static bool ESP8266_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
+static int ESP8266_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
                               char *buf2=NULL, size_t size2=0)
 {
-  return false;
+  return -1;
 }
 
 static void ESP8266_DB_fini()

@@ -627,7 +627,7 @@ static bool ESP32_DB_init()
   return rval;
 }
 
-static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
+static int ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
                             char *buf2=NULL, size_t size2=0)
 {
   // The 'type' argument is for selecting which DB (OGN, FLN, etc).
@@ -642,7 +642,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
   int nothing;
 
   if (!ADB_is_open)
-    return false;
+    return -1;   // no database
 
   snprintf(key, sizeof(key),"%06X", id);
 
@@ -710,7 +710,7 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
         snprintf(buf, size, "%s", out + pref3);
       } else {
         buf[0] = '\0';
-        return false;
+        return 2;   // found, but empty record
       }
 #else
 // will be two lines on the display
@@ -731,13 +731,13 @@ static bool ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
       } else {
         buf[0] = '\0';
         if (buf2)  buf2[0] = '\0';
-        return false;
+        return 2;   // found, but empty record
       }
 #endif
-      return true;
+      return 1;  // found
   }
 
-  return false;
+  return 0;   // not found
 }
 
 static void ESP32_DB_fini()
@@ -787,7 +787,7 @@ int readProps(File file, wavProperties_t *wavProps)
   return n;
 }
 
-static bool play_file(char *filename, bool quieter)
+static bool play_file(char *filename, int volume)
 {
   headerState_t state = HEADER_RIFF;
   bool rval = false;
@@ -849,7 +849,38 @@ static bool play_file(char *filename, bool quieter)
         uint32_t data;
         n = read4bytes(wavfile, &data);
         if (n == 4) {
-            if (quieter) {           // halve the values, 6 dB quieter
+            if (volume > 0) {            // double the values, 6 dB louder
+              if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_16BIT) {
+                int16_t *p16 = (int16_t *) &data;
+                int16_t i16 = *p16;
+                if (i16 & 0xC000 == 0x4000)        // large positive
+                    i16 = 0x7FFF;    // damn the clipping, full speed ahead
+                else if (i16 & 0xC000 == 0x8000)   // large negative
+                    i16 = 0x8000;
+                else  // 0xC000 -- 0x3FFF
+                    i16 <<= 1;
+                *p16 = i16;
+                ++p16;
+                i16 = *p16;
+                if (i16 & 0xC000 == 0x4000)
+                    i16 = 0x7FFF;
+                else if (i16 & 0xC000 == 0x8000)
+                    i16 = 0x8000;
+                else
+                    i16 <<= 1;
+                *p16 = i16;
+                ++p16;
+              } else if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_8BIT) {
+                uint8_t *p8 = (uint8_t *) &data;
+                for (int i=0; i<4; i++) {
+                    if (p8[i] > 128 + 63)
+                        p8[i] = 255;
+                    else if (p8[i] < 128 - 64)
+                        p8[i] = 0;
+                    else p8[i] = (p8[i] << 1) - 64;
+                }
+              }
+            } else if (volume < 0) {     // halve the values, 6 dB quieter
               if (wavProps.bitsPerSample == I2S_BITS_PER_SAMPLE_16BIT) {
                 int16_t *p16 = (int16_t *) &data;
                 *p16 >>= 1;
@@ -912,9 +943,10 @@ static void ESP32_TTS(char *message)
                            "" )));
           strcat(filename, word);
           strcat(filename, WAV_FILE_SUFFIX);
-          // voice_1 in the existing collection of .wav files is louder than voice_3,
-          // so make it a bit quieter since we use it for less-urgent advisories
-          play_file(filename, (settings->voice == VOICE_1));
+          // voice_3 in the existing collection of .wav files is quieter than voice_1,
+          // so make it a bit louder since we use it for more-urgent advisories
+          int volume = (settings->voice == VOICE_3)? 1 : 0;
+          play_file(filename, volume);
           word = strtok (NULL, " ");
 
           yield();
@@ -946,7 +978,7 @@ static void ESP32_TTS(char *message)
       strcat(filename, "POST");
       strcat(filename, WAV_FILE_SUFFIX);
 
-      if (play_file(filename, false)) {
+      if (play_file(filename, 0)) {
         /* playing POST.wav worked */
         /* keep boot-time SkyView logo on the screen for 7 seconds */
         delay(7000);
@@ -959,14 +991,14 @@ static void ESP32_TTS(char *message)
         strcat(filename, VOICE1_SUBDIR);
         strcat(filename, "notice");
         strcat(filename, WAV_FILE_SUFFIX);
-        play_file(filename, true);  // make voice_1 6dB quieter
+        play_file(filename, 0);
         delay(1000);
         settings->voice = VOICE_3;
         strcpy(filename, WAV_FILE_PREFIX);
         strcat(filename, VOICE3_SUBDIR);
         strcat(filename, "notice");
         strcat(filename, WAV_FILE_SUFFIX);
-        play_file(filename, false);
+        play_file(filename, 1);   // make voice3 6dB louder
         delay(1000);
       }
     }
