@@ -63,6 +63,7 @@ void NMEA_add_checksum(char *, size_t);
 char *bytes2Hex(byte *, size_t);
 
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
+extern char GPGGA_Copy[NMEA_BUFFER_SIZE];
 
 #if defined(USE_NMEA_CFG)
 void NMEA_Process_SRF_SKV_Sentences(void);

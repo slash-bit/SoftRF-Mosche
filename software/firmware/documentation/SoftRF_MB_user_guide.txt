@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 18, 2023
-to fit software version MB09s based on v1.0 with some parts of v1.2
+This version last updated March 21, 2023
+to fit software version MB09t based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -69,10 +69,10 @@ With my version of SoftRF you have the option of attaching a passive piezo buzze
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
 The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external amplifier, or, select "external" in the buzzer volume setting to get +3v DC output on pin 14, and drive an external (12V) *active* buzzer via a transistor.  Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm happens (or could happen).
 
-And now SoftRF also has the ability to generate *voice* warnings about traffic that is in danger of collision.  For example, "traffic, 3 o'clock, low" for alarm levels 1 & 2, or "danger, ahead, level" for alarm level 3.  The voice audio output is from pin 25.  This is a line-level output, it needs an external amplifier to drive a speaker.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/audio_output_circuit_.jpg
-for an example connection circuit.  The resistors reduce the output signal level to what the amplifier probably wants - if it is too weak, increase the value of the 2.2K resistors.  The 10 uF capacitor (positive side towards the T-Beam) blocks the DC component.  The 10 nF capacitor tries to filter out high frequencies, from the DAC steps and from the circuit board as a whole.  The amplifier can be a standalone device (LM386 modules are small and cheap), or can feed the signal into the AUX input of the aircraft communications radio, etc.  Another option is an external I2S decoder/amplifier, such as those based on the Max98357 chip.  The connection pins are: Serial Clock (SCK) (BCK): pin 14, Word Select (WS): pin 15, and Serial Data (SD): pin 25.  Note that while using an external I2S decoder, both the internal analog signal generator (output to pin 25), and the piezo buzzer option (on pins 14,15), are not available. This method has not been tested yet, let me know if it works!
+And now SoftRF, on the T-Beam, also has the ability to generate *voice* warnings about traffic that is in danger of collision.  For example, "traffic, 3 o'clock, low" for alarm levels 1 & 2, or "danger, ahead, level" for alarm level 3.  The audio data needs to be uploaded via the web interface, see below.  The voice audio output is from pin 25.  This is a line-level output, it needs an external amplifier to drive a speaker.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/audio_output_circuit_.jpg
+for an example connection circuit.  The resistors reduce the output signal level to what the amplifier probably wants - if it is too weak, increase the value of the 2.2K resistors.  The 10 uF capacitor (positive side towards the T-Beam) blocks the DC component.  The 10 nF capacitor tries to filter out high frequencies, from the DAC steps and from the circuit board as a whole.  The amplifier can be a standalone device (LM386 modules are small and cheap), or can feed the signal into the AUX input of the aircraft communications radio, etc.  Another option is an external I2S decoder/amplifier, such as those based on the Max98357 chip.  The connection pins are: Serial Clock (SCK) (BCK): pin 14, Word Select (WS): pin 15, and Serial Data (SD): pin 25.  Note that while using an external I2S decoder, both the internal analog signal generator (output to pin 25), and the piezo buzzer option (on pins 14,15), are not available. This digital-output method has not been tested yet, let me know if it works!
 
-You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 33 (note: moved from pin 25 to allow the voice output there).  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  See pinout diagram here:
+You also have the option to attach (through a 100-ohm resistor) an LED, or LED-driving circuit, to pin 33 (note: moved from pin 25 to allow the voice output there).  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam, although SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  Alternatively, can use a separate device ("SkyStrobe"), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  See pinout diagram here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-beam_wiring_.jpg
 
 Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header.  That is optional.  SoftRF will run just fine without the OLED display, saving time and money.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".  See photo of the attached OLED:
@@ -116,7 +116,7 @@ If a battery is installed on the board, the T-Beam is never completely turned "o
 The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - but they cannot be changed here, see below.  Find more info about operating the T-Echo ("Badge Edition") here:
 https://github.com/lyusupov/SoftRF/wiki/Badge-Edition
 
-FLARM does not generate collision warnings while it is not airborne.  My version of SoftRF follows that rule.  But to allow testing on the ground, my version does give such warnings - and sends signals out pretending to be airborne - for one minute after it is done booting and has acquired a GNSS fix.  If a strobe is connected, it too will fire, despite not being airborne.
+FLARM does not generate collision warnings while it is not airborne.  My version of SoftRF follows that rule.  But to allow testing on the ground, my version does give such warnings - and sends signals out pretending to be airborne - for one minute after it is has booted and has acquired a GNSS fix.  If a strobe is connected, it too will fire during that minute, despite not being airborne.
 
 
 Installing firmware for the first time
@@ -223,7 +223,11 @@ No track: this is similar to Stealth, but for the purpose of telling ground (OGN
 
 Radio CF correction: you can tell SoftRF (on some devices) to adjust the radio frequency up or down a bit.  Only use this if you have reliable information (e.g., from OGN ground stations) telling you that your device is a bit off-frequency.
 
-IGC encryption key:  Only shown if set to use the OGNTP protocol. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888" masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
+Alarms Log
+
+If enabled, every time a traffic alarm is issued (whether audible or not), a line of text is written into the alarmlog.txt file. This line includes the time, lat/lon, alarm level (1-3), aircraft ID, and horizontal and vertical separation (in meters).  If you want to download this data, use the web interface and click the "Alarm Log" button at the bottom of the status page.  The file is erased and a new one created when SoftRF is first airborne following a power-up or reboot.
+
+IGC encryption key:  Only shown if SoftRF is set to use the OGNTP protocol. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888", masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 
 
 The settings displayed, and adjusted, within the T-Echo
@@ -238,7 +242,7 @@ Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")
 NMEA1:BLT GL           < NMEA output to Bluetooth, sends GNSS & Legacy (traffic) data
 NMEA2:USB GL           < NMEA output to USB, sends GNSS & Legacy (traffic) data
 
-When you double-click the mode button the device normally toggles the display backlight on or off.  When the screen that shows various settings is displayed, specifically, if you double-click the mode button, it will instead go into change-settings mode.  It will show one setting at a time on a page, like this:
+When you double-click the mode button the device normally toggles the display backlight on or off.  When this screen that shows various settings is displayed, specifically, if you double-click the mode button, it will instead go into change-settings mode.  It will show one setting at a time on a page, like this:
     Aircraft Type:
       Glider
 Touching the "touch" button will change that setting, e.g., you will see:
@@ -247,13 +251,13 @@ Touching the "touch" button will change that setting, e.g., you will see:
 A short-press of the mode button will switch to the next setting, e.g.:
     Frequency Band:
       EU
-And so forth.  Note that after each "click" or "touch", it will take about 2 seconds for the next setting to appear on the screen.  There are three ways to exit the change-settings mode:
+And so forth.  Note that after each "click" or "touch", it will take about 2 seconds for the next setting to appear on the screen.  Be patient.  There are three ways to exit the change-settings mode:
 * single-click the mode button through all the settings until you see this:
     what to
     do next:
-      cancel
-  - use the touch button to select "cancel", "review", or "save" and then single-click the mode button, or
-* on any page (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or 
+     cancel
+  - use the touch button to select "cancel", "review", or "save" and then single-click the mode button.  Or:
+* on any of these settings pages (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or:
 * press the reset button to reboot without changing the settings.
 The settings accessible via this method are:
 * AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
@@ -263,6 +267,15 @@ The settings accessible via this method are:
 * Display units: Metric, Imperial, Mixed.
 * Display orientation: Track Up, North Up.
 Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.
+
+
+Uploading voice files (T-Beam only)
+
+If the voice warnings are activated but data has not been uploaded, the warnings will say the single word "traffic".  To get the full voice messages, download the waves.tar file from this page:
+https://github.com/moshe-braner/SoftRF/tree/master/software/data/Audio
+Then start up SoftRF, access the web interface, click the "upload" button at the bottom of the status web page, browse to the location where you saved the "waves.tar" file, and click "upload".  After that, it should say "17 WAV files found" at the bottom of the status page (refresh it).  The audio data (waves.tar) is stored in the file-system ("SPIFFS") area within the T-Beam's flash memory.  It is not erased when new firmware is uploaded.  If you need to erase it, use the "clear" button in the web interface.
+
+If you want to create and upload customized audio files (e.g., in another language), use the supplied waves.tar file as a template.  17 files are needed, with the file names and meanings the same as in the supplied file.  The WAV files must be PCM, mono, 8-bit, with a sample rate of 8000 Hz.  I have used the free PC app "Wavosaur" to convert WAV files to this format.  The total size of the WAV files should be no more than about 150 KB.  Then use a file-compression utility (such as 7ZIP) to combine the 17 WAV files into one TAR file (not a ZIP file).  The order of the WAV files within the TAR file does not matter.  The name of the TAR file (unlike the WAV files within) does not matter, it will always be saved into SPIFFS as "waves.tar".
 
 
 How to connect external devices
@@ -297,7 +310,7 @@ A wireless connection to XCvario is more difficult.  With the stock XCvario firm
 
 Updating the firmware on the T-Beam
 
-When it's time install a newer version of the SoftRF firmware on your T-Beam, the easiest way is to do it via WiFi (also called On The Air, OTA).
+When it's time install a newer version of the SoftRF firmware on your T-Beam, the easiest way is to do it via WiFi, also called On The Air (OTA).
 
 Note: if your T-Beam currently has the "RC9" version of SoftRF, do not update the firmware via WiFi.  It will fail!  There is a bug in that version.  Use the USB method (above) for the initial installation, of either my version of SoftRF, or version 1.0 (or higher) of the main line SoftRF.  After that, it will be possible to update the firmware to later versions via WiFi.
 
@@ -315,9 +328,9 @@ Here are step by step instructions for OTA firmware update:
 * Connect your PC/Tablet/Cellphone to the Wi-Fi Access Point created by SoftRF
     SSID: SoftRF-XXXXXX
     Key: 12345678
-  (If SoftRF is already set up to connect as a client to an external WiFi network, and if this network is in range, you can skip this step, and leave the PC/Tablet/Cellphone connected to the same external network.) 
+  (If SoftRF is already set up to connect as a client to an external WiFi network, and if this network is in range, you can skip this step, and have the PC/Tablet/Cellphone connected to the same external network.) 
 
-* Open up a browser and proceed to the URL: http://192.168.1.1
+* Open up a browser and proceed to the URL (IP address): 192.168.1.1
   (If using an external network, press the button for the third OLED screen to see the needed IP address.)
 
 * Inspect the firmware version listed in the Status web page that opens up.
@@ -334,13 +347,13 @@ Here are step by step instructions for OTA firmware update:
 
 * Wait until the progress indicator reaches 100%, then wait some more...
 
-ATTENTION! The update progress indicator shows file transfer completion only. So be patient and wait 30+ seconds more, do not touch anything or you will likely get a dead device.
+ATTENTION! The update progress indicator shows file transfer completion only. So be patient and wait 30+ seconds more, do not touch anything or you may get a "bricked" device.
 
 * When the update is completed the SoftRF device typically reboots automatically.  If it does not reboot itself, after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
 
 * Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.
 
-* Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be set, or all of them will need to be selected again (where different from the defaults).
+* Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be remembered, or all of them will need to be set again (where different from the defaults).
 
 If this firmware update method fails (and it always fails if starting from the "rc9" firmware version), proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
 
@@ -354,11 +367,11 @@ The T-Echo usually includes a "bootloader" which makes it easy to update the fir
 https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/nRF52840/SoftRF/MassStorage
 * Unzip the file and make sure you now have a .uf2 file.
 * Connect the SoftRF Badge Edition device to your PC by means of a USB cable (Type-A <-> Type-C)
-* Double click (within 0.5 seconds) the RESET button on the T-Echo.
+* Double click (two clicks within 0.5 seconds) the RESET button on the T-Echo.
 * A virtual disk with NRF52BOOT (or TECHOBOOT) label should appear in your "File manager".
-* Drag the .uf2 firmware file by your pointing device (mouse, trackball,...) and drop it into the window showing the NRF52BOOT (or TECHOBOOT) virtual disk.
+* Drag the .uf2 firmware file by your pointing device (mouse, touchpad,...) and drop it into the window showing the NRF52BOOT (or TECHOBOOT) virtual disk.
 * Wait until the file transfer is complete.  The window contents will disappear and the T-Echo will reboot itself.
-Note that this "virtual disk" is not really a disk.  You will never see the dragged-and-dropped file stored on it.  And you cannot store other files on the T-Echo.
+Note that this "virtual disk" is not really a disk.  You will never see the dragged-and-dropped file stored on it.
 
 See similar instructions here:
 https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#nrf52840

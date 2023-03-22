@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 17, 2023
-to fit software version MB09s based on v1.0 with some parts of v1.2
+This version last updated March 19, 2023
+to fit software version MB09t based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -166,7 +166,7 @@ Revived the option of connecting to an external WiFi network.  Can enter the SSI
 
 Voice output
 
-This new module uses WAV data (sample rate 8000, bit depth 8) stored in PROGMEM arrays (about 70 KBytes) defined in waves.cpp.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25.  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.  Later versions can work too, but they make the program too large to fit in the flash memory space.  (2.0.5 still fits, barely.)
+This new module uses WAV files(sample rate 8000, bit depth 8, about about 70 KBytes) stored in SPIFFS inside waves.tar.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25.  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.   Added methods to upload the tar file via the web interface.
 
 
 KNOWN ISSUES

@@ -37,6 +37,12 @@
 #endif
 #endif
 
+#include "SPIFFS.h"
+// #include <FS.h>
+
+File AlarmLog;
+bool AlarmLogOpen = false;
+
 unsigned long UpdateTrafficTimeMarker = 0;
 
 ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
@@ -852,6 +858,19 @@ void Traffic_loop()
       if (notified && mfop != NULL) {
         mfop->alert_level = mfop->alarm_level + 1;
         mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
+        if (settings->logalarms && AlarmLogOpen) {
+          // $GPGGA,235317.000,4003.9039,N,10512.5793,W,...
+          char *cp = &GPGGA_Copy[7];   // after the "$GPGGA,", start of timestamp
+          GPGGA_Copy[42] = '\0';       // overwrite the comma after the "E" or "W"
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+              PSTR("%s,%d,%06x,%d,%d\r\n"),
+              cp, mfop->alarm_level, mfop->addr, mfop->distance, mfop->alt_diff);
+          int len = strlen(NMEABuffer);
+          if (AlarmLog.write((const uint8_t *)NMEABuffer, len) < len) {    // perhaps out of space in SPIFFS
+              AlarmLog.close();
+              AlarmLogOpen = false;
+          }
+        }
       }
     }
 

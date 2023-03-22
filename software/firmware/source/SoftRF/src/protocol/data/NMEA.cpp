@@ -128,6 +128,7 @@ static int WiFi_isconnected_TCP()
 #endif // defined(NMEA_TCP_SERVICE)
 
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
+char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
 
 static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
 
@@ -964,6 +965,7 @@ void NMEA_GGA()
                                         NMEALIB_SENTENCE_GPGGA );
 
   if (gen_sz) {
+    strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
     NMEA_Outs(settings->nmea_g, settings->nmea2_g, (byte *) nmealib_buf.buffer, gen_sz, false);
   }
 }

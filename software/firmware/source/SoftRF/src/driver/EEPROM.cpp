@@ -176,6 +176,7 @@ void EEPROM_defaults()
   settings->ignore_id = 0;
   settings->follow_id = 0;
   settings->id_method = ADDR_TYPE_FLARM;
+  settings->logalarms = false;
   settings->debug_flags = 0x3F;
       // if and when debug output will be turned on,
       // allow all debug message types by default

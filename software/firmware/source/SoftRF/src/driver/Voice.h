@@ -31,7 +31,12 @@ bool Voice_Notify(ufo_t *);
 void Voice_loop(void);
 void Voice_fini(void);
 
-extern const uint8_t *word2wav(const char *, int &size);  // in waves.cpp
+// these are in waves.cpp:
+extern int num_wav_files;
+void clear_waves(void);
+int parse_wav_tar(void);
+bool word2wav(const char *word);
+int read_wav_byte(uint8_t &data);
 
 #endif /* ESP32 */
 #endif /* EXCLUDE_VOICE */

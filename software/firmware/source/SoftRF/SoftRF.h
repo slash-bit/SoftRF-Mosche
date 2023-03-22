@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB09s"
+#define SOFTRF_FIRMWARE_VERSION "MB09t"
 #define SOFTRF_IDENT            "SoftRF-"
 #define SOFTRF_USB_FW_VERSION   0x0101
 

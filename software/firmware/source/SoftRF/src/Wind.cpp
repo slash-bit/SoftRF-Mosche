@@ -444,6 +444,23 @@ void this_airborne()
 
     }
 
+    // restart alarm log on first takeoff after boot
+    if (settings->logalarms && ThisAircraft.airborne==0 && airborne>0 && AlarmLogOpen==false) {
+      if (SPIFFS.begin(true)) {
+        // if (SPIFFS.exists("/alarmlog.txt"))
+        //     SPIFFS.remove("/alarmlog.txt");
+        File AlarmLog = SPIFFS.open("/alarmlog.txt", "w");
+        if (AlarmLog) {
+            AlarmLogOpen = true;
+            AlarmLog.write((const uint8_t *)"time,lat,lon,level,ID,hdist,vdist\r\n", 35);
+        } else {
+            Serial.println(F("Failed to open alarmlog.txt"));
+        }
+      } else {
+          Serial.println(F("Failed to start SPIFFS"));
+      }
+    }
+
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
     if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {

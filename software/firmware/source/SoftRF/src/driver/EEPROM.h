@@ -128,7 +128,7 @@ typedef struct Settings {
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
     uint8_t  strobe:2;
-    uint8_t  resvd5:1;
+    bool     logalarms:1;
     uint8_t  voice:2;
     uint8_t  tcpport:1;       /* 0=2000, 1=8880 */
     uint8_t  tcpmode:1;

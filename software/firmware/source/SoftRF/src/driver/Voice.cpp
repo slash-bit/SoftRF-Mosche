@@ -37,6 +37,7 @@ void  Voice_loop()        {}
 void  Voice_fini()        {}
 #else
 
+#include "../../SoftRF.h"
 #include "Voice.h"
 #include "Buzzer.h"
 #include "Strobe.h"
@@ -141,10 +142,10 @@ static void silence()
     i2s_writesample();
 }
 
-static void play_i2s(const uint8_t *data, int size)
+static bool play_i2s(const char *word)
 {
   if (i2s_installed == false)
-      return;
+      return false;
 
   bool internal_dac = (settings->voice == VOICE_INT);
 
@@ -156,9 +157,12 @@ static void play_i2s(const uint8_t *data, int size)
     }
   }
 
-  if (size == 0) {
+  bool is_a_file = true;
+
+  if (word == NULL) {
 
       silence();
+      is_a_file = false;
 
   } else {
 
@@ -166,15 +170,22 @@ static void play_i2s(const uint8_t *data, int size)
     if (wdt_status)
       disableLoopWDT();
 
+    if (word2wav(word) == false)
+       is_a_file = false;  // playing the default WAV
+
+    int size = 32000;
     while (size-- > 0) {
-      if (internal_dac) {
-         // Need to shift 8-bit samples into MSB of 16-bit ints.
-         sample[1] = sample[3] = *data++;
-      } else {
-         // For external I2S convert from 8-bit unsigned to 16-bit signed.
-         sample[1] = sample[3] = (*data++) ^ 0x80;
-      }
-      i2s_writesample();
+        uint8_t data;
+        if (read_wav_byte(data) == 0)    // EOF
+            break;
+        if (internal_dac) {
+           // Need to shift 8-bit samples into MSB of 16-bit ints.
+           sample[1] = sample[3] = data;
+        } else {
+           // For external I2S convert from 8-bit unsigned to 16-bit signed.
+           sample[1] = sample[3] = (data ^ 0x80);
+        }
+        i2s_writesample();
     }
 
     if (wdt_status)
@@ -190,6 +201,8 @@ static void play_i2s(const uint8_t *data, int size)
   }
 
   delay(dmabufsize/32);    // wait long enough for the buffer to be flushed
+
+  return is_a_file;
 }
 
 static void TTS(const char *msg)
@@ -208,14 +221,14 @@ static void TTS(const char *msg)
 
     while (word != NULL)
     {
-        int size;
-        const uint8_t *wav = word2wav(word, size);
-        play_i2s(wav, size);
+        bool is_a_file = play_i2s(word);
+        if (! is_a_file)                 // if played default embedded WAV
+            break;
         word = strtok (NULL, " ");
     }
 
-    play_i2s(NULL, 0);      // silence "word"
-    delay(dmabufsize/32);   // wait for the buffer to be flushed (again)
+    (void) play_i2s(NULL);   // silence "word"
+    delay(dmabufsize/32);    // wait for the buffer to be flushed (again)
     i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);
 }
 
@@ -306,8 +319,12 @@ void Voice_setup(void)
       Buzzer_fini();
       settings->volume = BUZZER_OFF;   // free up pins 14 & 15
   }
+
   setup_i2s();
   i2s_installed = true;
+
+  if (num_wav_files < 17)      // have not successfully read WAV data from SPIFFS yet
+    parse_wav_tar();           // then try and do that
 }
 
 bool Voice_Notify(ufo_t *fop)

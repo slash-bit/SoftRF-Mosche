@@ -25,7 +25,9 @@ void Web_fini()     {}
 #else
 
 #include <Arduino.h>
+#include "SPIFFS.h"
 
+#include "../system/SoC.h"
 #include "../driver/Battery.h"
 #include "../driver/RF.h"
 #include "Web.h"
@@ -46,9 +48,9 @@ void Web_fini()     {}
 
 static uint32_t prev_rx_pkt_cnt = 0;
 
-static const char Logo[] PROGMEM = {
-#include "../Logo.h"
-    } ;
+//static const char Logo[] PROGMEM = {
+//#include "../Logo.h"
+//    } ;
 
 #include "jquery_min_js.h"
 
@@ -82,6 +84,12 @@ static const char about_html[] PROGMEM = "<html>\
 <h1>About</h1>\
 <h4>&nbsp;&nbsp;&nbsp;&nbsp;This version of SoftRF by Moshe Braner</h4>\
 <h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/moshe-braner/SoftRF</h4>\
+<h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mo\
+she.bra\
+ner@\
+gm\
+ail.\
+com</h4>\
 <h4>&nbsp;&nbsp;&nbsp;&nbsp;Based on the SoftRF project by Linar Yusupov</h4>\
 <h4>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://github.com/lyusupov/SoftRF</h4>\
 <br>\
@@ -130,9 +138,84 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 </body>\
 </html>";
 
+static const char upload_html[] PROGMEM =
+"<html>\
+ <head>\
+ <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\
+ </head>\
+ <p>Select and upload waves.tar (read instructions first)</p>\
+ <form method='POST' action='/doupload' enctype='multipart/form-data'>\
+ <input type='file' name='name'><input type='submit' value='Upload' title='Upload'>\
+ </form>\
+ </html>";
+
+static File UploadFile;
+static const char *textplain = "text/plain";
+
+void handleUpload()
+{
+  HTTPUpload& uploading = server.upload();
+
+  if(uploading.status == UPLOAD_FILE_START)
+  {
+    Serial.println(F("Replacing waves.tar in SPIFFS..."));
+    clear_waves();
+    //SPIFFS.remove("/waves.tar");
+    UploadFile = SPIFFS.open("/waves.tar", "w");
+       // ignore the source file name, always save it in SPIFFS as waves.tar
+    if(! UploadFile) {
+      Serial.println(F("Failed to create waves.tar in SPIFFS..."));
+      return;
+    }
+  }
+  else if (uploading.status == UPLOAD_FILE_WRITE)
+  {
+    if(UploadFile) {
+      size_t loaded = UploadFile.write(uploading.buf, uploading.currentSize);
+      // Serial.print(F("... bytes: ")); Serial.println(loaded);
+    }
+  } 
+  else if (uploading.status == UPLOAD_FILE_END)
+  {
+    if(UploadFile) {
+      UploadFile.close();
+      Serial.print(F("Upload Size: ")); Serial.println(uploading.totalSize);
+      parse_wav_tar();
+      if (uploading.totalSize > 0) {
+        server.sendHeader("Location","/");      // Redirect the client to the status page
+        server.send(303);
+      } else {
+        server.send(500, textplain, "500: uploaded zero bytes");
+      }
+    } else {
+      server.send(500, textplain, "500: couldn't create file");
+    }
+  }
+  yield();
+}
+
+void alarmlogfile(){
+    if (AlarmLogOpen) {
+      AlarmLog.close();
+      AlarmLogOpen = false;
+    }
+    if (! SPIFFS.exists("/alarmlog.txt")) {
+        server.send(404, textplain, "Alarm log file does not exist");
+        return;
+    }
+    File download = SPIFFS.open("/alarmlog.txt", "r");
+    if (download) {
+      server.sendHeader("Content-Type", "text/text");
+      server.sendHeader("Content-Disposition", "attachment; filename=alarmlog.txt");
+      server.sendHeader("Connection", "close");
+      server.streamFile(download, "application/octet-stream");
+      download.close();
+    }
+}
+
 void handleSettings() {
 
-  size_t size = 9600;
+  size_t size = 10000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -838,21 +921,31 @@ void handleSettings() {
     size -= len;
   }
 
-  if (settings->nmea_d || settings->nmea2_d) {
     snprintf_P ( offset, size,
       PSTR("\
+<tr>\
+<th align=left>Alarms Log</th>\
+<td align=right>\
+<select name='alarmlog'>\
+<option %s value='%d'>Disabled</option>\
+<option %s value='%d'>Enabled</option>"
+"</select>\
+</td>\
+</tr>\
 <tr>\
 <th align=left>Debug flags (2 HEX digits)</th>\
 <td align=right>\
 <INPUT type='text' name='debug_flags' maxlength='2' size='2' value='%02X'>\
 </td>\
 </tr>"),
+    (settings->logalarms==false ? "selected" : ""), 0,
+    (settings->logalarms==true  ? "selected" : ""), 1,
     settings->debug_flags);
 
     len = strlen(offset);
     offset += len;
     size -= len;
-  }
+
   // else start with all debug message types enabled by default
 
 #if defined(USE_OGN_ENCRYPTION)
@@ -888,6 +981,10 @@ void handleSettings() {
 </html>")
   );
 
+  len = strlen(offset);
+  offset += len;
+  Serial.print("Settings page ending offset: ");Serial.println(offset-Settings_temp);
+
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
   server.sendHeader(String(F("Pragma")), String(F("no-cache")));
@@ -898,6 +995,7 @@ void handleSettings() {
 }
 
 void handleRoot() {
+
   int sec = millis() / 1000;
   int min = sec / 60;
   int hr = min / 60;
@@ -912,7 +1010,7 @@ void handleRoot() {
   char str_alt[16];
   char str_Vcc[8];
 
-  char *Root_temp = (char *) malloc(2300);
+  char *Root_temp = (char *) malloc(2900);
   if (Root_temp == NULL) {
     return;
   }
@@ -922,7 +1020,7 @@ void handleRoot() {
   dtostrf(ThisAircraft.altitude,  7, 1, str_alt);
   dtostrf(vdd, 4, 2, str_Vcc);
 
-  snprintf_P ( Root_temp, 2300,
+  snprintf_P ( Root_temp, 2900,
     PSTR("<html>\
   <head>\
     <meta name='viewport' content='width=device-width, initial-scale=1'>\
@@ -976,6 +1074,15 @@ void handleRoot() {
     <td align=right><input type=button onClick=\"location.href='/firmware'\" value='Firmware update'></td>\
   </tr>\
  </table>\
+ <hr>\
+ <p>%d WAV files found</p>\
+ <table width=100%%>\
+  <tr>\
+    <td align=center><input type=button onClick=\"location.href='/upload'\" value='Upload'></td>\
+    <td align=right><input type=button onClick=\"location.href='/clear'\" value='Clear'></td>\
+    <td align=right><input type=button onClick=\"location.href='/alarmlog'\" value='Alarm Log'></td>\
+  </tr>\
+ </table>\
 </body>\
 </html>"),
     ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION
@@ -993,7 +1100,8 @@ void handleRoot() {
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
     low_voltage ? "red" : "green", str_Vcc,
     tx_packets_counter, rx_packets_counter,
-    timestamp, sats, str_lat, str_lon, str_alt
+    timestamp, sats, str_lat, str_lon, str_alt,
+    num_wav_files
   );
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -1002,6 +1110,20 @@ void handleRoot() {
   server.send ( 200, "text/html", Root_temp );
   SoC->swSer_enableRx(true);
   free(Root_temp);
+  if (!SPIFFS.begin(true)) {
+      Serial.println(F("Failed to start SPIFFS"));
+      return;
+  }
+  File root = SPIFFS.open("/");
+  Serial.println("Files in SPIFFS:");
+  File file = root.openNextFile();
+  while(file){
+      Serial.print("... ");
+      Serial.println(file.name());
+      file = root.openNextFile();
+  }
+  file.close();
+  root.close();
 }
 
 void handleInput() {
@@ -1107,6 +1229,9 @@ void handleInput() {
     } else if (server.argName(i).equals("follow_id")) {
       server.arg(i).toCharArray(idbuf, sizeof(idbuf));
       settings->follow_id = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("alarmlog")) {
+      server.arg(i).toCharArray(idbuf, sizeof(idbuf));
+      settings->logalarms = strtoul(idbuf, NULL, 16);
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -1216,6 +1341,7 @@ PSTR("<html>\
 <tr><th align=left>Power save</th><td align=right>%d</td></tr>\
 <tr><th align=left>Power external</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
+<tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
 </table>\
@@ -1238,7 +1364,8 @@ PSTR("<html>\
   BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
   settings->gdl90, settings->d1090,
   BOOL_STR(!settings->norelay), BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-  settings->power_save, settings->power_external, settings->freq_corr, settings->debug_flags,
+  settings->power_save, settings->power_external,
+  settings->freq_corr, settings->debug_flags, settings->logalarms,
 //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
   (settings->igc_key[0]? 0x88888888 : 0),
   (settings->igc_key[1]? 0x88888888 : 0),
@@ -1288,6 +1415,7 @@ Serial.print(" No track ");Serial.println(settings->no_track);
 Serial.print(" Power save ");Serial.println(settings->power_save);
 Serial.print(" Power external ");Serial.println(settings->power_external);
 Serial.print(" Freq. correction ");Serial.println(settings->freq_corr);
+Serial.print(" Alarm Log ");Serial.println(settings->logalarms);
 Serial.print(" debug_flags ");Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)
 if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
@@ -1307,7 +1435,6 @@ Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
   reboot();
 }
 
-
 void handleNotFound() {
 
   String message = "File Not Found\n\n";
@@ -1323,26 +1450,73 @@ void handleNotFound() {
     message += " " + server.argName ( i ) + ": " + server.arg ( i ) + "\n";
   }
 
-  server.send ( 404, "text/plain", message );
+  server.send ( 404, textplain, message );
+}
+
+bool handleFileRead(String path) { // send the requested file to the client (if it exists)
+  Serial.println("handleFileRead: " + path);
+  if (path.endsWith("/"))
+    return false;
+  if (! path.startsWith("/"))
+    path = "/" + path;
+  String contentType = "application/x-object";             // fake the MIME type
+  if (SPIFFS.exists(path)) {                               // If the file exists
+    File file = SPIFFS.open(path, "r");                    // Open the file
+    size_t sent = server.streamFile(file, contentType);    // Send it to the client
+    file.close();                                          // Close the file again
+    Serial.println(String("\tSent file: ") + path);
+    return true;
+  }
+  Serial.println(String("\tFile Not Found: ") + path);
+  return false;
+}
+
+void serve_P_html(const char *html)
+{
+    SoC->swSer_enableRx(false);
+    server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
+    server.sendHeader(String(F("Pragma")), String(F("no-cache")));
+    server.sendHeader(String(F("Expires")), String(F("-1")));
+    server.send_P ( 200, PSTR("text/html"), html);
+    SoC->swSer_enableRx(true);
 }
 
 void Web_setup()
 {
   server.on ( "/", handleRoot );
+
   server.on ( "/settings", handleSettings );
+
   server.on ( "/about", []() {
-    SoC->swSer_enableRx(false);
-    server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
-    server.sendHeader(String(F("Pragma")), String(F("no-cache")));
-    server.sendHeader(String(F("Expires")), String(F("-1")));
-    server.send_P ( 200, PSTR("text/html"), about_html);
-    SoC->swSer_enableRx(true);
+    serve_P_html(about_html);
   } );
 
-  server.on ( "/input", handleInput );
-  server.on ( "/inline", []() {
-    server.send ( 200, "text/plain", "this works as well" );
+  server.on ( "/upload", []() {
+    serve_P_html(upload_html);
   } );
+
+server.on("/doupload", HTTP_POST,  // if the client posts to the upload page
+    [](){ server.send(200); },     // Send 200 to tell the client we are ready to receive
+    handleUpload                   // Receive and save the file
+  );
+
+  server.on( "/clear", []() {
+    server.send(200, textplain, "SPIFFS cleared");
+    clear_waves();
+    Serial.println(F("Formatting spiffs..."));
+    SPIFFS.format();
+  } );
+
+  server.on ( "/alarmlog", alarmlogfile );
+
+  server.on ( "/input", handleInput );
+
+  //server.onNotFound ( handleNotFound );
+  server.onNotFound([]() {                              // If the client requests any URI
+    if (!handleFileRead(server.uri()))                  // send it if it exists
+        handleNotFound();
+  });
+
   server.on("/firmware", HTTP_GET, [](){
     SoC->swSer_enableRx(false);
     server.sendHeader(String(F("Connection")), String(F("close")));
@@ -1405,13 +1579,12 @@ $('form').submit(function(e){\
     );
   SoC->swSer_enableRx(true);
   });
-  server.onNotFound ( handleNotFound );
 
   server.on("/update", HTTP_POST, [](){
     SoC->swSer_enableRx(false);
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), "*");
-    server.send(200, String(F("text/plain")), (Update.hasError())?"FAIL":"OK");
+    server.send(200, textplain, (Update.hasError())?"FAIL":"OK");
 //    SoC->swSer_enableRx(true);
     Buzzer_fini();
     Voice_fini();
@@ -1444,11 +1617,14 @@ $('form').submit(function(e){\
     yield();
   });
 
-  server.on ( "/logo.png", []() {
-    server.send_P ( 200, "image/png", Logo, sizeof(Logo) );
-  } );
+//  server.on ( "/logo.png", []() {
+//    server.send_P ( 200, "image/png", Logo, sizeof(Logo) );
+//  } );
 
   server.on ( "/jquery.min.js", []() {
+
+    // send compressed jQuery script stored inside SoftRF firmware (about 30 KB)
+    // - should move this to SPIFFS (would need to be manually uploaded)
 
     PGM_P content = jquery_min_js_gz;
     size_t bytes_left = jquery_min_js_gz_len;
