@@ -87,9 +87,10 @@ typedef struct traffic_by_dist_struct {
 #define TRAFFIC_ALERT_VOICE     1    // bit within the .alert field
 
 // wordings for voice warnings and notifications:
-#define WARNING_WORDS "traffic"
-// also available: "warning", "danger"
-#define ADVISORY_WORDS "traffic"
+#define WARNING_WORD1 "traffic"
+#define WARNING_WORD3 "danger"
+// available: "traffic", "warning", "danger"
+#define ADVISORY_WORD "traffic"
 // also available: "notice"
 
 void Traffic_setup        (void);

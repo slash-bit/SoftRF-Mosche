@@ -225,7 +225,7 @@ Radio CF correction: you can tell SoftRF (on some devices) to adjust the radio f
 
 Alarms Log
 
-If enabled, every time a traffic alarm is issued (whether audible or not), a line of text is written into the alarmlog.txt file. This line includes the time, lat/lon, alarm level (1-3), aircraft ID, and horizontal and vertical separation (in meters).  If you want to download this data, use the web interface and click the "Alarm Log" button at the bottom of the status page.  The file is erased and a new one created when SoftRF is first airborne following a power-up or reboot.
+If enabled, every time a traffic alarm is issued (whether audible or not), a line of text is written into the alarmlog.txt file. This line includes the date, time, lat/lon, alarm level (1-3), aircraft ID, relative bearing, and horizontal and vertical separation (in meters).  If you want to download this data, use the web interface and click the "Alarm Log: [Download]" button at the bottom of the status page.  The existing file is normally appended to.  If space in the flash file system is low, the log file is erased and a new one created when SoftRF is first airborne following a power-up or reboot.  You can also do that manually by clicking the "Alarm Log: [Clear]" button on the status page.
 
 IGC encryption key:  Only shown if SoftRF is set to use the OGNTP protocol. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888", masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite the "88888888" with something else to change it.  If set to all zeros then no encryption is done.
 

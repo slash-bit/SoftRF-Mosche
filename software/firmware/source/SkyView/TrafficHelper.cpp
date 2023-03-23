@@ -227,8 +227,9 @@ static void Traffic_Voice_One(traffic_t *fop)
 
     if (max_alarm_level > ALARM_LEVEL_NONE) {
         voc_alt = (int) fop->RelativeVertical;
-        snprintf(message, sizeof(message), "%s %s %s", WARNING_WORDS, where, 
-                voc_alt > 70 ? "high" : voc_alt < -70 ? "low" : "level");
+        snprintf(message, sizeof(message), "%s %s %s",
+             (fop->alarm_level < ALARM_LEVEL_URGENT ? WARNING_WORD1 : WARNING_WORD3),
+             where, (voc_alt > 70 ? "high" : voc_alt < -70 ? "low" : "level"));
         settings->voice = VOICE_3;  // faster female voice
         SoC->TTS(message);
         return;
@@ -272,7 +273,7 @@ static void Traffic_Voice_One(traffic_t *fop)
     }
 
     if (voc_alt < 100) {
-      strcpy(elev, "near");
+      strcpy(elev, "level");
     } else {
       if (voc_alt > 500) {
         voc_alt = 500;
@@ -285,7 +286,7 @@ static void Traffic_Voice_One(traffic_t *fop)
 
     snprintf(message, sizeof(message),
                 "%s %s %s %s",           // was "traffic %s distance %s altitude %s"
-                ADVISORY_WORDS, where, how_far, elev);
+                ADVISORY_WORD, where, how_far, elev);
 
     settings->voice = VOICE_1;  // slower male voice
     SoC->TTS(message);

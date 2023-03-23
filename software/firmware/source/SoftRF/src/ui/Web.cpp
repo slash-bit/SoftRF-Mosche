@@ -144,7 +144,7 @@ static const char upload_html[] PROGMEM =
  <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\
  </head>\
  <p>Select and upload waves.tar (read instructions first)</p>\
- <form method='POST' action='/doupload' enctype='multipart/form-data'>\
+ <form method='POST' action='/dowavupld' enctype='multipart/form-data'>\
  <input type='file' name='name'><input type='submit' value='Upload' title='Upload'>\
  </form>\
  </html>";
@@ -152,7 +152,7 @@ static const char upload_html[] PROGMEM =
 static File UploadFile;
 static const char *textplain = "text/plain";
 
-void handleUpload()
+void wavUpload()
 {
   HTTPUpload& uploading = server.upload();
 
@@ -215,7 +215,7 @@ void alarmlogfile(){
 
 void handleSettings() {
 
-  size_t size = 10000;
+  size_t size = 10100;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -1058,7 +1058,8 @@ void handleRoot() {
      <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Rx&nbsp;&nbsp;</th><td align=right>%u</td>\
    </tr></table></td></tr>\
  </table>\
- <h2 align=center>Most recent GNSS fix</h2>\
+ <hr>\
+ <h3 align=center>Most recent GNSS fix</h3>\
  <table width=100%%>\
   <tr><th align=left>Time</th><td align=right>%u</td></tr>\
   <tr><th align=left>Satellites</th><td align=right>%d</td></tr>\
@@ -1075,12 +1076,19 @@ void handleRoot() {
   </tr>\
  </table>\
  <hr>\
- <p>%d WAV files found</p>\
  <table width=100%%>\
   <tr>\
-    <td align=center><input type=button onClick=\"location.href='/upload'\" value='Upload'></td>\
-    <td align=right><input type=button onClick=\"location.href='/clear'\" value='Clear'></td>\
-    <td align=right><input type=button onClick=\"location.href='/alarmlog'\" value='Alarm Log'></td>\
+    <td>%d WAV files found</td>\
+    <td><input type=button onClick=\"location.href='/wavupload'\" value='Upload waves.tar'></td>\
+    <td><input type=button onClick=\"location.href='/format'\" value='Clear ALL files'></td>\
+  </tr>\
+ </table>\
+ <hr>\
+ <table width=100%%>\
+  <tr>\
+    <td>Alarm Log:</td>\
+    <td><input type=button onClick=\"location.href='/alarmlog'\" value='Download'></td>\
+    <td><input type=button onClick=\"location.href='/clearlog'\" value='Clear'></td>\
   </tr>\
  </table>\
 </body>\
@@ -1491,23 +1499,34 @@ void Web_setup()
     serve_P_html(about_html);
   } );
 
-  server.on ( "/upload", []() {
+  server.on ( "/wavupload", []() {
     serve_P_html(upload_html);
   } );
 
-server.on("/doupload", HTTP_POST,  // if the client posts to the upload page
+server.on("/dowavupld", HTTP_POST,  // if the client posts to the upload page
     [](){ server.send(200); },     // Send 200 to tell the client we are ready to receive
-    handleUpload                   // Receive and save the file
+    wavUpload                      // Receive and save the file
   );
 
-  server.on( "/clear", []() {
-    server.send(200, textplain, "SPIFFS cleared");
+  server.on( "/format", []() {
     clear_waves();
     Serial.println(F("Formatting spiffs..."));
     SPIFFS.format();
+    server.send(200, textplain, "SPIFFS cleared");
   } );
 
   server.on ( "/alarmlog", alarmlogfile );
+
+  server.on( "/clearlog", []() {
+    if (SPIFFS.exists("/alarmlog.txt")) {
+        if (AlarmLogOpen) {
+          AlarmLog.close();
+          AlarmLogOpen = false;
+        }
+        SPIFFS.remove("/alarmlog.txt");
+    }
+    server.send(200, textplain, "Alarm Log cleared");
+  } );
 
   server.on ( "/input", handleInput );
 

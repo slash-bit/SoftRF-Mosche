@@ -877,7 +877,8 @@ static bool play_file(char *filename, int volume)
                         p8[i] = 255;
                     else if (p8[i] < 128 - 64)
                         p8[i] = 0;
-                    else p8[i] = (p8[i] << 1) - 64;
+                    else
+                        p8[i] = (p8[i] << 1) - 64;
                 }
               }
             } else if (volume < 0) {     // halve the values, 6 dB quieter

@@ -859,12 +859,20 @@ void Traffic_loop()
         mfop->alert_level = mfop->alarm_level + 1;
         mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
         if (settings->logalarms && AlarmLogOpen) {
+          int year  = gnss.date.year();
+          if( year > 99)  year = year - 1970;
+          else            year += 30;
+          int month = gnss.date.month();
+          int day   = gnss.date.day();
           // $GPGGA,235317.000,4003.9039,N,10512.5793,W,...
           char *cp = &GPGGA_Copy[7];   // after the "$GPGGA,", start of timestamp
           GPGGA_Copy[42] = '\0';       // overwrite the comma after the "E" or "W"
+          int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
+          rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("%s,%d,%06x,%d,%d\r\n"),
-              cp, mfop->alarm_level, mfop->addr, mfop->distance, mfop->alt_diff);
+              PSTR("%02d%02d%02d,%s,%d,%06x,%d,%d,%d\r\n"),
+              year, month, day, cp, mfop->alarm_level, mfop->addr,
+              rel_bearing, mfop->distance, mfop->alt_diff);
           int len = strlen(NMEABuffer);
           if (AlarmLog.write((const uint8_t *)NMEABuffer, len) < len) {    // perhaps out of space in SPIFFS
               AlarmLog.close();
