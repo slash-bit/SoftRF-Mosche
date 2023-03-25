@@ -116,7 +116,9 @@ void WiFi_setup()
 {
 
   // Set Hostname.
-  host_name += String((SoC->getChipId() & 0xFFFFFF), HEX);
+  char chipID[8];
+  snprintf(chipID, 8, "%06x", (SoC->getChipId() & 0xFFFFFF));
+  host_name += chipID;
   SoC->WiFi_hostname(host_name);
 
   // Print hostname.
