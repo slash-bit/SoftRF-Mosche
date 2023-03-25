@@ -564,6 +564,7 @@ static int ESP32_WiFi_clients_count()
   }
 }
 
+static bool SD_is_ok = false;
 static bool ADB_is_open = false;
 
 static bool ESP32_DB_init()
@@ -585,6 +586,11 @@ static bool ESP32_DB_init()
     Serial.println(F("ERROR: Failed to mount microSD card."));
     return rval;
   }
+
+  if (SD.cardType() == CARD_NONE)
+    return rval;
+
+  SD_is_ok = true;
 
   if (settings->adb == DB_NONE) {
     return rval;
@@ -640,6 +646,9 @@ static int ESP32_DB_query(uint8_t type, uint32_t id, char *buf, size_t size,
   int c, i = 0;
   int token_cnt = 1;           // token[0] always exists, preset to index 0
   int nothing;
+
+  if (!SD_is_ok)
+    return -2;   // no SD card
 
   if (!ADB_is_open)
     return -1;   // no database
@@ -751,6 +760,7 @@ static void ESP32_DB_fini()
     }
 
     SD.end();
+    SD_is_ok = false;
   }
 #endif /* BUILD_SKYVIEW_HD */
 }
@@ -789,12 +799,18 @@ int readProps(File file, wavProperties_t *wavProps)
 
 static bool play_file(char *filename, int volume)
 {
-  headerState_t state = HEADER_RIFF;
-  bool rval = false;
+    headerState_t state = HEADER_RIFF;
 
-  File wavfile = SD.open(filename);
+    File wavfile = SD.open(filename);
+    if (! wavfile) {
+      Serial.print(F("error opening WAV file: "));
+      Serial.println(filename);
+      return false;
+    } else {
+      Serial.print(F("Playing WAV file: "));
+      Serial.println(filename);
+    }
 
-  if (wavfile) {
     int c = 0;
     int n;
     while (wavfile.available()) {
@@ -900,27 +916,28 @@ static bool play_file(char *filename, int volume)
         break;
       }
     }
-    wavfile.close();
-    rval = true;
-  } else {
-    Serial.println(F("error opening WAV file"));
-  }
-  if (state == DATA) {
-    i2s_driver_uninstall((i2s_port_t)i2s_num); //stop & destroy i2s driver
-  }
 
-  return rval;
+    wavfile.close();
+    if (state == DATA) {
+      i2s_driver_uninstall((i2s_port_t)i2s_num); //stop & destroy i2s driver
+    }
+
+    return true;
 }
 
 static void ESP32_TTS(char *message)
 {
-  char filename[MAX_FILENAME_LEN];
+    char filename[MAX_FILENAME_LEN];
 
-  if (strcmp(message, "POST")) {
-    if (settings->voice != VOICE_OFF && settings->adapter == ADAPTER_TTGO_T5S) {
+    if (settings->voice == VOICE_OFF || settings->adapter != ADAPTER_TTGO_T5S)
+      return;
 
-      if (SD.cardType() == CARD_NONE)
+    if (strcmp(message, "POST")) {   // *not* the post-booting demo
+
+      if (SD.cardType() == CARD_NONE) {
+        //Serial.print(F("no SD card"));
         return;
+      }
 
       while (!SoC->EPD_is_ready()) {yield();}
       EPD_Message("VOICE", "ALERT");
@@ -959,51 +976,43 @@ static void ESP32_TTS(char *message)
       if (wdt_status) {
         enableLoopWDT();
       }
-    }
 
-  } else {   /* post-booting */
-
-    if (settings->voice != VOICE_OFF && settings->adapter == ADAPTER_TTGO_T5S) {
+   } else {   /* post-booting */
 
       if (SD.cardType() == CARD_NONE) {
         /* no SD card, can't play WAV files */
+        Serial.print(F("POST: no SD card"));
         //if (hw_info.display == DISPLAY_EPD_2_7)
         {
-          /* keep boot-time SkyView logo on the screen for 7 seconds */
-          delay(7000);
+          /* keep boot-time SkyView logo on the screen for a while */
+          delay(6000);
         }
+        return;
       }
 
-      settings->voice = VOICE_2;
+      //settings->voice = VOICE_2;
       strcpy(filename, WAV_FILE_PREFIX);
       strcat(filename, "POST");
       strcat(filename, WAV_FILE_SUFFIX);
+      play_file(filename, 0);
 
-      if (play_file(filename, 0)) {
-        /* playing POST.wav worked */
-        /* keep boot-time SkyView logo on the screen for 7 seconds */
-        delay(7000);
-
-      } else {
-        /* demonstrate the voice output */
-        delay(1000);
-        settings->voice = VOICE_1;
-        strcpy(filename, WAV_FILE_PREFIX);
-        strcat(filename, VOICE1_SUBDIR);
-        strcat(filename, "notice");
-        strcat(filename, WAV_FILE_SUFFIX);
-        play_file(filename, 0);
-        delay(1000);
-        settings->voice = VOICE_3;
-        strcpy(filename, WAV_FILE_PREFIX);
-        strcat(filename, VOICE3_SUBDIR);
-        strcat(filename, "notice");
-        strcat(filename, WAV_FILE_SUFFIX);
-        play_file(filename, 1);   // make voice3 6dB louder
-        delay(1000);
-      }
+      /* demonstrate the voice output */
+      delay(1500);
+      settings->voice = VOICE_1;
+      strcpy(filename, WAV_FILE_PREFIX);
+      strcat(filename, VOICE1_SUBDIR);
+      strcat(filename, "notice");
+      strcat(filename, WAV_FILE_SUFFIX);
+      play_file(filename, 0);
+      delay(1500);
+      settings->voice = VOICE_3;
+      strcpy(filename, WAV_FILE_PREFIX);
+      strcat(filename, VOICE3_SUBDIR);
+      strcat(filename, "notice");
+      strcat(filename, WAV_FILE_SUFFIX);
+      play_file(filename, 1);   // make voice3 6dB louder
+      delay(1000);
     }
-  }
 }
 
 #include <AceButton.h>

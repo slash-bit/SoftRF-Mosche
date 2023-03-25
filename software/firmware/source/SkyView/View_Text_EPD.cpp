@@ -150,15 +150,17 @@ static void EPD_Draw_Text()
     } else {
       snprintf(id_text, sizeof(id_text), "ID: %06X", id);
       if (found == 2) {
-        // found but empty record
+        // found in DB but record is empty
         strncpy(id2_text, " (blank)", sizeof(id2_text));
       } else if (found == 0) {
-        // have database, but not found
+        // have database, but ID not found within it
         strncpy(id2_text, " (no reg)", sizeof(id2_text));
-      } else {
+      } else if (found == -1) {
         // no database
-        snprintf(id_text, sizeof(id_text), "ID: %06X", id);
         strncpy(id2_text, "! NO DB !", sizeof(id2_text));
+      } else {
+        // SD card not mounted
+        strncpy(id2_text, "! NO SD !", sizeof(id2_text));
       }
     }
 
