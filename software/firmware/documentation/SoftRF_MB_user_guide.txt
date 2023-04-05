@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 21, 2023
-to fit software version MB09t based on v1.0 with some parts of v1.2
+This version last updated April 5, 2023
+to fit software version MB09u based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -54,6 +54,9 @@ The software is "embedded", i.e., runs on the bare hardware without an operating
 
 
 HOW TO USE SOFTRF
+
+See also Jim Hogue's detailed document:
+https://github.com/moshe-braner/SoftRF/blob/master/documents/Guide_to_Building_SoftRF_and_SkyView-Jim_Hogue.pdf
 
 Hardware choices
 
