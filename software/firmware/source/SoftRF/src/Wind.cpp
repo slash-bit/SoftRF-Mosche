@@ -445,24 +445,31 @@ void this_airborne()
     }
 
     // restart alarm log on first takeoff after boot
-    if (settings->logalarms && ThisAircraft.airborne==0 && airborne>0 && AlarmLogOpen==false) {
-      if (SPIFFS.begin(true)) {
-        // SPIFFS.remove("/alarmlog.txt");
-        if (! SPIFFS.exists("/alarmlog.txt"))
-            AlarmLog = SPIFFS.open("/alarmlog.txt", FILE_WRITE);
-        else if (SPIFFS.totalBytes() - SPIFFS.usedBytes() < 10000)
-            AlarmLog = SPIFFS.open("/alarmlog.txt", FILE_WRITE);
-        else
-            AlarmLog = SPIFFS.open("/alarmlog.txt", FILE_APPEND);
-        if (AlarmLog) {
-            AlarmLogOpen = true;
-            AlarmLog.write((const uint8_t *)"date,time,lat,lon,level,ID,relbrg,hdist,vdist\r\n", 35);
+    if (AlarmLogOpen==false) {
+      if (settings->logalarms && ThisAircraft.airborne==0 && airborne>0) {
+        if (SPIFFS.begin(true)) {
+          bool append = false;
+          if (SPIFFS.exists("/alarmlog.txt") && SPIFFS.totalBytes() - SPIFFS.usedBytes() > 10000)
+              append = true;
+          AlarmLog = SPIFFS.open("/alarmlog.txt", (append? FILE_APPEND : FILE_WRITE));
+          if (AlarmLog) {
+              AlarmLogOpen = true;
+              if (append == false) {
+                const char *p = "date,time,lat,lon,level,ID,relbrg,hdist,vdist\r\n";
+                AlarmLog.write((const uint8_t *)p, strlen(p));
+              }
+          } else {
+              Serial.println(F("Failed to open alarmlog.txt"));
+          }
         } else {
-            Serial.println(F("Failed to open alarmlog.txt"));
+            Serial.println(F("Failed to start SPIFFS"));
         }
-      } else {
-          Serial.println(F("Failed to start SPIFFS"));
       }
+
+    // close the alarm log after landing
+    } else if (ThisAircraft.airborne==1 && airborne<=0) {
+        AlarmLog.close();
+        AlarmLogOpen = false;
     }
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;

@@ -874,7 +874,10 @@ void Traffic_loop()
               year, month, day, cp, mfop->alarm_level, mfop->addr,
               rel_bearing, mfop->distance, mfop->alt_diff);
           int len = strlen(NMEABuffer);
-          if (AlarmLog.write((const uint8_t *)NMEABuffer, len) < len) {    // perhaps out of space in SPIFFS
+          if (AlarmLog.write((const uint8_t *)NMEABuffer, len) == len) {
+              AlarmLog.flush();
+          } else {
+              // perhaps out of space in SPIFFS
               AlarmLog.close();
               AlarmLogOpen = false;
           }

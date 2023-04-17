@@ -411,6 +411,8 @@ void shutparts()
 #endif
   SERIAL_FLUSH();
   SoC->swSer_enableRx(false);
+#if 0
+  // this crashed if BLE was active
   if (SoC->Bluetooth_ops)
      SoC->Bluetooth_ops->fini();
   Buzzer_fini();
@@ -420,9 +422,27 @@ void shutparts()
   SoC->WDT_fini();
   NMEA_fini();
   Web_fini();
+  if (AlarmLogOpen)
+     AlarmLog.close();
   if (SoC->USB_ops)
      SoC->USB_ops->fini();
   WiFi_fini();
+#else
+  if (AlarmLogOpen)
+     AlarmLog.close();
+  Buzzer_fini();
+  Voice_fini();
+  Strobe_fini();
+  RF_Shutdown();
+  Web_fini();
+  NMEA_fini();
+  WiFi_fini();
+  SoC->WDT_fini();
+  if (SoC->Bluetooth_ops)
+     SoC->Bluetooth_ops->fini();
+  if (SoC->USB_ops)
+     SoC->USB_ops->fini();
+#endif
   if (settings->mode != SOFTRF_MODE_UAV)
     GNSS_fini();
   delay(1000);

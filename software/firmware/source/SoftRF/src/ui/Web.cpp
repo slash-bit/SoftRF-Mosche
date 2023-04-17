@@ -203,19 +203,19 @@ void alarmlogfile(){
         server.send(404, textplain, "Alarm log file does not exist");
         return;
     }
-    File download = SPIFFS.open("/alarmlog.txt", "r");
-    if (download) {
+    AlarmLog = SPIFFS.open("/alarmlog.txt", "r");
+    if (AlarmLog) {
       server.sendHeader("Content-Type", "text/text");
       server.sendHeader("Content-Disposition", "attachment; filename=alarmlog.txt");
       server.sendHeader("Connection", "close");
-      server.streamFile(download, "application/octet-stream");
-      download.close();
+      server.streamFile(AlarmLog, "application/octet-stream");
+      AlarmLog.close();
     }
 }
 
 void handleSettings() {
 
-  size_t size = 10100;
+  size_t size = 10900;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -223,6 +223,8 @@ void handleSettings() {
   if (Settings_temp == NULL) {
     return;
   }
+
+  Serial.println(F("Constructing settings page..."));
 
   offset = Settings_temp;
 
@@ -864,10 +866,10 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
-<th align=left>Power source</th>\
+<th align=left>Shutdown if no external power</th>\
 <td align=right>\
-<input type='radio' name='power_external' value='0' %s>Battery\
-<input type='radio' name='power_external' value='1' %s>External\
+<input type='radio' name='power_external' value='0' %s>No\
+<input type='radio' name='power_external' value='1' %s>Yes\
 </td>\
 </tr>\
 <tr>\
@@ -983,7 +985,7 @@ void handleSettings() {
 
   len = strlen(offset);
   offset += len;
-  Serial.print("Settings page ending offset: ");Serial.println(offset-Settings_temp);
+  Serial.print(F("Settings page size: ")); Serial.println(offset-Settings_temp);
 
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -1093,11 +1095,7 @@ void handleRoot() {
  </table>\
 </body>\
 </html>"),
-    ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION
-#if defined(SOFTRF_ADDRESS)
-    "I"
-#endif
-    ,
+    ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     GNSS_name[hw_info.gnss],
     (rf_chip   == NULL ? "NONE" : rf_chip->name),
@@ -1123,15 +1121,23 @@ void handleRoot() {
       return;
   }
   File root = SPIFFS.open("/");
-  Serial.println("Files in SPIFFS:");
+  if (! root) {
+      Serial.println(F("Cannot open SPIFFS root"));
+      return;
+  }
+  Serial.println(F("Files in SPIFFS:"));
   File file = root.openNextFile();
   while(file){
       Serial.print("... ");
       Serial.println(file.name());
+      Serial.print("  [");
+      Serial.print(file.size());
+      Serial.println(" bytes]");
       file = root.openNextFile();
   }
   file.close();
   root.close();
+  Serial.println(F("... end of files in SPIFFS"));
 }
 
 void handleInput() {
@@ -1503,9 +1509,9 @@ void Web_setup()
     serve_P_html(upload_html);
   } );
 
-server.on("/dowavupld", HTTP_POST,  // if the client posts to the upload page
-    [](){ server.send(200); },     // Send 200 to tell the client we are ready to receive
-    wavUpload                      // Receive and save the file
+  server.on("/dowavupld", HTTP_POST,  // if the client posts to the upload page
+    [](){ server.send(200); },        // Send 200 to tell the client we are ready to receive
+    wavUpload                         // Receive and save the file
   );
 
   server.on( "/format", []() {
@@ -1530,7 +1536,6 @@ server.on("/dowavupld", HTTP_POST,  // if the client posts to the upload page
 
   server.on ( "/input", handleInput );
 
-  //server.onNotFound ( handleNotFound );
   server.onNotFound([]() {                              // If the client requests any URI
     if (!handleFileRead(server.uri()))                  // send it if it exists
         handleNotFound();

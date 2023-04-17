@@ -24,6 +24,7 @@
 #include "../../driver/GNSS.h"
 #include "../../driver/RF.h"
 #include "../../system/SoC.h"
+// which does #include "../../SoftRF.h"
 #include "../../driver/WiFi.h"
 #include "../../driver/EEPROM.h"
 #include "../../driver/Battery.h"
@@ -254,6 +255,25 @@ void NMEA_add_checksum(char *buf, size_t limit)
   snprintf_P(csum_ptr, limit, PSTR("%02X\r\n"), cs);
 }
 
+// send self-test and version sentences out, imitating a FLARM
+void sendPFLAV()
+{
+  static uint32_t whensend = 28000;
+  if (settings->nmea_l || settings->nmea2_l) {
+    uint32_t millisnow = millis();
+    if (millisnow > whensend) {
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAE,A,0,0*"));
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 16);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAV,A,2.4,7.20,%s-%s*"),
+                   SOFTRF_IDENT, SOFTRF_FIRMWARE_VERSION);  // our version in obstacle db text field
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 48);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      whensend = millisnow + 73000;
+    }
+  }
+}
+
 void NMEA_setup()
 {
 #if defined(USE_NMEA_CFG)
@@ -363,10 +383,13 @@ void NMEA_setup()
 #if defined(ENABLE_AHRS)
   RPYL_TimeMarker = millis();
 #endif /* ENABLE_AHRS */
+
+  sendPFLAV();
 }
 
 void NMEA_loop()
 {
+  sendPFLAV();
 
   if ((settings->nmea_s || settings->nmea2_s)
       && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
@@ -770,8 +793,9 @@ void NMEA_Export()
 
     /* One PFLAU NMEA sentence is mandatory regardless of traffic reception status */
     float voltage    = Battery_voltage();
-    int power_status = voltage > BATTERY_THRESHOLD_INVALID &&
-                         voltage < Battery_threshold() ?
+    if (voltage < BATTERY_THRESHOLD_INVALID)
+        voltage = 0;
+    int power_status = (voltage > 0 && voltage < Battery_threshold()) ?
                          POWER_STATUS_BAD : POWER_STATUS_GOOD;
 
     if (total_objects > 0) {
@@ -824,6 +848,10 @@ void NMEA_Export()
     NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
+    static int beatcount = 0;
+    if (++beatcount < 10)
+        return;
+    beatcount = 0;
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
             ThisAircraft.addr,settings->rf_protocol,

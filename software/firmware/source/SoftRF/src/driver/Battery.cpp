@@ -63,8 +63,9 @@ uint8_t Battery_charge() {
  * When set to run on external power but with a battery installed, allow running
  * on the battery as long as still airborne.  Shut down after at least an hour
  * of operation, once external power is turned off, and battery voltage is
- * somewhat down.  For now only implemented for T-Beam.
+ * somewhat down.  For now only implemented for T-Beam (and partially for T-Echo).
  */
+static bool had_ext_power = false;
 static bool follow_ext_power_shutoff(float voltage)
 {
 #if defined(ESP32)
@@ -72,7 +73,11 @@ static bool follow_ext_power_shutoff(float voltage)
         return false;
     if (hw_info.model != SOFTRF_MODEL_PRIME_MK2)
         return false;
-    if (ESP32_onExternalPower())
+    if (ESP32_onExternalPower()) {
+        had_ext_power = true;
+        return false;
+    }
+    if (had_ext_power == false)
         return false;
     if (ThisAircraft.airborne)
         return false;

@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated April 5, 2023
-to fit software version MB09u based on v1.0 with some parts of v1.2
+This version last updated April 17, 2023
+to fit software version MB09v based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE
@@ -103,7 +103,7 @@ One can install an 18650 size cylindrical lithium-ion cell in the battery holder
 
 Or, one can power the T-Beam via the USB port, without installing a battery on the board.  Any USB power source will do.  You may install a 12V to 5V dc-dc converter and use the aircraft main power so that SoftRF (plugged in via a USB cable) turns on when aircraft power is turned on.  The needed current is about 120 mA normally, perhaps double that during the very short transmission pulses (1 % of the time).  A disadvantage of this approach is that, after sitting unpowered for a while, the device may take a relatively long time to acquire a GNSS fix.  An advantage is that the device can be mounted "permanently" in the aircraft, one does not need to dismount it and take it elsewhere to charge it.
 
-Or, a hybrid power system can be used, combining external USB power and an on-board battery.  That way the USB power charges the on-board battery while the device is in use.  If the external power fails the device will keep running on the battery.  If mounted in the aircraft in an inaccessible way, one can use the "external power" option in the settings (unique to my version of SoftRF) which will automaticall turn the device off after several conditions are met: the device was running for at least an hour, the aircraft is not airborne, the external power has been turned off, and the battery voltage has decreased to under 3.9 volts.  But, if you store the device, with a lithium battery, in the glider trailer that gets hot in the summer sun, you may be nervous about the possibility of a fire.  Your choice.
+Or, a hybrid power system can be used, combining external USB power and an on-board battery.  That way the USB power charges the on-board battery while the device is in use.  If the external power fails the device will keep running on the battery.  If mounted in the aircraft in an inaccessible way, one can use the "external power" option in the settings (unique to my version of SoftRF) which will automatically turn the device off after several conditions are met: the device was running for at least an hour, the aircraft is not airborne, the external power has been turned off, and the battery voltage has decreased to under 3.9 volts.  But, if you store the device, with a lithium battery, in the glider trailer that gets hot in the summer sun, you may be nervous about the possibility of a fire.  Your choice.
 
 After several weeks in the apparently "off" mode, the battery installed in a T-Beam may be depleted.  This seems to happen in some boards more than others.  Perhaps those with a barometric sensor added have a charge leak that causes that.  Always recharge the battery before attempting to use the device following a storage period of more than a couple of weeks.
 
@@ -216,7 +216,7 @@ Dump1090: yet another local data transfer protocol, usually leave Off.
 
 Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
 
-Power source: select "External" only if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, leave this setting as "Battery".
+Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".
 
 Air Relay: Enable (default) or disable the relaying of radio packets from landed aircraft by airborne aircraft.  The relaying is transparent and happens in total no more than once every 5 seconds, and once every 15 seconds for a given landed aircraft.
 
