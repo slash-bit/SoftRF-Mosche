@@ -25,7 +25,7 @@
 #include "../../driver/EEPROM.h"
 #include "../../driver/RF.h"
 #include "../../driver/LED.h"
-#include "../../driver/Sound.h"
+#include "../../driver/Buzzer.h"
 #include "../../driver/Baro.h"
 #include "../../driver/EPD.h"
 #include "../../TrafficHelper.h"

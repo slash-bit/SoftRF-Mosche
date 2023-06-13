@@ -61,12 +61,16 @@ enum
 	STROBE_ALWAYS
 };
 
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
 enum
 {
 	VOICE_OFF = 0,
 	VOICE_INT,
 	VOICE_EXT
 };
+#endif
+#endif
 
 enum
 {

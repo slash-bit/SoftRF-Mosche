@@ -444,6 +444,7 @@ void this_airborne()
 
     }
 
+#if defined(ESP32)
     // restart alarm log on first takeoff after boot
     if (AlarmLogOpen==false) {
       if (settings->logalarms && ThisAircraft.airborne==0 && airborne>0) {
@@ -471,6 +472,7 @@ void this_airborne()
         AlarmLog.close();
         AlarmLogOpen = false;
     }
+#endif
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
@@ -718,8 +720,8 @@ void project_this(ufo_t *this_aircraft)
     float dir_chg = 3.0 * turnrate;
     heading += 0.5 * dir_chg;  /* first point will be 1.5 seconds into future */
     for (i=0; i<6; i++) {
-      if (heading >  360.0) heading -= 360.0;
-      if (heading < -360.0) heading += 360.0;
+      if (heading >  360.0)  heading -= 360.0;
+      if (heading < -360.0)  heading += 360.0;
       this_aircraft->air_ns[i] = (int16_t) roundf(4.0 * aspeed * cos_approx(heading));
       this_aircraft->air_ew[i] = (int16_t) roundf(4.0 * aspeed * sin_approx(heading));
       heading += dir_chg;
@@ -739,11 +741,11 @@ void project_this(ufo_t *this_aircraft)
     dir_chg = 3.0 * turnrate;
     course += 0.5 * dir_chg;
     for (i=0; i<4; i++) {
-      if (course >  360.0) heading -= 360.0;
-      if (course < -360.0) heading += 360.0;
+      if (course >  360.0)  course -= 360.0;
+      if (course < -360.0)  course += 360.0;
       this_aircraft->fla_ns[i] = (int16_t) roundf(4.0 * gspeed * cos_approx(course));
       this_aircraft->fla_ew[i] = (int16_t) roundf(4.0 * gspeed * sin_approx(course));
-      heading += dir_chg;
+      course += dir_chg;
     }
 
     if (report) report_this_projection(this_aircraft, proj_type);

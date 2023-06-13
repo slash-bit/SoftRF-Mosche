@@ -22,7 +22,8 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
-* vMB09s: collision-danger traffic VOICE warnings! (not just beeps)
+* vMB09w: important security update: corrected transmitted circling path
+* Collision-danger traffic VOICE warnings! (not just beeps)
 * Option to connect to ambient WiFi network instead of creating one
 * Option to send data as TCP client instead of TCP server
 * Specify server's IP address for TCP client, and choice of 2 ports

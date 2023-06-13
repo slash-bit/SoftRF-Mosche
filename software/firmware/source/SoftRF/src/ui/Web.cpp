@@ -25,7 +25,10 @@ void Web_fini()     {}
 #else
 
 #include <Arduino.h>
+
+#if defined(ESP32)
 #include "SPIFFS.h"
+#endif
 
 #include "../system/SoC.h"
 #include "../driver/Battery.h"
@@ -138,6 +141,8 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 </body>\
 </html>";
 
+#if defined(ESP32)
+
 static const char upload_html[] PROGMEM =
 "<html>\
  <head>\
@@ -212,6 +217,8 @@ void alarmlogfile(){
       AlarmLog.close();
     }
 }
+
+#endif   // ESP32
 
 void handleSettings() {
 
@@ -923,6 +930,7 @@ void handleSettings() {
     size -= len;
   }
 
+  if (SoC->id == SOC_ESP32) {
     snprintf_P ( offset, size,
       PSTR("\
 <tr>\
@@ -947,8 +955,7 @@ void handleSettings() {
     len = strlen(offset);
     offset += len;
     size -= len;
-
-  // else start with all debug message types enabled by default
+  }
 
 #if defined(USE_OGN_ENCRYPTION)
   if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
@@ -1505,6 +1512,7 @@ void Web_setup()
     serve_P_html(about_html);
   } );
 
+#if defined(ESP32)
   server.on ( "/wavupload", []() {
     serve_P_html(upload_html);
   } );
@@ -1533,6 +1541,7 @@ void Web_setup()
     }
     server.send(200, textplain, "Alarm Log cleared");
   } );
+#endif
 
   server.on ( "/input", handleInput );
 

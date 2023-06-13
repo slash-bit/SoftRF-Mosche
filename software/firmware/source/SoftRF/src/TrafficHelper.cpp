@@ -37,11 +37,12 @@
 #endif
 #endif
 
+#if defined(ESP32)
 #include "SPIFFS.h"
 // #include <FS.h>
-
 File AlarmLog;
 bool AlarmLogOpen = false;
+#endif
 
 unsigned long UpdateTrafficTimeMarker = 0;
 
@@ -858,6 +859,7 @@ void Traffic_loop()
       if (notified && mfop != NULL) {
         mfop->alert_level = mfop->alarm_level + 1;
         mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
+#if defined(ESP32)
         if (settings->logalarms && AlarmLogOpen) {
           int year  = gnss.date.year();
           if( year > 99)  year = year - 1970;
@@ -882,6 +884,7 @@ void Traffic_loop()
               AlarmLogOpen = false;
           }
         }
+#endif
       }
     }
 

@@ -422,16 +422,20 @@ void shutparts()
   SoC->WDT_fini();
   NMEA_fini();
   Web_fini();
+#if defined(ESP32)
   if (AlarmLogOpen)
      AlarmLog.close();
+#endif
   if (SoC->USB_ops)
      SoC->USB_ops->fini();
   WiFi_fini();
 #else
+#if defined(ESP32)
   if (AlarmLogOpen)
      AlarmLog.close();
-  Buzzer_fini();
   Voice_fini();
+#endif
+  Buzzer_fini();
   Strobe_fini();
   RF_Shutdown();
   Web_fini();

@@ -120,7 +120,11 @@ void EEPROM_defaults()
     settings->pointer = LED_OFF;
   }
 
+#if !defined(EXCLUDE_VOICE)
+#if defined(ESP32)
   settings->voice   = VOICE_OFF;
+#endif
+#endif
 
   settings->norelay = false;
 
