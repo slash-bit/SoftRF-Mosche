@@ -340,13 +340,6 @@ bool Voice_Notify(ufo_t *fop)
 
   Traffic_Voice_Msg(fop);
 
-  if ((settings->nmea_l || settings->nmea2_l) && (settings->volume == BUZZER_OFF)){
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSRAA,%d*"), fop->alarm_level-1);
-      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-  }
-
   return true;
 }
 

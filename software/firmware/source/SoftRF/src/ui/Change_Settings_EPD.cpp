@@ -105,6 +105,13 @@ set_entry directions[] = {
   {-1, NULL}
 };
 
+set_entry relays[] = {
+  {RELAY_OFF, "Off"},
+  {RELAY_LANDED, "Landed"},
+  {RELAY_ALL, "All"},
+  {-1, NULL}
+};
+
 enum
 {
 	DECISION_CANCEL = 0,
@@ -126,6 +133,7 @@ static int region = 0;
 static int alarm = 0;
 static int unit = 0;
 static int direction = 0;
+static int relay = 0;
 
 /* search for a given code and return the index */
 int get_one_setting(int setting, set_entry *list)
@@ -153,6 +161,7 @@ page pages[] = {
   {&protocol, protocols, NULL, "RF", "Protocol:"},
   {&region, regions, NULL, "Frequency", "Band:"},
   {&alarm, alarms, "Collision", "Prediction", "Algorithm:"},
+  {&relay, relays, NULL, "Air", "Relay:"},
   {&unit, units, NULL, "Display", "Units:"},
   {&direction, directions, NULL, "Display", "Orientation:"},
   {NULL, NULL, NULL, NULL, NULL}
@@ -172,6 +181,7 @@ void get_settings()
     protocol  = get_one_setting((int) settings->rf_protocol, protocols);
     region    = get_one_setting((int) settings->band, regions);
     alarm     = get_one_setting((int) settings->alarm, alarms);
+    relay     = get_one_setting((int) settings->relay, relays);
     unit      = get_one_setting((int) ui->units, units);
     direction = get_one_setting((int) ui->orientation, directions);
     decision = 0;  // cancel
@@ -185,6 +195,7 @@ void EPD_chgconf_save()
     settings->rf_protocol   = protocols[protocol].code;
     settings->band          = regions[region].code;
     settings->alarm         = alarms[alarm].code;
+    settings->relay         = relays[relay].code;
     ui->units               = units[unit].code;
     ui->orientation         = directions[direction].code;
     SoC->WDT_fini();

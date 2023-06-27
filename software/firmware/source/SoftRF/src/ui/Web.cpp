@@ -882,8 +882,11 @@ void handleSettings() {
 <tr>\
 <th align=left>Air-Relay</th>\
 <td align=right>\
-<input type='radio' name='relay' value='1' %s>Off\
-<input type='radio' name='relay' value='0' %s>On\
+<select name='relay'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>Landed</option>\
+<option %s value='%d'>All</option>\
+</select>\
 </td>\
 </tr>\
 <tr>\
@@ -904,7 +907,9 @@ void handleSettings() {
   (settings->power_save == POWER_SAVE_WIFI ? "selected" : ""), POWER_SAVE_WIFI,
 //(settings->power_save == POWER_SAVE_GNSS ? "selected" : ""), POWER_SAVE_GNSS,
   (!settings->power_external ? "checked" : "") , (settings->power_external ? "checked" : ""),
-  (settings->norelay  ? "checked" : "") , (!settings->norelay  ? "checked" : ""),
+  (settings->relay==RELAY_OFF    ? "selected" : ""), RELAY_OFF,
+  (settings->relay==RELAY_LANDED ? "selected" : ""), RELAY_LANDED,
+  (settings->relay==RELAY_ALL    ? "selected" : ""), RELAY_ALL,
   (!settings->stealth  ? "checked" : "") , (settings->stealth  ? "checked" : ""),
   (!settings->no_track ? "checked" : "") , (settings->no_track ? "checked" : "")
   );
@@ -1228,7 +1233,7 @@ void handleInput() {
     } else if (server.argName(i).equals("d1090")) {
       settings->d1090 = server.arg(i).toInt();
     } else if (server.argName(i).equals("relay")) {
-      settings->norelay = server.arg(i).toInt();
+      settings->relay = server.arg(i).toInt();
     } else if (server.argName(i).equals("stealth")) {
       settings->stealth = server.arg(i).toInt();
     } else if (server.argName(i).equals("no_track")) {
@@ -1356,7 +1361,7 @@ PSTR("<html>\
 <tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
 <tr><th align=left>GDL90</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
-<tr><th align=left>Air-Relay</th><td align=right>%s</td></tr>\
+<tr><th align=left>Air-Relay</th><td align=right>%d</td></tr>\
 <tr><th align=left>Stealth</th><td align=right>%s</td></tr>\
 <tr><th align=left>No track</th><td align=right>%s</td></tr>\
 <tr><th align=left>Power save</th><td align=right>%d</td></tr>\
@@ -1384,7 +1389,7 @@ PSTR("<html>\
   BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p),
   BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
   settings->gdl90, settings->d1090,
-  BOOL_STR(!settings->norelay), BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
+  settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
   settings->power_save, settings->power_external,
   settings->freq_corr, settings->debug_flags, settings->logalarms,
 //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
@@ -1430,7 +1435,7 @@ Serial.print(" NMEA2 Sensors ");Serial.println(settings->nmea2_s);
 Serial.print(" NMEA2 Debug ");Serial.println(settings->nmea2_d);
 Serial.print(" GDL90 ");Serial.println(settings->gdl90);
 Serial.print(" DUMP1090 ");Serial.println(settings->d1090);
-Serial.print(" Air-Relay ");Serial.println(!settings->norelay);
+Serial.print(" Air-Relay ");Serial.println(settings->relay);
 Serial.print(" Stealth ");Serial.println(settings->stealth);
 Serial.print(" No track ");Serial.println(settings->no_track);
 Serial.print(" Power save ");Serial.println(settings->power_save);

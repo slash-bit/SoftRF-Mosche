@@ -82,6 +82,8 @@ void EEPROM_setup()
 //#endif
 
   SoC->EEPROM_extension(cmd);
+
+  if (settings->relay > RELAY_ALL)  settings->relay = RELAY_LANDED;
 }
 
 void EEPROM_defaults()
@@ -126,7 +128,7 @@ void EEPROM_defaults()
 #endif
 #endif
 
-  settings->norelay = false;
+  settings->relay = RELAY_LANDED;
 
   settings->nmea_g  = true;
   settings->nmea_p  = false;

@@ -112,14 +112,6 @@ bool Buzzer_Notify(int8_t alarm_level)
   }
   BuzzerState = 1;
   BuzzerTimeMarker = millis();
-
-  if (settings->nmea_l || settings->nmea2_l) {
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSRAA,%d*"), alarm_level-1);
-      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-  }
-
   return true;
 }
 

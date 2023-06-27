@@ -316,7 +316,8 @@ Serial.println("... Baro_setup() returned");
 
   SoC->WDT_setup();
 
-//Serial.print("... setup() done, hw_info.model=");
+//Serial.println("... setup() done");
+//Serial.print("hw_info.model=");
 //Serial.print(hw_info.model);
 //Serial.print(", revision=");
 //Serial.println(hw_info.revision);
@@ -642,22 +643,6 @@ void normal()
 
   success = RF_Receive();
   /* this checks for newly received data, usually returns false */
-
-#if 0
-/* free-running time test */
-  if (success) {
-    lastsuccess = millis();
-  } else if (GNSSTimeMarker > 0 && lastsuccess > GNSSTimeMarker + 30000) {
-    uint32_t interval = (millis() - lastsuccess);
-    if (interval < 10 * 60 * 1000 && interval > 20000) {
-      /* should have received more - try and increment the slow fake time */
-      increment_fake_time();  /* actually only increments once in xxx seconds */
-    }
-    if (interval > 10 * 60 * 1000) {    /* give up after 10 minutes */
-      reset_fake_time();
-    }
-  }
-#endif
 
 #if DEBUG
   success = true;

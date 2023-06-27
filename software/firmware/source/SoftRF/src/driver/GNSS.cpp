@@ -1323,14 +1323,18 @@ void PickGNSSFix()
            */
 #if defined(USE_NMEALIB)
           if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
-              !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", strlen("GGA,")) &&
+              !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
               gnss.separation.meters() == 0.0) {
             NMEA_GGA();
           }
           else
 #endif
           {
-            NMEA_Outs(settings->nmea_g, settings->nmea2_g, &GNSSbuf[ndx], write_size, true);
+            if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
+              strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
+            }
+            if (settings->nmea_g || settings->nmea2_g)
+              NMEA_Outs(settings->nmea_g, settings->nmea2_g, &GNSSbuf[ndx], write_size, true);
           }
 
           break;

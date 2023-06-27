@@ -202,14 +202,13 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
       float turnangle = (nextcourse - course);
       if (turnangle >  270.0) turnangle -= 360.0;
       if (turnangle < -270.0) turnangle += 360.0;
-      turnrate = 0.333 * turnangle;  /* assuming 3 seconds interval */
-//      /* adjust direction for turning during time between origin and [0] */
-//      course -= 0.5 * turnangle;
-//      if (course >  360.0) course -= 360.0;
-//      if (course < -360.0) course += 360.0;
-//      heading -= 0.5 * turnangle;
-//      if (heading >  360.0) heading -= 360.0;
-//      if (heading < -360.0) heading += 360.0;
+      //turnrate = 0.333 * turnangle;  /* assuming 3 seconds interval */
+      turnrate = 0.5 * turnangle;  /* >>> assuming 2 seconds interval */
+      /* adjust direction for turning during time between "now" and [0] */
+      // >>> assumes that interval is 2s and that [0] is 2s after "now"
+      course -= turnangle;
+      if (course >  360.0) course -= 360.0;
+      if (course < -360.0) course += 360.0;
     }
 
     uint16_t vs_u16 = pkt->vs;
@@ -226,7 +225,7 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->course = course;
 //    fop->heading = heading;
     fop->turnrate = turnrate;
-         /* this is as reported by FLARM, which is ground-reference at time [0]-1.5s */
+         /* this is as reported by FLARM, which is ground-reference - at time [0]? */
     fop->vs = ((float) vs10) * (_GPS_FEET_PER_METER * 6.0);
     fop->aircraft_type = pkt->aircraft_type;
     fop->stealth = pkt->stealth;
@@ -234,30 +233,38 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     /* Keep the data given for the first 2 time points  */
     /* The other 2 time points are not useful in wind   */
     /* due to the data being in neither reference frame */
-    for (int i=0; i<2; i++) {
-       fop->fla_ns[i] = (int16_t) (pkt->ns[i] << smult);
-       fop->fla_ew[i] = (int16_t) (pkt->ew[i] << smult);
-    }
+    fop->fla_ns[0] = ((int16_t) pkt->ns[0]) << smult;
+    fop->fla_ns[1] = ((int16_t) pkt->ns[1]) << smult;
+    fop->fla_ew[0] = ((int16_t) pkt->ew[0]) << smult;
+    fop->fla_ew[1] = ((int16_t) pkt->ew[1]) << smult;
     fop->projtime_ms = fop->gnsstime_ms;
 
-    /* send radio packet data out via NMEA for debugging */
-    if ((settings->nmea_d || settings->nmea2_d) && settings->debug_flags & DEBUG_LEGACY) {
-#if 0
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSRFL,%06X,%ld,%d,%.5f,%.5f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
-        fop->addr, fop->gnsstime_ms, fop->airborne,
-        fop->latitude, fop->longitude, fop->altitude,
-        heading, turnrate, vs10, smult,
-        fop->fla_ns[0], fop->fla_ns[1], fop->fla_ns[2], fop->fla_ns[3],
-        fop->fla_ew[0], fop->fla_ew[1], fop->fla_ew[2], fop->fla_ew[3]);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-      /* also output the raw (but decrypted) packet as a whole, in hex */
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
-        fop->addr, fop->gnsstime_ms,
-        bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-#endif
+#if 1
+    /* send received radio packet data out via NMEA for debugging */
+    if (settings->nmea_d || settings->nmea2_d) {
+      if (settings->debug_flags & DEBUG_LEGACY) {
+        int16_t ns2 = ((int16_t) pkt->ns[2]) << smult;
+        int16_t ns3 = ((int16_t) pkt->ns[3]) << smult;
+        int16_t ew2 = ((int16_t) pkt->ew[2]) << smult;
+        int16_t ew3 = ((int16_t) pkt->ew[3]) << smult;
+        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+          PSTR("$PSRFL,%06X,%ld,%.6f,%.6f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
+          fop->addr, (int32_t)fop->gnsstime_ms - (int32_t)ThisAircraft.gnsstime_ms,
+          fop->latitude, fop->longitude, fop->altitude,
+          course, turnrate, vs10, smult, fop->airborne, pkt->_unk2,
+          fop->fla_ns[0], fop->fla_ns[1], ns2, ns3,
+          fop->fla_ew[0], fop->fla_ew[1], ew2, ew3);
+        NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        if (settings->debug_flags & DEBUG_RESVD1) {
+          /* also output the raw (but decrypted) packet as a whole, in hex */
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
+            fop->addr, fop->gnsstime_ms,
+            bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        }
+      }
     }
+#endif
 
     return true;
 }
@@ -267,7 +274,7 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     legacy_packet_t *pkt = (legacy_packet_t *) legacy_pkt;
 
     int ndx;
-    uint8_t pkt_parity=0;
+    uint8_t pkt_parity;
     uint32_t key[4];
 
     float lat = this_aircraft->latitude;
@@ -309,17 +316,6 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
          pkt->ew[i] = (int8_t) (this_aircraft->fla_ew[i] >> smult);
       }
       /* quarter-meters per sec if smult==0 */
-//    } else {
-//      // pkt->airborne = speed > 0 ? 1 : 0;
-//      pkt->airborne = this_aircraft->airborne;
-//      uint16_t speed = speed4 >> smult;
-//      int8_t ns = (int8_t) ((float) speed * cos_approx(course));
-//     int8_t ew = (int8_t) ((float) speed * sin_approx(course));
-//      for (int i=0; i<4; i++) {
-//        pkt->ns[i] = ns;
-//        pkt->ew[i] = ew;
-//      }
-//    }
 
     int16_t vs10 = (int16_t) roundf(vsf * 10.0f);
 /*  pkt->vs = this_aircraft->stealth ? 0 : vs10 >> pkt->smult; */
@@ -332,14 +328,20 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     pkt->addr = id & 0x00FFFFFF;
 
-    pkt->parity = 0;
-
     pkt->stealth = this_aircraft->stealth;
     pkt->no_track = this_aircraft->no_track;
 
     pkt->aircraft_type = this_aircraft->aircraft_type;
 
     pkt->gps = 323;
+
+    float turnRate = this_aircraft->turnrate;
+
+    /* project position 2 seconds into future, as it seems that FLARM does that */
+    course += turnRate;           // 1 second into future
+    float offset = speedf * (2.0 / 111300.0);   // degslat/sec * 2 sec = degs moved
+    lat += (offset * cos_approx(course));
+    lon += (offset * sin_approx(course) * InvCosLat());
 
     // this section revised by MB on 220526
     if (lat < 0.0)
@@ -351,14 +353,32 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     else
         pkt->lon = (((uint32_t) (lon * 1e7) + 0x40) >> 7) & 0x0FFFFF;
 
+    if (alt < 0) {
+        alt = 0;    // cannot be negative
+    } else {
+      if (alt >= (1<<13))
+          alt = (1<<13)-1; // clamp to Max
+    }
     pkt->alt = alt;
+
+    /* FLARM seems to send this in _unk2 from a glider */
+    static int turning = 1;   // not turning sharply
+    if (turnRate > 18)
+        turning = 0;           // turning sharply right
+    else if (turnRate < -18)
+        turning = 3;           // turning sharply left
+    else if (turnRate > -10 && turnRate < 10)
+        turning = 1;           // return to not-turning with hysteresis
+    // else
+    //   retain previous value of turning
+    pkt->_unk2 = turning;
 
     pkt->_unk0 = 0;
     pkt->_unk1 = 0;
-    pkt->_unk2 = 1;     /* this is what FLARM seems to send from a glider */
     pkt->_unk3 = 0;
 //    pkt->_unk4 = 0;
 
+    pkt->parity = 0;
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {
       pkt_parity += parity(*(((unsigned char *) pkt) + ndx));
     }

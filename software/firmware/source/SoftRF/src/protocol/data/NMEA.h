@@ -101,3 +101,4 @@ typedef struct NmeaTCP_struct {
 #endif /* PFLAU_EXT1_ARGS */
 
 #endif /* NMEAHELPER_H */
+

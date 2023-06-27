@@ -113,15 +113,21 @@ float approxHypotenuse(float x, float y)
 }
 
 /* cos(latitude) is used to convert longitude difference into linear distance. */
-/* Compute once, accurate enough through a significant range of latitude. */
+/* Once computed, accurate enough through a significant range of latitude. */
+
+static float cos_lat = 0.7;
+static float inv_cos_lat = 1.4;
 
 float CosLat(float latitude)
 {
-  static float cos_lat = 0.0;
-  static float oldlat = 0.0;
-  if (cos_lat == 0.0 || fabs(latitude-oldlat) > 0.3) {
+  static float oldlat = 45.0;
+  if (fabs(latitude-oldlat) > 0.3) {
     cos_lat = cos_approx(latitude);
+    if (cos_lat > 0.01)
+        inv_cos_lat = 1.0 / cos_lat;
     oldlat = latitude;
   }
   return cos_lat;
 }
+
+float InvCosLat() { return inv_cos_lat; }

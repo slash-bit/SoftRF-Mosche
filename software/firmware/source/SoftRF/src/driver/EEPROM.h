@@ -89,6 +89,13 @@ enum
 	TCP_MODE_CLIENT
 };
 
+enum
+{
+	RELAY_OFF=0,
+	RELAY_LANDED,
+	RELAY_ALL
+};
+
 typedef struct Settings {
     uint8_t  mode;
     uint8_t  rf_protocol;
@@ -120,7 +127,8 @@ typedef struct Settings {
 
     int8_t   freq_corr; /* +/-, kHz */
     uint8_t  resvd2;
-    uint8_t  resvd3;
+    uint8_t  relay:2;
+    uint8_t  resvd3:6;
     uint8_t  baud_rate;   /* for serial UART output */
 
     /* Use a key provided by (local) gliding contest organizer */
@@ -136,7 +144,7 @@ typedef struct Settings {
     uint8_t  voice:2;
     uint8_t  tcpport:1;       /* 0=2000, 1=8880 */
     uint8_t  tcpmode:1;
-    uint8_t  norelay:1;
+    uint8_t  resvd4:1;
     uint32_t follow_id:24;
 
     bool     nmea2_g:1;

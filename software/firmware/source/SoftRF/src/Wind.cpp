@@ -717,8 +717,8 @@ void project_this(ufo_t *this_aircraft)
       if (factor < 0.99)  aspeed *= factor;
     }
 
-    float dir_chg = 3.0 * turnrate;
-    heading += 0.5 * dir_chg;  /* first point will be 1.5 seconds into future */
+    heading += 1.5 * turnrate;        // first point will be 3 seconds into future
+    float dir_chg = 3.0 * turnrate;  // intervals after that
     for (i=0; i<6; i++) {
       if (heading >  360.0)  heading -= 360.0;
       if (heading < -360.0)  heading += 360.0;
@@ -730,16 +730,22 @@ void project_this(ufo_t *this_aircraft)
     /* also need to compute fla_ns[] & fla_ew[] for transmissions */
 
     /* first need to compute initial ground-reference turn rate */
-    float windangle = course - wind_direction;
+    //float windangle = course - wind_direction;
+    //>>> may want to compute this (approximately) for now+2s instead of now:
+    float windangle = course + 2.0*turnrate - wind_direction;
     if (windangle > 0)  windangle -= 180.0;
     else                windangle += 180.0;     /* angle from DOWNwind */
     turnrate /= (1.0 + cos_approx(windangle) * wind_speed / aspeed);
+    /* this increases the turnrate when heading upwind, and vice versa */
 
     // alternative: use gturnrate computed above
 
-    /* now imitate FLARM and keep this turn rate constant while circling */
-    dir_chg = 3.0 * turnrate;
-    course += 0.5 * dir_chg;
+    /* now imitate FLARM and keep speed and turn rate constant while circling */
+    //course += 1.5 * turnrate;   // first point will be 1.5 seconds into future
+    //dir_chg = 3.0 * turnrate;   // intervals after that
+    // >>> may need to change to 2.0 & 2.0 (and maybe 4.0 for towplane).
+    dir_chg = 2.0 * turnrate;   // intervals of 2 seconds between points
+    course += dir_chg;          // first point will be 2 seconds into future
     for (i=0; i<4; i++) {
       if (course >  360.0)  course -= 360.0;
       if (course < -360.0)  course += 360.0;
@@ -804,28 +810,48 @@ To compute the correct air-reference circling path:
 * this is a total of 13 trig calls!
 * might as well continue and compute 2 more points? (can use the no-trig method)
 */
-      gspeed = approxHypotenuse((float) fop->fla_ns[0], (float) fop->fla_ew[0]);  /* quarter-meters per sec */
+#if 0
       float direction0 = atan2_approx((float) fop->fla_ns[0], (float) fop->fla_ew[0]);
       float direction1 = atan2_approx((float) fop->fla_ns[1], (float) fop->fla_ew[1]);
       float dir_chg = direction1 - direction0;
       if (dir_chg >  270.0) dir_chg -= 360.0;
       if (dir_chg < -270.0) dir_chg += 360.0;
-      float dir_now = direction0 - 0.5 * dir_chg;     /* this was the present ground-reference direction */
+      /* FLARMs send lat/lon of position 2 seconds into future */
+      /* compute present ground-reference direction */
+      //float dir_now = direction0 - 0.667 * dir_chg;
+      // >>> that assumes dir_chg is over 3 seconds, and we need to roll back 2 seconds.
+      // >>> change to (direction0 - dir_chg) if interval between points is 2 secs rather than 3.
+      float dir_now = direction0 - dir_chg;
+#endif
+      float dir_now = fop->course;           // already computed in legacy_decode()
+      float dir_chg = 3.0 * fop->turnrate;   // for our 3-second intervals
+      gspeed = approxHypotenuse((float) fop->fla_ns[0], (float) fop->fla_ew[0]);  /* quarter-meters per sec */
       gs_ns = gspeed * cos_approx(dir_now);
-      gs_ew = gspeed * sin_approx(dir_now);     /* this was the present ground-speed vector */
+      gs_ew = gspeed * sin_approx(dir_now);     /* present ground-speed vector */
       as_ns = gs_ns - 4*wind_best_ns;
-      as_ew = gs_ns - 4*wind_best_ew;           /* this was the present air-speed vector */
+      as_ew = gs_ew - 4*wind_best_ew;           /* present air-speed vector */
       heading = atan2_approx(as_ns, as_ew);
-      aspeed = approxHypotenuse(as_ns, as_ns);
+      aspeed = approxHypotenuse(as_ns, as_ew);
       windangle = dir_now - wind_direction;
       if (windangle > 0)  windangle -= 180.0;         /* angle from DOWNwind */
       else                windangle += 180.0;
-      /* here's the magic: (assumes 3 sec between points [0] & [1]) */
       dir_chg *= (1.0 + cos_approx(windangle) * wind_speed / aspeed);
-      // air_turnrate = 0.333 * dir_chg;
+      /* this makes air-ref turnrate smaller than the ground-ref turnrate
+         when heading upwind, and vice versa */
+
+      if (fabs(dir_chg) > 18.0) {
+        /* since the projection is in straight segments rather than a circle, */
+        /* correct the speed for the polygon shortcut relative to the circumference */
+        /* so that the projected trajectory will reach the points at the right time */
+        /* factor = 360/PI/turnrate/interval * sin_approx(turnrate*interval/2) */
+       /* - 1/2 slice angle in degrees over interval=3seconds is turnrate * 1.5 */
+        float factor = (360.0/3.1416)/dir_chg * sin_approx(0.5*dir_chg);
+        if (factor < 0.86)  factor = 0.86;
+        if (factor < 0.99)  aspeed *= factor;
+      }
 
       /* whew! now can compute air-ref direction for any future time, simple trig: */
-      heading += 0.5 * dir_chg;
+      heading += 0.5 * dir_chg;    // 1.5 sec into future
       for (int i=0; i<6; i++) {
          if (heading >  360.0) heading -= 360.0;
          if (heading < -360.0) heading += 360.0;
@@ -839,7 +865,7 @@ To compute the correct air-reference circling path:
       if (report) report_that_projection(fop, 1);
 
       return;
-    }      
+    }
 
     /* for other protocols, turn rate was NOT computed in decode() */
     /* rely on history to compute turn rate */
@@ -944,13 +970,14 @@ To compute the correct air-reference circling path:
       if (factor < 0.99)  aspeed *= factor;
     }
 
-    heading += 1.5 * turnrate;  /* first point will be 1.5 seconds into future */
+    heading += 1.5 * turnrate;         // first point will be 1.5 seconds into future
+    float dir_chg = 3.0 * turnrate;   // intervals after that
     for (i=0; i<6; i++) {
       if (heading >  360.0) heading -= 360.0;
       if (heading < -360.0) heading += 360.0;
       fop->air_ns[i] = (int16_t) roundf(4.0 * aspeed * cos_approx(heading));
       fop->air_ew[i] = (int16_t) roundf(4.0 * aspeed * sin_approx(heading));
-      heading += 3.0 * turnrate;
+      heading += dir_chg;
     }
 
     if (report) report_that_projection(fop, 4);
