@@ -150,15 +150,14 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   }
 
   /* if either aircraft is turning, vector method is not usable */
-  if (circling != 0 || fabs(this_aircraft->turnrate) > 3.0 || fabs(fop->turnrate) > 3.0)
+  if (fabs(this_aircraft->turnrate) > 3.0 || fabs(fop->turnrate) > 3.0)
         return Alarm_Distance(this_aircraft, fop);
-  if (fop->turnrate == 0.0) {   /* fop->turnrate not available */
-    float angle = fabs(fop->course - fop->prevcourse);
-    if (angle > 270.0)  angle = 360.0 - angle;
-    if (angle > 6.0)
-      return Alarm_Distance(this_aircraft, fop);
-  }
-
+//  if (fop->turnrate == 0.0) {   /* fop->turnrate not available */
+//    float angle = fabs(fop->course - fop->prevcourse);
+//    if (angle > 270.0)  angle = 360.0 - angle;
+//    if (angle > 6.0)
+//      return Alarm_Distance(this_aircraft, fop);
+//  }
 
   float V_rel_magnitude, V_rel_direction, t;
 
@@ -287,9 +286,9 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   /* project_this(this_aircraft); */
   /* - was already called from Estimate_Wind() or Legacy_Encode() */
 
-  if (fabs(this_aircraft->turnrate) < 2 && fabs(fop->turnrate) < 2) {
+  if (fabs(this_aircraft->turnrate) < 2.0 && fabs(fop->turnrate) < 2.0) {
     /* neither aircraft is circling */
-    return (Alarm_Vector(this_aircraft, fop));
+    return (Alarm_Vector(this_aircraft, fop));   // >>> or try and use this algorithm anyway?
   }
 
   /* Project relative position second by second into the future */
@@ -473,26 +472,14 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 
 void Traffic_Update(ufo_t *fop)
 {
-  float lat, lon;
-  if (fop->protocol == RF_PROTOCOL_LEGACY) {
-    /* adjust position to "now" - it sent a position 2 sec into future */
-    float course = fop->course - fop->turnrate;      // 1 second back
-    float speed = fop->speed * (_GPS_MPS_PER_KNOT * 2.0 / 111300.0);   // degslat/sec * 2 sec
-    lat = fop->latitude  - (speed * cos_approx(course));
-    lon = fop->longitude - (speed * sin_approx(course) * InvCosLat());
-  } else {
-    lat = fop->latitude;
-    lon = fop->longitude;
-  }
-
   /* use an approximation for distance & bearing between 2 points */
   float x, y;
-  y = 111300.0 * (lat - ThisAircraft.latitude);         /* meters */
-  x = 111300.0 * (lon - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
-  fop->dx = (int32_t) x;
-  fop->dy = (int32_t) y;
+  y = 111300.0 * (fop->latitude  - ThisAircraft.latitude);         /* meters */
+  x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
   fop->distance = approxHypotenuse(x, y);      /* meters  */
   fop->bearing = atan2_approx(y, x);           /* degrees from ThisAircraft to fop */
+  fop->dx = (int32_t) x;
+  fop->dy = (int32_t) y;
 
   fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
@@ -608,19 +595,6 @@ void ParseData(void)
 
     if (((*protocol_decode)((void *) fo_raw, &ThisAircraft, &fo)) == false)
         return;
-
-    if (fo.addr == settings->ignore_id)        /* ID told in settings to ignore */
-           return;
-
-    if (fo.addr == ThisAircraft.addr) {
-        /* received same ID as this aircraft, and not told to ignore it */
-        /* then replace this aircraft ID with a random one */
-        // settings->id_method = ADDR_TYPE_ANONYMOUS;
-        // generate_random_id();
-        //   - very unlikely, more useful instead:
-        //   - auto-ignore same-ID:
-        return;
-    }
 
     bool do_relay = false;
     bool first_minute = (millis() < SetupTimeMarker + 60000);

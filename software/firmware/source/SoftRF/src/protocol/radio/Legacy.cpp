@@ -151,7 +151,7 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     }
     if (pkt_parity % 2) {
         if (settings->nmea_p) {
-          StdOut.print(F("$PSRFE,bad parity of decoded packet: "));
+          StdOut.print(F("$PSRFE,bad parity of decrypted packet: "));
           StdOut.println(pkt_parity % 2, HEX);
         }
         return false;
@@ -160,15 +160,17 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->addr = pkt->addr;
     
     if (fop->addr == settings->ignore_id)
-         return true;                 /* ID told in settings to ignore */
+         return false;                 /* ID told in settings to ignore */
+
     if (fop->addr == ThisAircraft.addr)
-         return true;                 /* same ID as this aircraft - ignore */
-    /* return true so that the packet will reach ParseData() */
+         return false;                 /* same ID as this aircraft - ignore */
 
     fop->protocol = RF_PROTOCOL_LEGACY;
     fop->addr_type = pkt->addr_type;
     fop->timestamp = timestamp;
     fop->gnsstime_ms = millis();
+
+    uint8_t unk2 = pkt->_unk2;
 
     // this section revised by MB on 220526
     int32_t round_lat, round_lon;
@@ -188,24 +190,37 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     float lon = (float)((ilon + round_lon) << 7) * 1e-7;
 
     uint8_t smult = pkt->smult;
-    float nsf = (float) (pkt->ns[0] << smult);      /* quarter-meters per sec */
-    float ewf = (float) (pkt->ew[0] << smult);
-//    float heading = atan2_approx(nsf, ewf);
-//    /* if those are airspeeds, adjust for wind */   // they are not airspeeds.
-//    nsf += 4.0 * wind_best_ns;
-//    ewf += 4.0 * wind_best_ew;
+    float nsf = (float) (((int16_t) pkt->ns[0]) << smult);      /* quarter-meters per sec */
+    float ewf = (float) (((int16_t) pkt->ew[0]) << smult);
     float course = atan2_approx(nsf, ewf);
     float speed4 = approxHypotenuse(nsf, ewf);
+    float interval, factor;
+    if (pkt->aircraft_type == AIRCRAFT_TYPE_TOWPLANE) {      // known 4-second intervals
+        //interval = 4.0;
+        factor = (1.0/4.0);
+    } else if (pkt->aircraft_type == AIRCRAFT_TYPE_DROPPLANE) {   // unverified assumptions
+        //interval = 4.0;
+        factor = (1.0/4.0);
+    } else if (pkt->aircraft_type == AIRCRAFT_TYPE_POWERED) {
+        //interval = 4.0;
+        factor = (1.0/4.0);
+    } else if (unk2 == 1) {
+        //interval = 2.0;
+        factor = (1.0/2.0);
+    } else {                                          // circling gliders
+        //interval = 3.0;
+        factor = (1.0/3.0);
+    }
     float turnrate = 0;
     if (speed4 > 0) {
       float nextcourse = atan2_approx((float) pkt->ns[1], (float) pkt->ew[1]);
       float turnangle = (nextcourse - course);
       if (turnangle >  270.0) turnangle -= 360.0;
       if (turnangle < -270.0) turnangle += 360.0;
-      //turnrate = 0.333 * turnangle;  /* assuming 3 seconds interval */
-      turnrate = 0.5 * turnangle;  /* >>> assuming 2 seconds interval */
-      /* adjust direction for turning during time between "now" and [0] */
-      // >>> assumes that interval is 2s and that [0] is 2s after "now"
+      turnrate = turnangle * factor;
+      /* adjust course direction for turning during time between "now" and [0] */
+      // it appears that the time of [0] after "now" is same as the interval between [0] & [1]
+      // course -= interval * turnrate;
       course -= turnangle;
       if (course >  360.0) course -= 360.0;
       if (course < -360.0) course += 360.0;
@@ -218,42 +233,60 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     int16_t alt = pkt->alt ; /* relative to WGS84 ellipsoid */
 
     fop->airborne = pkt->airborne;
-    fop->latitude = lat;
-    fop->longitude = lon;
+
+    /* FLARM sometimes sends packets with implausible data */
+    if (fop->airborne == 0 && (vs10 > 100 || vs10 < -100))
+        return false;
+    if (unk2 == 2)   // appears with implausible data in speed fields
+        return false;
+
+    if (unk2 == 0)
+        fop->circling = 1;   // to the right
+    else if (unk2 == 3)
+        fop->circling = -1;
+    else
+        fop->circling = 0;
+
+    /* adjust position to "now" - it sent a position 2 sec into future */
+    float course2 = course - turnrate;     // average course over the previous 2 seconds
+    float offset = speed4 * (2.0 / 4.0 / 111300.0);   // degslat/sec * 2 sec = degs moved
+    fop->latitude  = lat - (offset * cos_approx(course2));
+    fop->longitude = lon - (offset * sin_approx(course2) * InvCosLat());
+
     fop->altitude = (float) alt - geo_separ;
     fop->speed = (1.0 / (4.0 * _GPS_MPS_PER_KNOT)) * speed4;
+    fop->aircraft_type = pkt->aircraft_type;
     fop->course = course;
 //    fop->heading = heading;
     fop->turnrate = turnrate;
          /* this is as reported by FLARM, which is ground-reference - at time [0]? */
     fop->vs = ((float) vs10) * (_GPS_FEET_PER_METER * 6.0);
-    fop->aircraft_type = pkt->aircraft_type;
     fop->stealth = pkt->stealth;
     fop->no_track = pkt->no_track;
-    /* Keep the data given for the first 2 time points  */
-    /* The other 2 time points are not useful in wind   */
-    /* due to the data being in neither reference frame */
-    fop->fla_ns[0] = ((int16_t) pkt->ns[0]) << smult;
-    fop->fla_ns[1] = ((int16_t) pkt->ns[1]) << smult;
-    fop->fla_ew[0] = ((int16_t) pkt->ew[0]) << smult;
-    fop->fla_ew[1] = ((int16_t) pkt->ew[1]) << smult;
+    /* There is no need to keep the ns[] & ew[] data  */
+    /* We already computed course and speed from them */
+    //fop->fla_ns[0] = ((int16_t) pkt->ns[0]) << smult;
+    //fop->fla_ns[1] = ((int16_t) pkt->ns[1]) << smult;
+    //fop->fla_ew[0] = ((int16_t) pkt->ew[0]) << smult;
+    //fop->fla_ew[1] = ((int16_t) pkt->ew[1]) << smult;
     fop->projtime_ms = fop->gnsstime_ms;
 
 #if 1
     /* send received radio packet data out via NMEA for debugging */
     if (settings->nmea_d || settings->nmea2_d) {
       if (settings->debug_flags & DEBUG_LEGACY) {
-        int16_t ns2 = ((int16_t) pkt->ns[2]) << smult;
-        int16_t ns3 = ((int16_t) pkt->ns[3]) << smult;
-        int16_t ew2 = ((int16_t) pkt->ew[2]) << smult;
-        int16_t ew3 = ((int16_t) pkt->ew[3]) << smult;
+        int16_t ns[4], ew[4];
+        int i;
+        for (i=0; i<4; i++) {
+           ns[i] = ((int16_t) pkt->ns[i]) << smult;
+           ew[i] = ((int16_t) pkt->ew[i]) << smult;
+        }
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRFL,%06X,%ld,%.6f,%.6f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
           fop->addr, (int32_t)fop->gnsstime_ms - (int32_t)ThisAircraft.gnsstime_ms,
           fop->latitude, fop->longitude, fop->altitude,
-          course, turnrate, vs10, smult, fop->airborne, pkt->_unk2,
-          fop->fla_ns[0], fop->fla_ns[1], ns2, ns3,
-          fop->fla_ew[0], fop->fla_ew[1], ew2, ew3);
+          course, turnrate, vs10, smult, fop->airborne, unk2,
+          ns[0], ns[1], ns[2], ns[3], ew[0], ew[1], ew[2], ew[3]);
         NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
         if (settings->debug_flags & DEBUG_RESVD1) {
           /* also output the raw (but decrypted) packet as a whole, in hex */
@@ -335,10 +368,8 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     pkt->gps = 323;
 
-    float turnRate = this_aircraft->turnrate;
-
     /* project position 2 seconds into future, as it seems that FLARM does that */
-    course += turnRate;           // 1 second into future
+    course += this_aircraft->turnrate;     // average course over the next 2 seconds
     float offset = speedf * (2.0 / 111300.0);   // degslat/sec * 2 sec = degs moved
     lat += (offset * cos_approx(course));
     lon += (offset * sin_approx(course) * InvCosLat());
@@ -361,17 +392,13 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     }
     pkt->alt = alt;
 
-    /* FLARM seems to send this in _unk2 from a glider */
-    static int turning = 1;   // not turning sharply
-    if (turnRate > 18)
-        turning = 0;           // turning sharply right
-    else if (turnRate < -18)
-        turning = 3;           // turning sharply left
-    else if (turnRate > -10 && turnRate < 10)
-        turning = 1;           // return to not-turning with hysteresis
-    // else
-    //   retain previous value of turning
-    pkt->_unk2 = turning;
+    // assume unk2 signals established circling
+    if (this_aircraft->circling > 0)
+        pkt->_unk2 = 0;
+    else if (this_aircraft->circling < 0)
+        pkt->_unk2 = 3;
+    else
+        pkt->_unk2 = 1;
 
     pkt->_unk0 = 0;
     pkt->_unk1 = 0;

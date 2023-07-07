@@ -37,7 +37,7 @@ function UpdateChecksum()
       + document.getElementById("legacy2").value + ","
       + document.getElementById("sens2").value + ","
       + document.getElementById("debug2").value + ","
-      + document.getElementById("norelay").value;
+      + document.getElementById("relay").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -190,12 +190,12 @@ function SelDebug2()
   UpdateChecksum();
 }
 
-function SelNorelay()
+function SelRelay()
 {
-  var norelay = document.getElementsByName('norelay');
-  for (var i = 0; i < norelay.length; i++) {
-      if (norelay[i].type == "radio" && norelay[i].checked) {
-        document.getElementById("norelay").value = i;
+  var relay = document.getElementsByName('relay');
+  for (var i = 0; i < relay.length; i++) {
+      if (relay[i].type == "radio" && relay[i].checked) {
+        document.getElementById("relay").value = i;
       }
   }
   UpdateChecksum();
@@ -218,7 +218,7 @@ function InitSettings()
   document.getElementById("legacy2").value     = 1;
   document.getElementById("sens2").value       = 1;
   document.getElementById("debug2").value      = 0;
-  document.getElementById("norelay").value     = 0;
+  document.getElementById("relay").value       = 1;
 
   UpdateChecksum();
 }
@@ -374,8 +374,9 @@ If you are affected - please, consider to update
 <tr>
 <th align=left>Air Relay</th>
 <td align=right>
-<input type='radio' name='norelay' value='0' onchange="SelNorelay()" checked>Enable
-<input type='radio' name='norelay' value='1' onchange="SelNorelay()">Disable
+<input type='radio' name='relay' value='0' onchange="SelRelay()">Off
+<input type='radio' name='relay' value='1' onchange="SelRelay()" checked>Landed
+<input type='radio' name='relay' value='2' onchange="SelRelay()">All
 </td>
 </tr>
 
@@ -395,7 +396,7 @@ If you are affected - please, consider to update
 <!-- Legacy2:   --><input type="hidden" id="legacy2" size="1">
 <!-- Sensors2:  --><input type="hidden" id="sens2" size="1">
 <!-- Debug2:    --><input type="hidden" id="debug2" size="1">
-<!-- Norelay:   --><input type="hidden" id="norelay" size="1">
+<!-- Relay:     --><input type="hidden" id="relay" size="1">
 
 <h4 align=center>NMEA control sentence:</h4>
 <hr>

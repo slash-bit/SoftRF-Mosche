@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB09x"
+#define SOFTRF_FIRMWARE_VERSION "MB09z"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -169,6 +169,7 @@ typedef struct UFO {
     bool      no_track;
     uint8_t   aircraft_type;
     uint8_t   airborne;
+    int8_t    circling;   /* 1=right, -1=left */
 
     /* for linking into a list */
     uint8_t   next;

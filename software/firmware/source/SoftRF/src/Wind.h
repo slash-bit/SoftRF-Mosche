@@ -24,7 +24,6 @@ extern float wind_best_ew;
 extern float wind_speed;
 extern float wind_direction;
 
-extern int circling;          /* 1 = clockwise, -1 = counterclockwise */
 extern float avg_turnrate;
 extern float avg_speed;       /* average around the circle */
 extern float avg_climbrate;

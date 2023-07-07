@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated March 19, 2023
-to fit software version MB09t based on v1.0 with some parts of v1.2
+This version last updated June 19, 2023
+to fit software version MB09x based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -72,6 +72,8 @@ I added a completely new and significant module in Wind.cpp.  It estimates the a
 
 Because the collision prediction algorithm for circling aircraft makes heavy use of some trig functions, in addition to their use in existing code, and because floating point ops on the ESP32 are fairly slow, I added a module called ApproxMath which implements very fast trig functions that are only as accurate as needed for the purpose.  The nwe functions atan2_approx() and approxHypotenuse() are set up in a way that also makes calling them more efficient.  E.g., no need to convert degrees to radians.  Also, in TrafficHelper Traffic_Update(), use a simple approximation for distance & bearing between 2 points, and compute and store some things (distance and bearing) in advance for re-use later.
 
+The old Sound.cpp is now two separate files Buzzer.cpp and Voice.cpp for the different types of sound.
+
 Corrected determination of exact UTC time
 
 Fixed a bug in the time computation.  Code now says "+ time_corr_neg".  Also handles possible small jitter in PPS.  The exact time is now computed in system/Time.cpp - Time_loop().  Changed globally to using the variable OurTime to hold the UTC second as determined from the GNSS.  That is to isolate it from any possible code I am or am not aware of that adjusts the "system" time.  E.g., the system clock gets updated by GNSSTimeSync() called from GNSS_loop().
@@ -82,7 +84,7 @@ Wrote new code to compute the frequency hopping time slots for the "Legacy" (FLA
 
 Audio alarms
 
-When a collision warning is given, at one of the three levels of urgency (following what FLARM does), besides sending the warning out as NMEA sentences, also use the piezo buzzer (if present) to produce beeps.  One beep for low level warning, two (at higher pitch) for medium level, and 5 beeps for urgent warnings.  Main files affected: driver/Sound, and platform/ESP32.
+When a collision warning is given, at one of the three levels of urgency (following what FLARM does), besides sending the warning out as NMEA sentences, also use the piezo buzzer (if present) to produce beeps.  One beep for low level warning, two (at higher pitch) for medium level, and 5 beeps for urgent warnings.  Main files affected: driver/Voice, and platform/ESP32.  Also added a voice output option, see below.
 
 Take vertical separation into account
 
@@ -158,7 +160,7 @@ Masked additional data fields in stealth mode to fit FLARM specifications.
 
 Air Relay
 
-Added one-hop relay of radio packets from landed aircraft.  The relayed packets are marked by a different "address (ID) type".  Main file changed: TrafficHelper.cpp.  Also changed EEPROM.* and Web.cpp (for the no-relay setting), NMEA.cpp (for norelay setting), and SoftRF.ino (added pauses between transmissions).
+Added one-hop relay of radio packets from landed (or all) aircraft.  The relayed packets are marked by a different "address (ID) type".  Main file changed: TrafficHelper.cpp.  Also changed EEPROM.* and Web.cpp (for the relay setting), NMEA.cpp (for relay setting), and SoftRF.ino (added pauses between transmissions).
 
 WiFi Client Mode
 
@@ -180,4 +182,4 @@ Baro sensor support and turn-off issues (both related to I2C library?) seem most
 
 Compiling SoftRF
 
-At this time I compile it under Ubuntu 20.04 using the Arduino IDE verion 1.8.16, and the ESP32 board support version 2.0.3.  If you use any other versions, especially of the ESP32 support, expect to spend some time fixing library incompatibilities.
+At this time I compile it under Ubuntu 20.04 using the Arduino IDE verion 1.8.16.  For the T-Beam I use the ESP32 board support version 2.0.3.  If you use any other versions, especially of the ESP32 support, expect to spend some time fixing library incompatibilities.  For the T-Echo I use the Adafruit nRF52 board support version 1.2.0.
