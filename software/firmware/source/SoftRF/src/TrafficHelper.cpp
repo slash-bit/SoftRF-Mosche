@@ -288,13 +288,14 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 
   if (fabs(this_aircraft->turnrate) < 2.0 && fabs(fop->turnrate) < 2.0) {
     /* neither aircraft is circling */
-    return (Alarm_Vector(this_aircraft, fop));   // >>> or try and use this algorithm anyway?
+    return (Alarm_Vector(this_aircraft, fop));
+    // hopefully this takes care of aerotows?
+    // >>> or try and use this algorithm anyway?
   }
 
   /* Project relative position second by second into the future */
-  /* Time points in the ns/ew array appear to be current time + 1.5, 4.5, 7.5, 10.5 seconds */
-  /* >>> well that's in dispute, it may be +2,4,6,8, and perhaps 2,6,10,14 for towplanes    */
-  /*     although that's in the FLARM transmissions, we compute what we want in Wind.cpp    */
+  /* Time points in the ns/ew array may be +2,4,6,8, and perhaps 2,6,10,14 for towplanes    */
+  /*   - although that's in the FLARM transmissions, we compute what we want in Wind.cpp    */
 
   /* Use integer math for computational speed */
 
@@ -409,7 +410,7 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   int dy = fop->dy << 2;
 
   /* project paths over time and find minimum 3D distance */
-  uint32_t minsqdist = 100*100*4*4;
+  uint32_t minsqdist = 200*200*4*4;
   int mintime = ALARM_TIME_CLOSE;
   int vxmin = 0;
   int vymin = 0;
@@ -471,9 +472,17 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
         } else {
           rval = ALARM_LEVEL_CLOSE;
         }
+  } else if (minsqdist < 160*160*4*4 && (! this_aircraft->circling || ! fop->circling)) {
+        if (mintime < ALARM_TIME_EXTREME) {
+          rval = ALARM_LEVEL_IMPORTANT;
+        } else if (mintime < ALARM_TIME_URGENT) {
+          rval = ALARM_LEVEL_LOW;
+        } else {
+          rval = ALARM_LEVEL_CLOSE;
+        }
   }
   uint32_t sqspeed = 0;
-  if (rval > ALARM_LEVEL_NONE && mintime > ALARM_TIME_EXTREME) {
+  if (rval > ALARM_LEVEL_NONE /* && mintime > ALARM_TIME_EXTREME */ ) {
     sqspeed = vxmin*vxmin + vymin*vymin;    /* relative speed at closest point, squared */
     if (sqspeed < 6*6*4*4) {     /* relative speed < 6 mps */
       --rval;       // <= IMPORTANT
