@@ -455,7 +455,7 @@ void this_airborne()
           if (AlarmLog) {
               AlarmLogOpen = true;
               if (append == false) {
-                const char *p = "date,time,lat,lon,level,ID,relbrg,hdist,vdist\r\n";
+                const char *p = "date,time,lat,lon,level,count,ID,relbrg,hdist,vdist\r\n";
                 AlarmLog.write((const uint8_t *)p, strlen(p));
               }
           } else {

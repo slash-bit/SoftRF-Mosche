@@ -130,9 +130,18 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
     legacy_packet_t *pkt = (legacy_packet_t *) legacy_pkt;
 
-    // FLARM seems to send some other type of data packet occasionally, ignore it
-    if (pkt->_unk0 != 0)
+    bool relayed = false;
+    if (pkt->_unk0 == 0xF && pkt->_unk1 == 1 && pkt->addr_type > 3) {
+        // probably air-relayed packet from airborne originator
+        //   but do some sanity checks below
+        pkt->_unk0 = 0;
+        pkt->_unk1 = 0;   // restores original parity
+        relayed = true;
+
+    } else if (pkt->_unk0 != 0) {
+        // FLARM seems to send some other type of data packet occasionally, ignore it
         return false;
+    }
 
     float ref_lat = this_aircraft->latitude;
     float ref_lon = this_aircraft->longitude;
@@ -149,10 +158,11 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {
       pkt_parity += parity(*(((unsigned char *) pkt) + ndx));
     }
-    if (pkt_parity % 2) {
+    // if ((pkt_parity % 2) && (! relayed)) {
+    if (pkt_parity & 0x01) {
         if (settings->nmea_p) {
           StdOut.print(F("$PSRFE,bad parity of decrypted packet: "));
-          StdOut.println(pkt_parity % 2, HEX);
+          StdOut.println(pkt_parity & 0x01, HEX);
         }
         return false;
     }
@@ -239,6 +249,12 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
         return false;
     if (unk2 == 2)   // appears with implausible data in speed fields
         return false;
+    if (relayed) {   // additional sanity checks
+        if (speed4 > 600.0)
+            return false;
+        if (fabs(turnrate) > 100.0)
+            return false;
+    }
 
     if (unk2 == 0)
         fop->circling = 1;   // to the right
@@ -410,7 +426,8 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
       pkt_parity += parity(*(((unsigned char *) pkt) + ndx));
     }
 
-    pkt->parity = (pkt_parity % 2);
+    //pkt->parity = (pkt_parity % 2);
+    pkt->parity = (pkt_parity & 0x01);
 
     make_key(key, timestamp , (pkt->addr << 8) & 0xffffff);
 

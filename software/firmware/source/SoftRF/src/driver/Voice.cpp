@@ -251,7 +251,7 @@ void Voice_test(int reason)
     }
 }
 
-static void Traffic_Voice_Msg(ufo_t *fop)
+static void Traffic_Voice_Msg(ufo_t *fop, bool multi_alarm)
 {
     int bearing = (int)(fop->bearing - ThisAircraft.course);   // relative bearing
 
@@ -305,10 +305,11 @@ static void Traffic_Voice_Msg(ufo_t *fop)
     }
 
     char message[80];
-    snprintf(message, sizeof(message), "%s %s %s",
+    snprintf(message, sizeof(message), "%s %s %s%s",
         (fop->alarm_level >= ALARM_LEVEL_URGENT? "danger" : "traffic"),
         where,
-        (fop->adj_alt_diff > 0 ? "high" : fop->adj_alt_diff < 0 ? "low" : "level"));
+        (fop->adj_alt_diff > 0 ? "high" : fop->adj_alt_diff < 0 ? "low" : "level"),
+        (multi_alarm? " traffic" : ""));
 
     TTS(message);
 }
@@ -327,7 +328,7 @@ void Voice_setup(void)
     parse_wav_tar();           // then try and do that
 }
 
-bool Voice_Notify(ufo_t *fop)
+bool Voice_Notify(ufo_t *fop, bool multi_alarm)
 {
   if (settings->voice == VOICE_OFF)
       return false;
@@ -338,7 +339,7 @@ bool Voice_Notify(ufo_t *fop)
   if (fop->alarm_level < ALARM_LEVEL_LOW)
       return false;
 
-  Traffic_Voice_Msg(fop);
+  Traffic_Voice_Msg(fop, multi_alarm);
 
   return true;
 }

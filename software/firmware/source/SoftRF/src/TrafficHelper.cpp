@@ -299,69 +299,104 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   /* Use integer math for computational speed */
 
   /* also take altitude difference into account */
-  int dz = abs((int) fop->alt_diff);
-  /* reduce altitude separation to account for possible 100m GPS altitude error */
-  int adjdz = (dz > 100) ? (dz - 100) : 0;
+  int dz = (int) fop->alt_diff;
+  int absdz = abs(dz);
+  int adjdz = absdz;
+  /* assume lower aircraft may zoom up */
+  /* potential zoom altitude is about V^2/20 (m, m/s) */
+  int vx, vy, vv, vv20;
+  if (dz < 0) {             // other aircraft is lower
+    vx = fop->air_ew[0];
+    vy = fop->air_ns[0];    // quarter-meters per second airspeed
+  } else {
+    vx = this_aircraft->air_ew[0];
+    vy = this_aircraft->air_ns[0];
+  }
+  vv = (vx*vx + vy*vy);
+  vv20 = vv - (20*20*4*4);  // zoom to 20 m/s
+  if (vv20 > 0)
+    adjdz -= vv20 >> 9;     // about 2/3 of possible zoom
+  adjdz -= 70;        // account for possible GPS altitude discrepancy
+  if (adjdz < 0)
+    adjdz = 0;
+  if (adjdz > 100)
+    return (ALARM_LEVEL_NONE);
+
   /* may want to adjust dz over time? */
   /* - but is relative vs representative of future? */
   /* - in same thermal average relative vs = 0 */
-  if (adjdz > 100)
-    return (ALARM_LEVEL_NONE);
 
   /* prepare the second-by-second velocity vectors */
   static int thisvx[20];
   static int thisvy[20];
   static int thatvx[20];
   static int thatvy[20];
-  int i, j;
-  int vx, vy;
+  //int vx, vy;
   int *px = thisvx;
   int *py = thisvy;
   /* considered interpolating between the 4 points, but does not seem useful */
-  for (i=0; i<6; i++) {
-    vx = this_aircraft->air_ew[i];  /* quarter-meters per second */
-    vy = this_aircraft->air_ns[i];
-    for (j=0; j<3; j++) {
-      *px++ = vx;
-      *py++ = vy;    
+  int i, j;
+  /* if zooming to level of other aircraft, speed decreases */
+  /* rough approximation: multiply speed by (1 - 5*dz/vv)   */
+  /*    5 = 20, halved for average, halved again for sqrt() */
+  if (vv20 > 8000 && dz > 15) {
+    int32_t factor = (5*16*64) * (int32_t) absdz;
+    factor = 64 - factor/vv;
+    if (factor < 48)  factor = 48;
+    for (i=0; i<6; i++) {
+       int32_t v;
+       v = this_aircraft->air_ew[i];
+       v *= factor;
+       vx = v >> 6;
+       v = this_aircraft->air_ns[i];
+       v *= factor;
+       vy = v >> 6;
+       for (j=0; j<3; j++) {
+         *px++ = vx;
+         *py++ = vy;    
+       }
+    }
+  } else {
+    for (i=0; i<6; i++) {
+      vx = this_aircraft->air_ew[i];  /* quarter-meters per second */
+      vy = this_aircraft->air_ns[i];
+      for (j=0; j<3; j++) {
+        *px++ = vx;
+        *py++ = vy;    
+      }
     }
   }
-#if 0
-  /* could have extrapolated "points" past [3] without trig: */
-  float speed = approxHypotenuse((float)this_aircraft->ns[0], (float)this_aircraft->ew[0]);
-  float spdchg = approxHypotenuse((float)(this_aircraft->ns[1] - this_aircraft->ns[0]),
-                                   (float)(this_aircraft->ew[1] - this_aircraft->ew[0]));
-  float factor = spdchg / speed;
-  int ifactor = (int) (256.0 * (2.0 - factor * factor));
-  vx = this_aircraft->ew[4-4]
-       + ((ifactor * (this_aircraft->ew[4-1] - this_aircraft->ew[4-3])) >> 8);
-  vy = this_aircraft->ns[4-4]
-       + ((ifactor * (this_aircraft->ns[4-1] - this_aircraft->ns[4-3])) >> 8);
-  for (j=0; j<3; j++) {
-    *px++ = vx;
-    *py++ = vy;
-  }
-  vx = this_aircraft->ew[5-4]
-       + ((ifactor * (vx - this_aircraft->ew[5-3])) >> 8);
-  vy = this_aircraft->ns[5-4]
-       + ((ifactor * (vy - this_aircraft->ns[5-3])) >> 8);
-  for (j=0; j<3; j++) {
-    *px++ = vx;
-    *py++ = vy;
-  }
-#endif
   *px = vx;  /* extrapolate one more second */
   *py = vy;
 
   /* same for the other aircraft */
   px = thatvx;
   py = thatvy;
-  for (i=0; i<6; i++) {
-    vx = fop->air_ew[i];
-    vy = fop->air_ns[i];
-    for (j=0; j<3; j++) {
-      *px++ = vx;
-      *py++ = vy;    
+  if (vv20 > 8000 && dz < -15) {
+    int32_t factor = (5*16*64) * (int32_t) absdz;
+    factor = 64 - factor/vv;
+    if (factor < 48)  factor = 48;
+    for (i=0; i<6; i++) {
+       int32_t v;
+       v = fop->air_ew[i];
+       v *= factor;
+       vx = v >> 6;
+       v = fop->air_ns[i];
+       v *= factor;
+       vy = v >> 6;
+       for (j=0; j<3; j++) {
+         *px++ = vx;
+         *py++ = vy;    
+       }
+    }
+  } else {
+    for (i=0; i<6; i++) {
+      vx = fop->air_ew[i];
+      vy = fop->air_ns[i];
+      for (j=0; j<3; j++) {
+        *px++ = vx;
+        *py++ = vy;    
+      }
     }
   }
   *px = vx;
@@ -523,6 +558,9 @@ void air_relay()
     if (fo.timerelayed + ENTRY_RELAY_TIME > fo.timestamp)
         return;
 
+    // Since (legacy) decryption happens in-place, fo_raw is now cooked,
+    // so use the original (still encrypted) data in RxBuffer.
+
     // need to flag relayed packets so they won't be relayed again:
     // change the "address type" field without affecting bit parity.
     legacy_packet_t* pkt = (legacy_packet_t *) RxBuffer;
@@ -538,8 +576,14 @@ void air_relay()
     else
         return;                // should not happen
 
-    // Since (legacy) decryption happens in-place, fo_raw is now cooked,
-    // so use the original (still encrypted) data in RxBuffer.
+    if (fo.airborne) {
+        // also munge the packet to make it invisible to FLARMs,
+        //   otherwise the relayed FLARM "sees" itself
+        // but do make landed traffic visible to FLARMs
+        pkt->_unk0 = 0xF;  // this leaves parity intact since it was 0x0
+        pkt->_unk1 = 1;    // this also spoils the parity - intentionally
+    }
+
     memcpy((void *) &TxBuffer[0], (void *) &RxBuffer[0], sizeof(legacy_packet_t));
 
     bool relayed = RF_Transmit(sizeof(legacy_packet_t), true);
@@ -806,11 +850,13 @@ void Traffic_setup()
 
 void Traffic_loop()
 {
-  if (isTimeToUpdateTraffic()) {
+    if (! isTimeToUpdateTraffic())
+        return;
 
     ufo_t *mfop = NULL;
     max_alarm_level = ALARM_LEVEL_NONE;          /* global, used for visual displays */
     int sound_alarm_level = ALARM_LEVEL_NONE;    /* local, used for sound alerts */
+    int alarmcount = 0;
 
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
@@ -831,6 +877,7 @@ void Traffic_loop()
           /* figure out what is the highest alarm level needing a sound alert */
           if (fop->alarm_level > fop->alert_level
                    && fop->alarm_level > ALARM_LEVEL_CLOSE) {
+              ++alarmcount;
               if (fop->alarm_level > sound_alarm_level) {
                   sound_alarm_level = fop->alarm_level;
                   mfop = fop;
@@ -861,17 +908,18 @@ void Traffic_loop()
     /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
 
     if (sound_alarm_level > ALARM_LEVEL_CLOSE) {
-      bool notified = Buzzer_Notify(sound_alarm_level);
+      // use alarmcount to modify the sounds
+      bool notified = Buzzer_Notify(sound_alarm_level, (alarmcount > 1));
 #if !defined(EXCLUDE_VOICE)
 #if defined(ESP32)
       if (mfop != NULL)
-        notified |= Voice_Notify(mfop);
+        notified |= Voice_Notify(mfop, (alarmcount > 1));
 #endif
 #endif
       /* Doing this here means that alarms via $PSRAA follow the same
        * hysteresis algorithm as the sound alarms.
        * External devices (XCsoar) sounding alarms based on $PFLAU have
-       * their own algorithms and are not affected and may be continuous */
+       * their own algorithms, are not affected and may be continuous */
       if (settings->nmea_l || settings->nmea2_l) {
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSRAA,%d*"), sound_alarm_level-1);
@@ -887,21 +935,20 @@ void Traffic_loop()
 #if defined(ESP32)
         if (settings->logalarms && AlarmLogOpen) {
           int year  = gnss.date.year();
-          if( year > 99)  year = year - 1970;
-          else            year += 30;
+          if( year > 99)  year = year - 2000;
           int month = gnss.date.month();
           int day   = gnss.date.day();
-          // $GPGGA,235317.000,4003.9039,N,10512.5793,W,...
+          // $GPGGA,235317.00,4003.90395,N,10512.57934,W,...
           char *cp = &GPGGA_Copy[7];   // after the "$GPGGA,", start of timestamp
-          GPGGA_Copy[42] = '\0';       // overwrite the comma after the "E" or "W"
+          GPGGA_Copy[43] = '\0';       // overwrite the comma after the "E" or "W"
 Serial.print("GGA timestamp: ");
 Serial.println(cp);
           int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
           rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("%02d%02d%02d,%s,%d,%06x,%d,%d,%d\r\n"),
-              year, month, day, cp, mfop->alarm_level, mfop->addr,
-              rel_bearing, mfop->distance, mfop->alt_diff);
+              PSTR("%02d%02d%02d,%s,%d,%d,%06x,%d,%d,%d\r\n"),
+              year, month, day, cp, mfop->alarm_level-1, alarmcount,
+              mfop->addr, rel_bearing, (int)mfop->distance, (int)mfop->alt_diff);
 Serial.println(NMEABuffer);
           int len = strlen(NMEABuffer);
           if (AlarmLog.write((const uint8_t *)NMEABuffer, len) == len) {
@@ -917,7 +964,6 @@ Serial.println(NMEABuffer);
     }
 
     UpdateTrafficTimeMarker = millis();
-  }
 }
 
 void ClearExpired()

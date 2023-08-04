@@ -208,7 +208,8 @@ uint8_t parity(uint32_t x) {
       }
       x >>= 1;
     }
-    return (parity % 2);
+    // return (parity % 2);
+    return (parity & 0x01);
 }
  
 byte RF_setup(void)

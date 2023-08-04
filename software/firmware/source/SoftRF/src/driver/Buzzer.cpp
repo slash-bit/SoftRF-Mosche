@@ -20,14 +20,14 @@
 
 #if defined(EXCLUDE_BUZZER)
 void  Buzzer_setup()       {}
-bool  Buzzer_Notify(int8_t level) {return false;}
+bool  Buzzer_Notify(int8_t level, bool multi_alarm) {return false;}
 void  Buzzer_loop()        {}
 void  Buzzer_fini()        {}
 #else
 
 #if !defined(ESP32)
 void  Buzzer_setup()       {}
-bool  Buzzer_Notify(int8_t level) {return false;}
+bool  Buzzer_Notify(int8_t level, bool multi_alarm) {return false;}
 void  Buzzer_loop()        {}
 void  Buzzer_fini()        {}
 #else
@@ -42,12 +42,13 @@ void  Buzzer_fini()        {}
 
 #include "../protocol/data/NMEA.h"
 
-static unsigned long BuzzerTimeMarker = 0;
+static uint32_t BuzzerTimeMarker = 0;
 static int BuzzerBeeps = 0;     /* how many beeps */
 static int BuzzerState = 0;     /* 1 = buzzing */
 static int BuzzerToneHz = 0;    /* variable tone */
 static int BuzzerBeepMS = 0;    /* how long each beep */
 static int BuzzerPin = SOC_UNUSED_PIN;
+static bool double_beep = false;
 
 #include <toneAC.h>
 
@@ -77,9 +78,10 @@ void Buzzer_setup(void)
   BuzzerBeeps = 0;
   BuzzerState = 0;
   BuzzerTimeMarker = 0;
+  double_beep = false;
 }
 
-bool Buzzer_Notify(int8_t alarm_level)
+bool Buzzer_Notify(int8_t alarm_level, bool multi_alarm)
 {
   if (settings->volume == BUZZER_OFF)
       return false;
@@ -87,18 +89,36 @@ bool Buzzer_Notify(int8_t alarm_level)
   if (BuzzerTimeMarker != 0)   // beeping in progress
       return false;
 
+  /* if more than one alarm aircraft, emit double-beeps */
+
+  double_beep = false;
   if (alarm_level == ALARM_LEVEL_LOW) {
     BuzzerToneHz = ALARM_TONE_HZ_LOW;
-    BuzzerBeepMS = ALARM_TONE_MS_LOW;
-    BuzzerBeeps  = ALARM_BEEPS_LOW;
+    if (multi_alarm) {
+        BuzzerBeepMS = ALARM_TONE_MS_LOW / 2;
+        BuzzerBeeps  = ALARM_BEEPS_LOW * 2;
+        double_beep = true;
+    } else {
+        BuzzerBeepMS = ALARM_TONE_MS_LOW;
+        BuzzerBeeps  = ALARM_BEEPS_LOW;
+    }
   } else if (alarm_level == ALARM_LEVEL_IMPORTANT) {
     BuzzerToneHz = ALARM_TONE_HZ_IMPORTANT;
-    BuzzerBeepMS = ALARM_TONE_MS_IMPORTANT;
-    BuzzerBeeps  = ALARM_BEEPS_IMPORTANT;
+    if (multi_alarm) {
+        BuzzerBeepMS = ALARM_TONE_MS_IMPORTANT / 2;
+        BuzzerBeeps  = ALARM_BEEPS_IMPORTANT * 2;
+        double_beep = true;
+    } else {
+        BuzzerBeepMS = ALARM_TONE_MS_LOW;
+        BuzzerBeeps  = ALARM_BEEPS_LOW;
+    }
   } else if (alarm_level == ALARM_LEVEL_URGENT) {
     BuzzerToneHz = ALARM_TONE_HZ_URGENT;
     BuzzerBeepMS = ALARM_TONE_MS_URGENT;
-    BuzzerBeeps  = ALARM_BEEPS_URGENT;
+    if (multi_alarm)
+        BuzzerBeeps  = ALARM_BEEPS_URGENT + 2;
+    else
+        BuzzerBeeps  = ALARM_BEEPS_URGENT;
   } else {    /* whether NONE or CLOSE */
     return false;
   }
@@ -111,7 +131,7 @@ bool Buzzer_Notify(int8_t alarm_level)
     toneAC(BuzzerToneHz, volume, duration, background);
   }
   BuzzerState = 1;
-  BuzzerTimeMarker = millis();
+  BuzzerTimeMarker = millis() + BuzzerBeepMS;
   return true;
 }
 
@@ -120,7 +140,7 @@ void Buzzer_loop(void)
   if (settings->volume == BUZZER_OFF)
       return;
 
-  if (BuzzerTimeMarker != 0 && millis() - BuzzerTimeMarker > BuzzerBeepMS) {
+  if (BuzzerTimeMarker != 0 && millis() > BuzzerTimeMarker) {
 
     if (BuzzerBeeps > 1) {
 
@@ -130,6 +150,12 @@ void Buzzer_loop(void)
         else
           noToneAC();
         BuzzerState = 0;
+        uint32_t gap;
+        if (double_beep && (BuzzerBeeps & 1))
+            gap = ALARM_MULTI_GAP_MS;   /* short break making it a double-beep */
+        else
+            gap = BuzzerBeepMS;         /* gap is same length as the beep */
+        BuzzerTimeMarker = millis() + gap;           /* time of next beep */
       } else {  /* sound is off, start another beep */
         if (settings->volume == BUZZER_EXT)
           ext_buzzer(true);
@@ -137,8 +163,8 @@ void Buzzer_loop(void)
           toneAC(BuzzerToneHz, volume, 0, true);
         BuzzerState = 1;
         --BuzzerBeeps;
+        BuzzerTimeMarker = millis() + BuzzerBeepMS;  /* timer of next gap */
       }
-      BuzzerTimeMarker = millis();   /* reset timer for the next beep or gap */
 
     } else {   /* done beeping, turn it all off */
 
@@ -161,7 +187,7 @@ void Buzzer_loop(void)
           ++level;
           if (level > ALARM_LEVEL_URGENT)
               level = ALARM_LEVEL_LOW;
-          Buzzer_Notify(level);
+          Buzzer_Notify(level,(level==ALARM_LEVEL_IMPORTANT? true : false));
       }
   }
 #endif

@@ -32,6 +32,7 @@
 #define ALARM_TONE_MS_LOW       700
 #define ALARM_TONE_MS_IMPORTANT 250
 #define ALARM_TONE_MS_URGENT    140
+#define ALARM_MULTI_GAP_MS 60
 
 enum
 {
@@ -42,7 +43,7 @@ enum
 };
 
 void Buzzer_setup(void);
-bool Buzzer_Notify(int8_t);
+bool Buzzer_Notify(int8_t, bool);
 void Buzzer_loop(void);
 void Buzzer_fini(void);
 

@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated June 19, 2023
-to fit software version MB09x based on v1.0 with some parts of v1.2
+This version last updated July 7, 2023
+to fit software version MB09z based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -84,7 +84,7 @@ Wrote new code to compute the frequency hopping time slots for the "Legacy" (FLA
 
 Audio alarms
 
-When a collision warning is given, at one of the three levels of urgency (following what FLARM does), besides sending the warning out as NMEA sentences, also use the piezo buzzer (if present) to produce beeps.  One beep for low level warning, two (at higher pitch) for medium level, and 5 beeps for urgent warnings.  Main files affected: driver/Voice, and platform/ESP32.  Also added a voice output option, see below.
+When a collision warning is given, at one of the three levels of urgency (following what FLARM does), besides sending the warning out as NMEA sentences, also use the piezo buzzer (if present) to produce beeps.  One beep for low level warning, two (at higher pitch) for medium level, and 5 beeps for urgent warnings.  Main files affected: driver/Buzzer, and platform/ESP32.  Also added a voice output option, see below.
 
 Take vertical separation into account
 
@@ -96,11 +96,15 @@ When a collision warning is given about an aircraft in the vicinity, try not to 
 
 Graduated collision cone in Vector method
 
-If the relative velocity vector is slightly outside the threshold chosen for triggering an alarm, still issue an alarm but at a lower urgency level.  Main file affected: TrafficHelper - Alarm_Vector().
+If the relative velocity vector is slightly outside the angles threshold chosen for triggering an alarm, still issue an alarm but at a lower urgency level.  Main file affected: TrafficHelper - Alarm_Vector().
 
 New "Legacy" collision prediction method
 
-This applies to circling aircraft.  This is complicated by the fact that FLARM sends out the projected future path in a format that - when there is wind - is neither relative to the air nor relative to the ground.  Main file affected: TrafficHelper - Alarm_Legacy().  Also modified outgoing Legacy radio packets (in protocol/Legacy legacy_encode()) to send path projection in the format FLARM expects.  Added code to compute path projections for ThisAircraft in two places: protocol/Legacy legacy_encode() and TrafficHelper - alarm_legacy().  Added code to compute projections for other Aircraft in TrafficHelper - alarm_legacy().  (These all end up calling the code in Wind.cpp.)
+This applies to circling aircraft.  This is complicated by the fact that FLARM sends out the projected future path in a format that - when there is wind - is neither relative to the air nor relative to the ground.  Internally, project velocities in 3-second intervals and project paths in 1-second intervals based on those velocities.  Main files affected: Wind.cpp (code to compute path projections for ThisAircraft and for other Aircraft), and TrafficHelper - Alarm_Legacy().  Also modified outgoing Legacy radio packets (in protocol/Legacy legacy_encode()) to send path projection in the format FLARM expects.
+
+Improved FLARM compatibility
+
+For outgoing radio packets: send lat/lon computed for 2 seconds into future.  Send projected velocity vectors for future time points that are dependent on aircraft type, and, for gliders, on whether established in circling.  The projected velocities are based on current ground speed and turn rate and ignore the wind.  Set the undocumented _unk2 field in outgoing Legacy radio packets to mimic what FLARM does.  For incoming radio packets: Convert location to current time.  Convert projected velocities to airmass frame of reference.  Use the _unk2 field and aircraft type to interpret the projected time points.
 
 Modified the decision method for replacing old traffic data with new
 
@@ -124,7 +128,11 @@ Some have asked for an option to mount the SoftRF device in an inaccessible plac
 
 Spurious alarm warnings caused in FLARM by stationary SoftRF
 
-Made multiple rounds of changes to the computation of the "airborne" status for this aircraft.  Now in Wind.cpp.  Set undocumented _unk2 bit in outgoing Legacy radio packets to 1 to mimic what FLARM does.  Affected: protocol/radio/Legacy legacy_encode().
+Made multiple rounds of changes to the computation of the "airborne" status for this aircraft.  Now in Wind.cpp.  Still not clear whether this is resolved.  Affected: protocol/radio/Legacy legacy_encode().
+
+Spurious alarm warnings caused in towed FLARM by SoftRF in tow plane
+
+This has been resolved by transmitting lat/lon computed for 2 seconds into the future, as FLARM does.
 
 Hide IGC encryption key
 
@@ -168,7 +176,7 @@ Revived the option of connecting to an external WiFi network.  Can enter the SSI
 
 Voice output
 
-This new module uses WAV files(sample rate 8000, bit depth 8, about about 70 KBytes) stored in SPIFFS inside waves.tar.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25.  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.   Added methods to upload the tar file via the web interface.
+This new module uses WAV files(sample rate 8000, bit depth 8, about about 70 KBytes) stored in SPIFFS inside waves.tar.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25.  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.   Added methods to upload the tar file via the web interface.  Files: driver/Voice.cpp and .h, Waves.cpp, and changes in UI/Web.cpp.
 
 
 KNOWN ISSUES
