@@ -590,7 +590,7 @@ void air_relay()
         //   otherwise the relayed FLARM "sees" itself
         // but do make landed traffic visible to FLARMs
         pkt->_unk0 = 0xF;  // this leaves parity intact since it was 0x0
-        pkt->_unk1 = 1;    // this also spoils the parity - intentionally
+        pkt->_unk1 = 1;    // this spoils the parity - intentionally
     }
 
     memcpy((void *) &TxBuffer[0], (void *) &RxBuffer[0], sizeof(legacy_packet_t));

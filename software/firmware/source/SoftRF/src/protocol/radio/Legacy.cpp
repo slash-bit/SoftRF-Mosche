@@ -245,11 +245,11 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
     fop->airborne = pkt->airborne;
 
     /* FLARM sometimes sends packets with implausible data */
-    if (fop->airborne == 0 && (vs10 > 100 || vs10 < -100))
+    if (fop->airborne == 0 && (vs10 > 150 || vs10 < -150))
         return false;
     if (unk2 == 2)   // appears with implausible data in speed fields
         return false;
-    if (relayed) {   // additional sanity checks
+    /* if (relayed) */ {   // additional sanity checks
         if (speed4 > 600.0)
             return false;
         if (fabs(turnrate) > 100.0)
@@ -299,7 +299,7 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
         }
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRFL,%06X,%ld,%.6f,%.6f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
-          fop->addr, (int32_t)fop->gnsstime_ms - (int32_t)ThisAircraft.gnsstime_ms,
+          fop->addr, (int32_t)fop->gnsstime_ms /* - (int32_t)ThisAircraft.gnsstime_ms */,
           fop->latitude, fop->longitude, fop->altitude,
           course, turnrate, vs10, smult, fop->airborne, unk2,
           ns[0], ns[1], ns[2], ns[3], ew[0], ew[1], ew[2], ew[3]);
@@ -337,7 +337,10 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
 
     uint16_t speed4 = (uint16_t) roundf(speedf * 4.0f);
     if (speed4 > 0x3FF) {
-      speed4 = 0x3FF;
+        // speed4 = 0x3FF;
+        /* sanity checks, don't send bad data */
+        Serial.println("skipping sending bad speed");
+        return 0;
     }
 
     uint8_t smult;
@@ -360,13 +363,28 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
       } else {
           pkt->airborne = this_aircraft->airborne;
       }
-      for (int i=0; i<4; i++) {
-         pkt->ns[i] = (int8_t) (this_aircraft->fla_ns[i] >> smult);
-         pkt->ew[i] = (int8_t) (this_aircraft->fla_ew[i] >> smult);
+      int16_t vs10;
+      if (this_aircraft->airborne) {
+         for (int i=0; i<4; i++) {
+             pkt->ns[i] = (int8_t) (this_aircraft->fla_ns[i] >> smult);
+             pkt->ew[i] = (int8_t) (this_aircraft->fla_ew[i] >> smult);
+             // quarter-meters per sec if smult==0
+         }
+         vs10 = (int16_t) roundf(vsf * 10.0f);
+         /* sanity checks, don't send bad data */
+         if (vs10 > 150 || vs10 < -150) {
+             Serial.println("skipping sending bad vs");
+             return 0;
+         }
+      } else {
+         // >>> trying to avoid FLARM warnings about parked SoftRF devices
+         for (int i=0; i<4; i++) {
+             pkt->ns[i] = 0;
+             pkt->ew[i] = 0;
+         }
+         vs10 = 0;
       }
-      /* quarter-meters per sec if smult==0 */
 
-    int16_t vs10 = (int16_t) roundf(vsf * 10.0f);
 /*  pkt->vs = this_aircraft->stealth ? 0 : vs10 >> pkt->smult; */
 /*  - that degrades collision avoidance - should only mask vs in NMEA */
     pkt->vs = vs10 >> smult;

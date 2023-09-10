@@ -621,8 +621,11 @@ void normal()
     /*  and also repeat to help ensure reception */
     static uint32_t try_tx = 0;
     if (millis() > try_tx) {
-      RF_Transmit(RF_Encode(&ThisAircraft), true);
-      /* - this only actually transmits when some preset time intervals are reached */
+      size_t s = RF_Encode(&ThisAircraft);  // returns 0 if implausible data
+      if (s != 0) {
+        RF_Transmit(s, true);
+        /* - this only actually transmits when some preset time intervals are reached */
+      }
       /* - but don't try too often, to give air-relay a chance to happen */
       try_tx = millis() + 66;
     }

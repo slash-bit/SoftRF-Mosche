@@ -401,9 +401,9 @@ void this_airborne()
       if (! GNSSTimeMarker)
         return;
       /* set initial location */
-      initial_latitude = ThisAircraft.latitude;
+      initial_latitude  = ThisAircraft.latitude;
       initial_longitude = ThisAircraft.longitude;
-      initial_altitude = ThisAircraft.altitude;
+      initial_altitude  = ThisAircraft.altitude;
     }
 
     if (airborne > 0) {
@@ -427,13 +427,17 @@ void this_airborne()
           || fabs(ThisAircraft.longitude - initial_longitude) > 0.0027f
           || fabs(ThisAircraft.altitude - initial_altitude) > 120.0f) {
             /* movement larger than typical GNSS noise */
-            ++airborne;
             float interval = 0.001 * fabs(ThisAircraft.gnsstime_ms - ThisAircraft.prevtime_ms);
             if (fabs(ThisAircraft.altitude - ThisAircraft.prevaltitude) > 20.0 * interval
              || fabs(ThisAircraft.course - ThisAircraft.prevcourse) > 50.0 * interval
              || speed > 4.0 * prevspeed || prevspeed > 4.0 * speed) {
-               /* supposed initial movement is too jerky */
-               if (airborne > -5)  airborne -= 2;
+               /* supposed initial movement is too jerky - wait for smoother changes */
+            } else {
+                ++airborne;
+                /* if stays slow, require additional movements to call it airborne */
+                initial_latitude  = ThisAircraft.latitude;
+                initial_longitude = ThisAircraft.longitude;
+                initial_altitude  = ThisAircraft.altitude;
             }
             prevspeed = speed;
             if (airborne > 0)    /* consistently good indications */
@@ -476,10 +480,12 @@ void this_airborne()
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
     if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n"),
-          airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      if (airborne != was_airborne) {
+        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+          PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n"),
+            airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
+        NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      }
     }
 }
 
