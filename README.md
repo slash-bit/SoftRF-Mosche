@@ -22,6 +22,7 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
+* vMB10d: now works on the new v1.2 model of the T-Beam with AXP2101
 * vMB09z: further compatibility improvements in transmissions and collision prediction
 * Collision-danger traffic VOICE warnings! (not just beeps)
 * Option to connect to ambient WiFi network instead of creating one

@@ -1143,7 +1143,17 @@ static void sx12xx_transmit()
     sx12xx_setvars();
     os_setCallback(&sx12xx_txjob, sx12xx_tx_func);
 
+    unsigned long tx_timeout = LMIC.protocol ? (LMIC.protocol->air_time + 25) : 60;
+    unsigned long tx_start   = millis();
+
     while (sx12xx_transmit_complete == false) {
+
+      if ((millis() - tx_start) > tx_timeout) {   // timeout code from v1.2
+        os_radio(RADIO_RST);
+        //Serial.println("TX timeout");
+        break;
+      }
+
       // execute scheduled jobs and events
       os_runstep();
 
@@ -1472,7 +1482,8 @@ static bool uatm_probe()
   u1_t i=0;
 
   /* Do not probe on itself and ESP8266 */
-  if (SoC->id == SOC_CC13XX ||
+  if (SoC->id == SOC_CC13X0 ||
+      SoC->id == SOC_CC13X2 ||
       SoC->id == SOC_ESP8266) {
     return success;
   }
@@ -1840,7 +1851,7 @@ static bool cc13xx_probe()
 {
   bool success = false;
 
-  if (SoC->id == SOC_CC13XX) {
+  if (SoC->id == SOC_CC13X0 || SoC->id == SOC_CC13X2) {
     success = true;
   }
 

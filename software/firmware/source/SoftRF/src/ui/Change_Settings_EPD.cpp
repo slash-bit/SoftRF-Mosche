@@ -73,7 +73,7 @@ set_entry protocols[] = {
 set_entry regions[] = {
   {RF_BAND_EU, "EU"},
   {RF_BAND_US, "US"},
-  {RF_BAND_UK, "UK"},
+//  {RF_BAND_UK, "UK"},
   {RF_BAND_AU, "AU"},
   {RF_BAND_NZ, "NZ"},
   {RF_BAND_RU, "RU"},

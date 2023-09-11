@@ -387,7 +387,7 @@ void Estimate_Wind()
 void this_airborne()
 {
     /* static vars to keep track of 'airborne' status: */
-    static int airborne = -5;
+    static int airborne = -4;
     static float prevspeed = 0;
     static float initial_latitude = 0;
     static float initial_longitude = 0;
@@ -406,23 +406,23 @@ void this_airborne()
       initial_altitude  = ThisAircraft.altitude;
     }
 
-    if (airborne > 0) {
+    if (speed < 1.0) {
 
-      if (speed < 1.0)  --airborne;
-      /* after 50 calls (~20 sec if consecutive)
-         with speed < 1kt consider it a landing */
-      if (airborne <= 0) {
-        airborne = -5;
+      if (airborne > 0) {
+        --airborne;
+        /* after 50 calls (~20 sec if consecutive)
+           with speed < 1 knot consider it a landing */
+      } else /* not airborne */ {
+        /* if had some speed and then stopped - reset to -4 again */
+        airborne = -4;
         initial_latitude = 0;
       }
 
-    } else if (speed > 1.0) {
-
-      /* > 1 knot but airborne still <= 0 */
+    } else if (airborne < 0) {    /* not airborne but moving with speed > 1 knot */
 
       if (GNSSTimeMarker > 0 && ThisAircraft.prevtime_ms > 0) {  /* had fix for a while */
 
-        if (speed > 10.0                                                /* 10 knots  */
+        if ( speed > 20.0                                               /* 20 knots  */
           || fabs(ThisAircraft.latitude - initial_latitude) > 0.0018f   /* about 200 meters */
           || fabs(ThisAircraft.longitude - initial_longitude) > 0.0027f
           || fabs(ThisAircraft.altitude - initial_altitude) > 120.0f) {
@@ -434,7 +434,7 @@ void this_airborne()
                /* supposed initial movement is too jerky - wait for smoother changes */
             } else {
                 ++airborne;
-                /* if stays slow, require additional movements to call it airborne */
+                /* require additional movements to call it airborne */
                 initial_latitude  = ThisAircraft.latitude;
                 initial_longitude = ThisAircraft.longitude;
                 initial_altitude  = ThisAircraft.altitude;
