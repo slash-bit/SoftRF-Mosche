@@ -140,11 +140,11 @@ typedef struct Settings {
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
     uint32_t ignore_id:24;
     uint8_t  strobe:2;
-    bool     logalarms:1;
+    bool    logalarms:1;
     uint8_t  voice:2;
     uint8_t  tcpport:1;       /* 0=2000, 1=8880 */
     uint8_t  tcpmode:1;
-    uint8_t  resvd4:1;
+    bool     ppswire:1;       /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
     uint32_t follow_id:24;
 
     bool     nmea2_g:1;

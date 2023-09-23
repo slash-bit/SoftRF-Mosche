@@ -37,7 +37,8 @@ function UpdateChecksum()
       + document.getElementById("legacy2").value + ","
       + document.getElementById("sens2").value + ","
       + document.getElementById("debug2").value + ","
-      + document.getElementById("relay").value;
+      + document.getElementById("relay").value + ","
+      + document.getElementById("bluetooth").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -98,6 +99,13 @@ function SelBaud()
 {
   var baud = document.getElementById("Bauds");
   document.getElementById("baud_rate").value = baud.options[baud.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelBT()
+{
+  var BT = document.getElementById("BT");
+  document.getElementById("bluetooth").value = BT.options[BT.selectedIndex].value;
   UpdateChecksum();
 }
 
@@ -209,6 +217,7 @@ function InitSettings()
   document.getElementById("ignore_id").value   = "000000";
   document.getElementById("follow_id").value   = "000000";
   document.getElementById("baud_rate").value   = 0;
+  document.getElementById("bluetooth").value   = 0;
   document.getElementById("power_ext").value   = 0;
   document.getElementById("NMEA_debug").value  = 0;
   document.getElementById("debug_flags").value = "00";
@@ -284,6 +293,17 @@ If you are affected - please, consider to update
 <option value=4>38400</option>
 <option value=5>57600</option>
 <option value=6>115200</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>Bluetooth</th>
+<td align=right>
+<select id="BT" onchange="SelBT()">
+<option selected value=0>OFF</option>
+<option value=1>SPP</option>
+<option value=2>LE</option>
 </select>
 </td>
 </tr>
@@ -387,6 +407,7 @@ If you are affected - please, consider to update
 <!-- Ignore:    --><input type="hidden" id="ignore_id" size="6">
 <!-- Follow:    --><input type="hidden" id="follow_id" size="6">
 <!-- Baud rate: --><input type="hidden" id="baud_rate" size="1">
+<!-- Bluetooth: --><input type="hidden" id="bluetooth" size="1">
 <!-- Power_ext: --><input type="hidden" id="power_ext" size="1">
 <!-- Debug1:    --><input type="hidden" id="NMEA_debug" size="1">
 <!-- Flags:     --><input type="hidden" id="debug_flags" size="2">

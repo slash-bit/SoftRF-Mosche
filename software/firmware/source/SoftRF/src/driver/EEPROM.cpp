@@ -83,6 +83,7 @@ void EEPROM_setup()
 
   SoC->EEPROM_extension(cmd);
 
+  // >>> can remove this after next chance in EEPROM version ID:
   if (settings->relay > RELAY_ALL)  settings->relay = RELAY_LANDED;
 }
 
@@ -195,6 +196,7 @@ void EEPROM_defaults()
   strncpy(settings->host_ip, NMEA_TCP_IP, sizeof(settings->host_ip)-1);
   settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
   settings->tcpport = 0;   // 2000
+  settings->ppswire = false;   /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
 }
 
 void EEPROM_store()

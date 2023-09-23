@@ -198,7 +198,8 @@ TinyGPSCustom D_NMEA2_private;
 TinyGPSCustom D_NMEA2_legacy;
 TinyGPSCustom D_NMEA2_sensors;
 TinyGPSCustom D_NMEA2_debug;
-TinyGPSCustom D_relay;    /* 16 */
+TinyGPSCustom D_relay;
+TinyGPSCustom D_bluetooth;  /* 17 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -318,7 +319,8 @@ void NMEA_setup()
   D_NMEA2_legacy.begin  (gnss, psrf_d, term_num++);
   D_NMEA2_sensors.begin (gnss, psrf_d, term_num++);
   D_NMEA2_debug.begin   (gnss, psrf_d, term_num++);
-  D_relay.begin         (gnss, psrf_d, term_num++); /* 16 */
+  D_relay.begin         (gnss, psrf_d, term_num++);
+  D_bluetooth.begin     (gnss, psrf_d, term_num++); /* 17 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -1283,6 +1285,11 @@ void NMEA_Process_SRF_SKV_Sentences()
           if (D_relay.isUpdated()) {
             settings->relay = atoi(D_relay.value());
             Serial.print(F("Relay = ")); Serial.println(settings->relay);
+            cfg_is_updated = true;
+          }
+          if (D_bluetooth.isUpdated()) {
+            settings->bluetooth = atoi(D_bluetooth.value());
+            Serial.print(F("Bluetooth = ")); Serial.println(settings->bluetooth);
             cfg_is_updated = true;
           }
 

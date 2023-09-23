@@ -142,7 +142,7 @@ extern Adafruit_NeoPixel strip;
 #define SOC_GPIO_PIN_GNSS_PPS (hw_info.model == SOFTRF_MODEL_PRIME_MK3 ?  \
                                 SOC_GPIO_PIN_S3_GNSS_PPS :                \
                                 (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
-                                  (hw_info.revision >= 8 ?                \
+                                  ((hw_info.revision >= 8 || settings->ppswire) ? \
                                     SOC_GPIO_PIN_TBEAM_V08_PPS :          \
                                     SOC_UNUSED_PIN) :                     \
                                   SOC_UNUSED_PIN))
@@ -371,6 +371,8 @@ extern Adafruit_NeoPixel strip;
 #define SOC_GPIO_PIN_S3_LED_BLUE        7
 #define SOC_GPIO_PIN_S3_LED_WHITE       38
 #define SOC_GPIO_PIN_S3_LED_YELLOW      39
+
+// extern gpio_num_t middle_button_pin;  // for T-Beam v1.x
 
 extern WebServer server;
 

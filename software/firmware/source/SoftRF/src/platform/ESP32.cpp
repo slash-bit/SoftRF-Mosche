@@ -320,6 +320,8 @@ static uint32_t ESP32_getFlashId()
 int Wire_Trans_rval;
 // int axp_begin_rval;
 
+gpio_num_t middle_button_pin = (gpio_num_t) SOC_UNUSED_PIN;
+
 static void ESP32_setup()
 {
 #if !defined(SOFTRF_ADDRESS)
@@ -440,10 +442,12 @@ static void ESP32_setup()
 #endif /* CONFIG_IDF_TARGET_ESP32 */
   }
 
+#if 0   /* we use ToneAC (or external active buzzer), not LEDC */
   if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN) {
     ledcAttachPin(SOC_GPIO_PIN_BUZZER, LEDC_CHANNEL_BUZZER);
     ledcSetup(LEDC_CHANNEL_BUZZER, 0, LEDC_RESOLUTION_BUZZER);
   }
+#endif
 
   if (hw_info.model == SOFTRF_MODEL_SKYWATCH) {
     esp32_board = ESP32_TTGO_T_WATCH;
@@ -556,6 +560,11 @@ static void ESP32_setup()
         axp_2xxx.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
         axp_2xxx.clearIrqStatus();
 
+        //These lines were added to lyusupov's version in Sep 2023:
+        //axp_2xxx.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+        //axp_2xxx.disableTSPinMeasure();
+        //axp_2xxx.enableBattVoltageMeasure();
+
         axp_2xxx.enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ |
                            XPOWERS_AXP2101_PKEY_SHORT_IRQ);
 
@@ -568,6 +577,16 @@ static void ESP32_setup()
     }
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
+
+    /* use middle button on T-Beam v1.x to turn off Bluetooth */
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+        if (hw_info.revision == 8 || hw_info.revision == 12) {
+            middle_button_pin = (gpio_num_t) SOC_GPIO_PIN_TBEAM_V08_BUTTON;
+            pinMode(middle_button_pin, INPUT);
+            //gpio_pullup_en(middle_button_pin);
+        }
+    }
+
 #if defined(CONFIG_IDF_TARGET_ESP32S2)
   } else if (esp32_board == ESP32_S2_T8_V1_1) {
     lmic_pins.nss  = SOC_GPIO_PIN_T8_S2_LORA_SS;
@@ -960,19 +979,6 @@ static void ESP32_post_init()
 
   Serial.println();
 
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
-    Serial.println("Detected MODEL_PRIME_MK2");
-  else
-    { Serial.print("Detected model "); Serial.println(hw_info.model); }
-  Serial.print("hw_info.revision: "); Serial.println(hw_info.revision);
-
-  Serial.println();
-  Serial.print(F("CPU Freq = "));
-  Serial.print(getCpuFrequencyMhz());
-  Serial.println(F(" MHz"));
-
-  Serial.println();
-
   if (!uSD_is_mounted) {
     Serial.println(F("WARNING: unable to mount micro-SD card."));
   } else {
@@ -1003,6 +1009,22 @@ static void ESP32_post_init()
       uSD.fsBegin();
     }
   }
+
+#else /* not CONFIG_IDF_TARGET_ESP32S3 */
+
+  Serial.println();
+
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+    Serial.println("Detected MODEL_PRIME_MK2");
+  else
+    { Serial.print("Detected model "); Serial.println(hw_info.model); }
+  Serial.print("hw_info.revision: "); Serial.println(hw_info.revision);
+
+  Serial.println();
+  Serial.print(F("CPU Freq = "));
+  Serial.print(getCpuFrequencyMhz());
+  Serial.println(F(" MHz"));
+
 #endif /* CONFIG_IDF_TARGET_ESP32S3 */
 
   Serial.println();
@@ -1049,6 +1071,15 @@ static void ESP32_post_init()
     case D1090_BLUETOOTH :  Serial.println(F("Bluetooth")); break;
     case D1090_OFF       :
     default              :  Serial.println(F("NULL"));      break;
+  }
+
+  Serial.println();
+  switch (settings->bluetooth)
+  {
+    case BLUETOOTH_OFF   :  Serial.println(F("BT: OFF"));    break;
+    case BLUETOOTH_SPP   :  Serial.println(F("BT: SPP"));    break;
+    case BLUETOOTH_LE_HM10_SERIAL :  Serial.println(F("BT: LE"));    break;
+    default              :  Serial.println(F("BT?"));       break;
   }
 
   Serial.println();
@@ -2724,6 +2755,20 @@ static void ESP32_Button_setup()
 
 static void ESP32_Button_loop()
 {
+  /* use middle button on T-Beam to turn off Bluetooth */
+  /* this can help one reach the web interface */
+  static bool done = false;
+  if (settings->bluetooth != BLUETOOTH_OFF && middle_button_pin != SOC_UNUSED_PIN
+          && done == false && millis() > 15000) {
+    if (digitalRead(middle_button_pin) == 0) {
+      if (SoC->Bluetooth_ops) {
+          Serial.println(F("Turning off Bluetooth due to button press"));
+          SoC->Bluetooth_ops->fini();
+          done = true;   // only do this once, until next reboot
+      }
+    }
+  }
+
   if (( hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
        (hw_info.revision == 2 || hw_info.revision == 5)) ||
        esp32_board == ESP32_S2_T8_V1_1 ||

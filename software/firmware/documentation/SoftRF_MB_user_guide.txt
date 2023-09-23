@@ -3,9 +3,9 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated July 17, 2023
-to fit software version MB10a based on v1.0 with some parts of v1.2
-Latest version is always here:
+This version last updated Sep. 23, 2023
+to fit software version MB10e based on v1.0 with some parts of v1.2
+The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 
 
@@ -112,7 +112,7 @@ After several weeks in the apparently "off" mode, the battery installed in a T-B
 
 Turning the device on and off
 
-To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing, and the third button is a reset button.  After booting, the first button serves to switch between pages on the OLED display.
+To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing (but see below), and the third button is a reset button.  After booting, the first button serves to switch between pages on the OLED display.
 
 The Power Management Unit (PMU) on the T-Beam is always active.  The on/off button just sends instructions to the PMU.  The PMU can turn the power to individual parts of the board (e.g., the CPU, or the GNSS module) on or off.  There are 3 LEDs on the board.  The bright blue LED near the PMU is controlled by the PMU (with indirect instructions from the CPU).  The dim red LED near it signifies that the CPU is powered (I think).  The red LED near the GNSS module, when blinking, is indicating that the GNSS module has a "fix", i.e., is receiving signals from enough satellites.  If any of the 3 LEDs are lit, the board is not as close to "off" as it can be.
 
@@ -141,6 +141,8 @@ The Web Interface (T-Beam only)
 
 After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
+Note that when Bluetooth is active, the WiFI connection is sluggish, and attempting to load the status web page may fail.  Try several times.  If you manage get through to that page, the settings and firmware update pages automatically turn Bluetooth off (until you reboot), to allow more reliable access to those functions.  If you cannot get to the status page, one way to recover is via a USB terminal and Settings2.html (see the next section).  Another way is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
+
 
 Choosing the operational settings
 
@@ -149,7 +151,7 @@ Once the firmware is installed, before actual use in an aircraft, one must choos
 On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
 
 On the T-Echo, adjusting the settings is more difficult.  An Android app is available that can display and change the basic settings, see here: https://github.com/lyusupov/SoftRF/wiki/SoftRF-Configuration-Tool
-But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottom will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
+But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo (or T-Beam, for that matter) via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottom will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
 
 Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  See instructions later in this document in the "settings displayed, and adjusted, within the T-Echo" section.
 

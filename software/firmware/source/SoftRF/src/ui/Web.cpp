@@ -78,6 +78,20 @@ void Hex2Bin(String str, byte *buffer)
 }
 #endif
 
+void stop_bluetooth()
+{
+  static bool done = false;
+  if (done)
+      return;   // only do this once per boot
+  if (settings->bluetooth != BLUETOOTH_OFF) {
+      if (SoC->Bluetooth_ops) {
+          Serial.println(F("Stopping Bluetooth for web access"));
+          SoC->Bluetooth_ops->fini();
+          done = true;   // only do this once, until next reboot
+      }
+  }
+}
+
 static const char about_html[] PROGMEM = "<html>\
   <head>\
     <meta name='viewport' content='width=device-width, initial-scale=1'>\
@@ -231,6 +245,9 @@ void handleSettings() {
     return;
   }
 
+  stop_bluetooth();
+  yield();
+
   Serial.println(F("Constructing settings page..."));
 
   offset = Settings_temp;
@@ -344,6 +361,8 @@ void handleSettings() {
   len = strlen(offset);
   offset += len;
   size -= len;
+
+  yield();
 
   /* Radio specific part 1 */
   if (hw_info.rf == RF_IC_SX1276 || hw_info.rf == RF_IC_SX1262) {
@@ -521,6 +540,8 @@ void handleSettings() {
   offset += len;
   size -= len;
 
+  yield();
+
   /* SoC specific part 1 */
   if (SoC->id == SOC_ESP32) {
     snprintf_P ( offset, size,
@@ -585,6 +606,8 @@ void handleSettings() {
     offset += len;
     size -= len;
   }
+
+  yield();
 
   /* Common part 3 */
   snprintf_P ( offset, size,
@@ -792,6 +815,8 @@ void handleSettings() {
   offset += len;
   size -= len;
 
+  yield();
+
   /* Common part 4 */
   snprintf_P ( offset, size,
     PSTR("\
@@ -935,6 +960,24 @@ void handleSettings() {
     size -= len;
   }
 
+  /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+    snprintf_P ( offset, size,
+      PSTR("\
+<tr>\
+<th align=left>PPS wire hardware mod:</th>\
+<td align=right>\
+<input type='radio' name='ppswire' value='0' %s>Absent\
+<input type='radio' name='ppswire' value='1' %s>Present\
+</td>\
+</tr>"),
+  (!settings->ppswire ? "checked" : "") , (settings->ppswire ? "checked" : ""));
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+  }
+
   if (SoC->id == SOC_ESP32) {
     snprintf_P ( offset, size,
       PSTR("\
@@ -984,6 +1027,8 @@ void handleSettings() {
     size -= len;
   }
 #endif
+
+  yield();
 
   /* Common part 7 */
   snprintf_P ( offset, size,
@@ -1258,6 +1303,8 @@ void handleInput() {
     } else if (server.argName(i).equals("alarmlog")) {
       server.arg(i).toCharArray(idbuf, sizeof(idbuf));
       settings->logalarms = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("ppswire")) {
+      settings->ppswire = server.arg(i).toInt();
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -1280,7 +1327,8 @@ void handleInput() {
         if (key != 0x88888888)  settings->igc_key[0] = key;
 #endif
     }
-  }
+    yield();
+  }                // end for (server.args())
 
   /* enforce some restrictions on second NMEA output route */
   int nmea1 = settings->nmea_out;
@@ -1304,10 +1352,16 @@ void handleInput() {
         nmea2 = NMEA_OFF;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
   settings->nmea_out2 = nmea2;
-  if (nmea1==NMEA_BLUETOOTH || nmea2==NMEA_BLUETOOTH) {
-      if (settings->bluetooth == BLUETOOTH_OFF)
-          settings->bluetooth = BLUETOOTH_SPP;
+  //if (nmea1==NMEA_BLUETOOTH || nmea2==NMEA_BLUETOOTH
+  //      || settings->d1090 == D1090_BLUETOOTH || settings->gdl90 == GDL90_BLUETOOTH) {
+  //    if (settings->bluetooth == BLUETOOTH_OFF)
+  //        settings->bluetooth = BLUETOOTH_SPP;
+  //}
+  if (nmea1 != NMEA_BLUETOOTH && nmea2 != NMEA_BLUETOOTH
+          && settings->d1090 != D1090_BLUETOOTH && settings->gdl90 != GDL90_BLUETOOTH) {
+      settings->bluetooth = BLUETOOTH_OFF;
   }
+  Serial.print(F("Bluetooth (adjusted) = ")); Serial.println(settings->bluetooth);
 
   /* enforce some hardware restrictions */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
@@ -1368,6 +1422,7 @@ PSTR("<html>\
 <tr><th align=left>Power external</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
 <tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
+<tr><th align=left>PPS wire</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
 </table>\
@@ -1391,7 +1446,7 @@ PSTR("<html>\
   settings->gdl90, settings->d1090,
   settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
   settings->power_save, settings->power_external,
-  settings->freq_corr, settings->debug_flags, settings->logalarms,
+  settings->freq_corr, settings->ppswire, settings->debug_flags, settings->logalarms,
 //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
   (settings->igc_key[0]? 0x88888888 : 0),
   (settings->igc_key[1]? 0x88888888 : 0),
@@ -1442,6 +1497,7 @@ Serial.print(" Power save ");Serial.println(settings->power_save);
 Serial.print(" Power external ");Serial.println(settings->power_external);
 Serial.print(" Freq. correction ");Serial.println(settings->freq_corr);
 Serial.print(" Alarm Log ");Serial.println(settings->logalarms);
+Serial.print(" PPS wire ");Serial.println(settings->ppswire);
 Serial.print(" debug_flags ");Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)
 if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
@@ -1557,6 +1613,7 @@ void Web_setup()
 
   server.on("/firmware", HTTP_GET, [](){
     SoC->swSer_enableRx(false);
+    stop_bluetooth();
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), String(F("*")));
     server.send_P(200,

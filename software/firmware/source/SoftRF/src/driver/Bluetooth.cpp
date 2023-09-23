@@ -42,6 +42,8 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+#include "esp_bt.h"
+#include "esp_bt_main.h"
 #include "esp_gap_bt_api.h"
 
 #include "WiFi.h"   // HOSTNAME
@@ -334,7 +336,19 @@ static void ESP32_Bluetooth_loop()
 
 static void ESP32_Bluetooth_fini()
 {
-  BLEDevice::deinit();
+  static bool done = false;
+  if (done)
+      return;   // only do this once per boot
+  if (settings->bluetooth == BLUETOOTH_LE_HM10_SERIAL) {
+      BLEDevice::deinit();
+  } else if (settings->bluetooth == BLUETOOTH_SPP) {
+      esp_bluedroid_disable();
+      esp_bluedroid_deinit();
+      esp_bt_controller_disable();
+      esp_bt_controller_deinit();
+  }
+  done = true;
+  delay(500);
 }
 
 static int ESP32_Bluetooth_available()
