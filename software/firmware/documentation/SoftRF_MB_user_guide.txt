@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Sep. 23, 2023
-to fit software version MB10e based on v1.0 with some parts of v1.2
+This version last updated Oct. 5, 2023
+to fit software version MB10f based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 
@@ -141,7 +141,7 @@ The Web Interface (T-Beam only)
 
 After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
-Note that when Bluetooth is active, the WiFI connection is sluggish, and attempting to load the status web page may fail.  Try several times.  If you manage get through to that page, the settings and firmware update pages automatically turn Bluetooth off (until you reboot), to allow more reliable access to those functions.  If you cannot get to the status page, one way to recover is via a USB terminal and Settings2.html (see the next section).  Another way is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
+Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
 
 
 Choosing the operational settings
@@ -208,7 +208,7 @@ NMEA output: this selects the method by which the data is sent out: Off (no data
 NMEA sentences: Data is sent to connected devices via text "sentences" in the NMEA format.  You can turn on or off each of the following types of sentences:  GNSS (position data), Private (SoftRF debugging, leave off), 
 Legacy (traffic data in the same format used by FLARM), Sensors (e.g., barometric sensor, if you attach such to the board), and Debug (debugging of my SoftRF version, leave off).
 
-NMEA secondary output: two output routes are allowed simultaneously, e.g., Bluetooth and USB.  Or, UDP and TCP.
+NMEA secondary output: two output routes are allowed simultaneously, e.g., Bluetooth and USB.  Or, UDP and TCP.  Note: Bluetooth is not allowed at the same time as another wireless option (UDP or TCP).
 
 NMEA secondary output sentences: same choices as for the primary NMEA output.  E.g., can send GNSS data to the primary and traffic messages to the secondary.  By default both output get the same sentences: GNSS, traffic and sensors.
 

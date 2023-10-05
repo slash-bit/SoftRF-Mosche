@@ -344,10 +344,10 @@ void RF_SetChannel(void)
 
     now_ms = millis();
     pps_btime_ms = SoC->get_PPS_TimeMarker();
-    if (now_ms > pps_btime_ms + 1010)
-      pps_btime_ms += 1000;
 
     if (pps_btime_ms) {
+      if (now_ms > pps_btime_ms + 1010)
+        pps_btime_ms += 1000;
       uint32_t last_Commit_Time = now_ms - gnss.time.age();
       if (pps_btime_ms <= last_Commit_Time) {
         time_corr_neg = (last_Commit_Time - pps_btime_ms) % 1000;

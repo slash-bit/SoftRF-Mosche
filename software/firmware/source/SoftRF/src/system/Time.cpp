@@ -188,6 +188,8 @@ void Time_loop()
 
         pps_btime_ms = SoC->get_PPS_TimeMarker();
         if (pps_btime_ms > 0) {
+          if (now_ms > pps_btime_ms + 1010)
+            pps_btime_ms += 1000;
           newtime = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION;   /* seems to receive FLARM better */
         } else {   /* PPS not available */
           time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;

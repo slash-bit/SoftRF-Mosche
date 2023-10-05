@@ -78,8 +78,18 @@ void Hex2Bin(String str, byte *buffer)
 }
 #endif
 
+// Compiler said:
+//  Global variables use 63296 bytes of dynamic memory, maximum is 327680 bytes.
+// Saw this in serial output:
+//  handleRoot()...
+//  Free memory: 19904
+//  Stopping Bluetooth for web access
+//  Free memory: 68892
+
 void stop_bluetooth()
 {
+  Serial.print(F("Free memory: "));
+  Serial.println(ESP.getFreeHeap());
   static bool done = false;
   if (done)
       return;   // only do this once per boot
@@ -90,6 +100,9 @@ void stop_bluetooth()
           done = true;   // only do this once, until next reboot
       }
   }
+  yield();
+  Serial.print(F("Free memory: "));
+  Serial.println(ESP.getFreeHeap());
 }
 
 static const char about_html[] PROGMEM = "<html>\
@@ -236,6 +249,10 @@ void alarmlogfile(){
 
 void handleSettings() {
 
+Serial.println("handleSettings()...");
+
+  stop_bluetooth();
+
   size_t size = 10900;
   char *offset;
   size_t len = 0;
@@ -244,9 +261,6 @@ void handleSettings() {
   if (Settings_temp == NULL) {
     return;
   }
-
-  stop_bluetooth();
-  yield();
 
   Serial.println(F("Constructing settings page..."));
 
@@ -1055,6 +1069,10 @@ void handleSettings() {
 
 void handleRoot() {
 
+Serial.println("handleRoot()...");
+
+  stop_bluetooth();
+
   int sec = millis() / 1000;
   int min = sec / 60;
   int hr = min / 60;
@@ -1090,6 +1108,7 @@ void handleRoot() {
   <tr><!-- <td align=left><h1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</h1></td> -->\
   <td align=center><h1>SoftRF status</h1></td>\
   <!-- <td align=right><img src='/logo.png'></td> --></tr>\
+ %s\
  </table>\
  <table width=100%%>\
   <tr><th align=left>Device Id</th><td align=right>%06X</td></tr>\
@@ -1129,9 +1148,10 @@ void handleRoot() {
  <hr>\
  <table width=100%%>\
   <tr>\
-    <td align=left><input type=button onClick=\"location.href='/settings'\" value='Settings'></td>\
-    <td align=center><input type=button onClick=\"location.href='/about'\" value='About'></td>\
-    <td align=right><input type=button onClick=\"location.href='/firmware'\" value='Firmware update'></td>\
+    <td><input type=button onClick=\"location.href='/settings'\" value='Settings'></td>\
+    <td><input type=button onClick=\"location.href='/firmware'\" value='Firmware update'></td>\
+    <td><input type=button onClick=\"location.href='/reboot'\" value='Reboot'></td>\
+    <td><input type=button onClick=\"location.href='/about'\" value='About'></td>\
   </tr>\
  </table>\
  <hr>\
@@ -1152,6 +1172,8 @@ void handleRoot() {
  </table>\
 </body>\
 </html>"),
+    (settings->bluetooth == BLUETOOTH_OFF ? "" :
+          "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>"),
     ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     GNSS_name[hw_info.gnss],
@@ -1568,6 +1590,10 @@ void Web_setup()
   server.on ( "/", handleRoot );
 
   server.on ( "/settings", handleSettings );
+
+  server.on ( "/reboot", []() {
+    reboot();
+  } );
 
   server.on ( "/about", []() {
     serve_P_html(about_html);

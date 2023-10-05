@@ -1298,10 +1298,11 @@ void PickGNSSFix()
 
     isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
     if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
-      for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // skip CS and *
-        if (settings->nmea_g && (GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
+      if (settings->nmea_g || settings->nmea2_g) {
+        for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // skip CS and *
+          if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
 
-          size_t write_size = GNSS_cnt - ndx + 1;
+            size_t write_size = GNSS_cnt - ndx + 1;
 
 #if 0
           if (!strncmp((char *) &GNSSbuf[ndx+3], "GGA,", strlen("GGA,"))) {
@@ -1317,27 +1318,27 @@ void PickGNSSFix()
           }
 #endif
 
-          /*
-           * Work around issue with "always 0.0,M" GGA geoid separation value
-           * given by some Chinese GNSS chipsets
-           */
+            /*
+             * Work around issue with "always 0.0,M" GGA geoid separation value
+             * given by some Chinese GNSS chipsets
+             */
 #if defined(USE_NMEALIB)
-          if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
-              !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
-              gnss.separation.meters() == 0.0) {
-            NMEA_GGA();
-          }
-          else
-#endif
-          {
-            if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
-              strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
+            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
+                !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
+                gnss.separation.meters() == 0.0) {
+              NMEA_GGA();
             }
-            if (settings->nmea_g || settings->nmea2_g)
+            else
+#endif
+            {
+              if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
+                strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
+              }
               NMEA_Outs(settings->nmea_g, settings->nmea2_g, &GNSSbuf[ndx], write_size, true);
-          }
+            }
 
-          break;
+            break;
+          }
         }
       }
 

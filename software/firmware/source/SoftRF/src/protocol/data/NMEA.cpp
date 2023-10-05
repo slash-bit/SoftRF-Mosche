@@ -92,8 +92,8 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
         while (client.available() && i < RXbuffer_size - 1) {
             RXbuffer[i] = client.read();
             i++;
-            RXbuffer[i] = '\0';
         }
+        RXbuffer[i] = '\0';
 if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_RESVD2)) {
 Serial.print("TCP>");
 Serial.print(RXbuffer);
@@ -366,10 +366,10 @@ void NMEA_setup()
         NmeaTCPServer.setNoDelay(true);
     } else if (settings->tcpmode == TCP_MODE_CLIENT) {
         if (WiFi_connect_TCP()) {
-            Serial.print(F("Connected as TCP client to port 2000 on host: "));
+            Serial.print(F("Connected as TCP client to host: "));
             Serial.println(settings->host_ip);
         } else {
-            Serial.print(F("Failed to connect to port 2000 on host: "));
+            Serial.print(F("Failed to connect to host: "));
             Serial.println(settings->host_ip);
         }
     }
@@ -440,6 +440,7 @@ void NMEA_loop()
 
     switch (settings->tcpmode)
     {
+
     case TCP_MODE_CLIENT:
 
     WiFi_flush_TCP();

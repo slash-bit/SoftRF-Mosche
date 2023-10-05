@@ -382,6 +382,7 @@ static int ESP32_Bluetooth_read()
   {
 #if !defined(CONFIG_IDF_TARGET_ESP32S3)
   case BLUETOOTH_SPP:
+//Serial.println("BT_read()");
     rval = SerialBT.read();
     break;
 #endif /* CONFIG_IDF_TARGET_ESP32S3 */

@@ -367,6 +367,8 @@ void loop()
   // Handle DNS
   WiFi_loop();
 
+yield();
+
   // Handle Web
   Web_loop();
 
@@ -382,6 +384,8 @@ void loop()
   if (SoC->Bluetooth_ops) {
     SoC->Bluetooth_ops->loop();
   }
+
+yield();
 
   if (SoC->USB_ops) {
     SoC->USB_ops->loop();
