@@ -229,7 +229,7 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
   delay(100);
 
   hw_info.baro = Baro_setup();
-Serial.println("... Baro_setup() returned");
+Serial.println(F("... Baro_setup() returned"));
 
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();
@@ -367,8 +367,6 @@ void loop()
   // Handle DNS
   WiFi_loop();
 
-yield();
-
   // Handle Web
   Web_loop();
 
@@ -384,8 +382,6 @@ yield();
   if (SoC->Bluetooth_ops) {
     SoC->Bluetooth_ops->loop();
   }
-
-yield();
 
   if (SoC->USB_ops) {
     SoC->USB_ops->loop();
@@ -531,6 +527,10 @@ void normal()
       ThisAircraft.longitude = gnss.location.lng();
 //    newfix = newfix && (ThisAircraft.latitude != lat || ThisAircraft.longitude != lon);
       ThisAircraft.altitude = gnss.altitude.meters();
+      if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
+        /* for "winch" aircraft type, elevate above ground */
+        ThisAircraft.altitude += ((ThisAircraft.timestamp & 0x03) * 100) + 100;
+      }
       ThisAircraft.course = gnss.course.deg();
       ThisAircraft.speed = gnss.speed.knots();
       ThisAircraft.hdop = (uint16_t) gnss.hdop.value();

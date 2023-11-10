@@ -18,6 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#if !defined(EXCLUDE_UAT978)
+
 #ifndef PROTOCOL_UAT978_H
 #define PROTOCOL_UAT978_H
 
@@ -69,3 +71,5 @@ bool   uat978_decode(void *, ufo_t *, ufo_t *);
 size_t uat978_encode(void *, ufo_t *);
 
 #endif /* PROTOCOL_UAT978_H */
+
+#endif /* EXCLUDE_UAT978 */

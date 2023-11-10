@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB10f"
+#define SOFTRF_FIRMWARE_VERSION "MB10h"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -130,15 +130,15 @@ typedef struct UFO {
     int8_t    alarm_level;
     int8_t    alert_level;
 
-    time_t    timestamp;
+    time_t    timestamp;      // seconds
     time_t    timerelayed;
     uint32_t  addr;
-    float     latitude;
+    float     latitude;      // signed decimal-degrees
     float     longitude;
-    float     altitude;
+    float     altitude;      // meters
     float     geoid_separation; /* metres */
     float     pressure_altitude;
-    float     course;     /* CoG */
+    float     course;     /* CoG */   // degrees
     float     heading;    /* where the nose points = course - wind drift */
     float     speed;      /* ground speed in knots */
     float     vs;         /* feet per minute vertical speed */
@@ -159,20 +159,19 @@ typedef struct UFO {
     float     adj_distance;
 
     /* 'legacy' specific data */
-    int16_t   fla_ns[4];     /* quarter-meters per second */
+    int16_t   fla_ns[4];     // quarter-meters per second
     int16_t   fla_ew[4];
-    int16_t   air_ns[6];     /* corrected to air reference frame */
+    int16_t   air_ns[6];     // corrected to air reference frame
     int16_t   air_ew[6];
-    int32_t   dx;        /* EW distance to this other aircraft, in meters */
-    int32_t   dy;        /* NS distance */
+    int32_t   dx;        // EW distance to this other aircraft, in meters
+    int32_t   dy;        // NS distance
     bool      stealth;
     bool      no_track;
     uint8_t   aircraft_type;
     uint8_t   airborne;
-    int8_t    circling;   /* 1=right, -1=left */
+    int8_t    circling;   // 1=right, -1=left
 
-    /* for linking into a list */
-    uint8_t   next;
+    uint8_t   next;       // for linking into a list
 
     int8_t    rssi; /* SX1276 only */
     uint16_t  hdop; /* cm */

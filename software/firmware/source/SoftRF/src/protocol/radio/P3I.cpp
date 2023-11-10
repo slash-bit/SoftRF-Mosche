@@ -117,7 +117,9 @@ size_t p3i_encode(void *p3i_pkt, ufo_t *this_aircraft) {
   float lat = this_aircraft->latitude;
   float lon = this_aircraft->longitude;
   int16_t alt = (int16_t) this_aircraft->altitude;
-  unsigned int aircraft_type =  this_aircraft->aircraft_type;
+  unsigned int aircraft_type = this_aircraft->aircraft_type;
+  if (aircraft_type == AIRCRAFT_TYPE_WINCH)
+        aircraft_type = AIRCRAFT_TYPE_STATIC;
 
   uint8_t cs = 0;
   uint8_t *p = (uint8_t *)pkt;

@@ -159,11 +159,21 @@ size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
   pos.Latitude  = (int32_t) (this_aircraft->latitude * 600000);
   pos.Longitude = (int32_t) (this_aircraft->longitude * 600000);
   pos.Altitude  = (int32_t) (this_aircraft->altitude * 10);
-  if (this_aircraft->pressure_altitude != 0.0) {
-    pos.StdAltitude = (int32_t) (this_aircraft->pressure_altitude * 10);
-    pos.ClimbRate = this_aircraft->stealth ?
-                    0 : (int32_t) (this_aircraft->vs / (_GPS_FEET_PER_METER * 6.0));
+
+  uint8_t aircraft_type = this_aircraft->aircraft_type;
+  if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
+      aircraft_type = AIRCRAFT_TYPE_STATIC;
+      pos.ClimbRate = 0;
+      pos.StdAltitude = pos.Altitude;
+  } else {
+      pos.ClimbRate = this_aircraft->stealth ?
+           0 : (int32_t) (this_aircraft->vs / (_GPS_FEET_PER_METER * 6.0));
+      if (this_aircraft->pressure_altitude != 0.0)
+          pos.StdAltitude = (int32_t) (this_aircraft->pressure_altitude * 10);
+      else
+          pos.StdAltitude = pos.Altitude;
   }
+
   pos.Heading = (int16_t) (this_aircraft->course * 10);
   pos.Speed   = (int16_t) (this_aircraft->speed * 10 * _GPS_MPS_PER_KNOT);
   pos.HDOP    = (uint8_t) (this_aircraft->hdop / 10);
@@ -184,7 +194,7 @@ size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
 
   ogn_tx_pkt.Packet.calcAddrParity();
 
-  ogn_tx_pkt.Packet.Position.AcftType = (int16_t) this_aircraft->aircraft_type;
+  ogn_tx_pkt.Packet.Position.AcftType = (int16_t) aircraft_type;
   ogn_tx_pkt.Packet.Position.Stealth  = (int16_t) this_aircraft->stealth;
   ogn_tx_pkt.Packet.Position.Time     = second();
 

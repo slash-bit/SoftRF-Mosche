@@ -398,15 +398,22 @@ size_t legacy_encode(void *legacy_pkt, ufo_t *this_aircraft) {
     pkt->stealth = this_aircraft->stealth;
     pkt->no_track = this_aircraft->no_track;
 
-    pkt->aircraft_type = this_aircraft->aircraft_type;
+    uint8_t aircraft_type = this_aircraft->aircraft_type;
+    if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
+        aircraft_type = AIRCRAFT_TYPE_STATIC;
+        pkt->airborne = 1;
+    }
+    pkt->aircraft_type = aircraft_type;
 
     pkt->gps = 323;
 
     /* project position 2 seconds into future, as it seems that FLARM does that */
-    course += this_aircraft->turnrate;     // average course over the next 2 seconds
-    float offset = speedf * (2.0 / 111300.0);   // degslat/sec * 2 sec = degs moved
-    lat += (offset * cos_approx(course));
-    lon += (offset * sin_approx(course) * InvCosLat());
+    if (aircraft_type != AIRCRAFT_TYPE_STATIC) {
+        course += this_aircraft->turnrate;     // average course over the next 2 seconds
+        float offset = speedf * (2.0 / 111300.0);   // degslat/sec * 2 sec = degs moved
+        lat += (offset * cos_approx(course));
+        lon += (offset * sin_approx(course) * InvCosLat());
+    }
 
     // this section revised by MB on 220526
     if (lat < 0.0)

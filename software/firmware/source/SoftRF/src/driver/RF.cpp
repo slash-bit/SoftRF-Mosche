@@ -289,7 +289,9 @@ byte RF_setup(void)
       case RF_PROTOCOL_OGNTP:     p = &ogntp_proto_desc;  break;
       case RF_PROTOCOL_P3I:       p = &p3i_proto_desc;    break;
       case RF_PROTOCOL_FANET:     p = &fanet_proto_desc;  break;
+#if !defined(EXCLUDE_UAT978)
       case RF_PROTOCOL_ADSB_UAT:  p = &uat978_proto_desc; break;
+#endif
       case RF_PROTOCOL_LEGACY:
       default:                    p = &legacy_proto_desc; break;
     }
@@ -639,7 +641,9 @@ uint8_t RF_Payload_Size(uint8_t protocol)
     case RF_PROTOCOL_OGNTP:     return ogntp_proto_desc.payload_size;
     case RF_PROTOCOL_P3I:       return p3i_proto_desc.payload_size;
     case RF_PROTOCOL_FANET:     return fanet_proto_desc.payload_size;
+#if !defined(EXCLUDE_UAT978)
     case RF_PROTOCOL_ADSB_UAT:  return uat978_proto_desc.payload_size;
+#endif
     default:                    return 0;
   }
 }
@@ -1551,6 +1555,7 @@ static void uatm_setup()
 
   protocol_encode = &uat978_encode;
   protocol_decode = &uat978_decode;
+
 }
 
 static bool uatm_receive()

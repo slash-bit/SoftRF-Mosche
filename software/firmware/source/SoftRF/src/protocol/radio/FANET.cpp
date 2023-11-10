@@ -80,7 +80,8 @@ const uint8_t aircraft_type_to_fanet[] PROGMEM = {
 	FANET_AIRCRAFT_TYPE_BALLOON,
 	FANET_AIRCRAFT_TYPE_UAV,
 	FANET_AIRCRAFT_TYPE_OTHER,
-	FANET_AIRCRAFT_TYPE_OTHER
+	FANET_AIRCRAFT_TYPE_OTHER,
+	FANET_AIRCRAFT_TYPE_OTHER    // added for "winch"
 };
 
 const uint8_t aircraft_type_from_fanet[] PROGMEM = {
@@ -94,7 +95,7 @@ const uint8_t aircraft_type_from_fanet[] PROGMEM = {
 	AIRCRAFT_TYPE_UAV
 };
 
-#define AT_TO_FANET(x)  (x > 15 ? \
+#define AT_TO_FANET(x)  (x > 16 ? \
    FANET_AIRCRAFT_TYPE_OTHER : pgm_read_byte(&aircraft_type_to_fanet[x]))
 
 #define AT_FROM_FANET(x)  (x > 7 ? \
@@ -338,7 +339,7 @@ size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
   pkt->track_online   = (this_aircraft->no_track ? 0 : 1);
   pkt->aircraft_type  = AT_TO_FANET(aircraft_type);
 
-  int altitude        = constrain(alt, 0, 8190);
+  int altitude = constrain(alt, 0, 8190);
   pkt->altitude_scale = altitude > 2047 ? (altitude = (altitude + 2) / 4, 1) : 0;
   pkt->altitude_msb   = (altitude & 0x700) >> 8;
   pkt->altitude_lsb   = (altitude & 0x0FF);

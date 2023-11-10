@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Oct. 5, 2023
-to fit software version MB10f based on v1.0 with some parts of v1.2
+This version last updated Nov. 9, 2023
+to fit software version MB10h based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 
@@ -101,22 +101,24 @@ How to power the SoftRF device
 
 There are basically 3 options:
 
-One can install an 18650 size cylindrical lithium-ion cell in the battery holder of the T-Beam (or a small Lithium-polymer pouch battery in the T-Echo), and run the device on that battery.  (Be sure to buy FLAT TOP and not BUTTON TOP 18650 batteries as only FLAT TOP will fit in the holder.)  This will suffice for long flights.  The battery can be charged via the USB port of the T-Beam or T-Echo.  When a charger is attached, the board turns on, one can then turn it off to make the charging process somewhat faster.  There is no indication on the T-Beam of when the charging is complete.  If your charger gets warm to the touch while charging, it will be cool to the touch when no longer charging at a significant rate.
+One can install an 18650 size cylindrical lithium-ion cell in the battery holder of the T-Beam (or a small Lithium-polymer pouch battery in the T-Echo), and run the device on that battery.  (Be sure to buy FLAT TOP and not BUTTON TOP 18650 batteries as only FLAT TOP will fit in the holder.)  This will suffice for long flights.  The battery can be charged via the USB port of the T-Beam or T-Echo.  When a charger is attached, the board turns on, one can then turn it off to make the charging process somewhat faster.  On the T-Beam v1.2, once turned "off", the blue LED indicates the charging.  There is no indication on the older T-Beam models of when the charging is complete.  If your charger gets warm to the touch while charging, it will be cool to the touch when no longer charging at a significant rate.
 
 Or, one can power the T-Beam via the USB port, without installing a battery on the board.  Any USB power source will do.  You may install a 12V to 5V dc-dc converter and use the aircraft main power so that SoftRF (plugged in via a USB cable) turns on when aircraft power is turned on.  The needed current is about 120 mA normally, perhaps double that during the very short transmission pulses (1 % of the time).  A disadvantage of this approach is that, after sitting unpowered for a while, the device may take a relatively long time to acquire a GNSS fix.  An advantage is that the device can be mounted "permanently" in the aircraft, one does not need to dismount it and take it elsewhere to charge it.
 
 Or, a hybrid power system can be used, combining external USB power and an on-board battery.  That way the USB power charges the on-board battery while the device is in use.  If the external power fails the device will keep running on the battery.  If mounted in the aircraft in an inaccessible way, one can use the "external power" option in the settings (unique to my version of SoftRF) which will automatically turn the device off after several conditions are met: the device was running for at least an hour, the aircraft is not airborne, the external power has been turned off, and the battery voltage has decreased to under 3.9 volts.  But, if you store the device, with a lithium battery, in the glider trailer that gets hot in the summer sun, you may be nervous about the possibility of a fire.  Your choice.
 
-After several weeks in the apparently "off" mode, the battery installed in a T-Beam may be depleted.  This seems to happen in some boards more than others.  Perhaps those with a barometric sensor added have a charge leak that causes that.  Always recharge the battery before attempting to use the device following a storage period of more than a couple of weeks.
+After several weeks in the apparently "off" mode, the battery installed in a T-Beam may be depleted.  This seems to happen in some boards more than others.  Perhaps those with a barometric sensor added have a charge leak that causes that?  Always recharge the battery before attempting to use the device following a storage period of more than a couple of weeks.
 
 
 Turning the device on and off
 
-To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button does nothing (but see below), and the third button is a reset button.  After booting, the first button serves to switch between pages on the OLED display.
+To turn on the T-Beam, press and hold the button closest to the USB jack for about 2 seconds.  Once LEDs and/or the OLED display light up, can let go of the button.  To turn off the T-Beam, press and hold the button closest to the USB jack until the dim red LED turns off - about 8 seconds.  The middle button usually does nothing (but see below), and the third button is a reset button.  After booting, the first button serves to switch between pages on the OLED display.
 
-The Power Management Unit (PMU) on the T-Beam is always active.  The on/off button just sends instructions to the PMU.  The PMU can turn the power to individual parts of the board (e.g., the CPU, or the GNSS module) on or off.  There are 3 LEDs on the board.  The bright blue LED near the PMU is controlled by the PMU (with indirect instructions from the CPU).  The dim red LED near it signifies that the CPU is powered (I think).  The red LED near the GNSS module, when blinking, is indicating that the GNSS module has a "fix", i.e., is receiving signals from enough satellites.  If any of the 3 LEDs are lit, the board is not as close to "off" as it can be.
+The Power Management Unit (PMU) on the T-Beam is always active.  The on/off button just sends instructions to the PMU.  The PMU can turn the power to individual parts of the board (e.g., the CPU, or the GNSS module) on or off.  There are 3 LEDs on the board.  The bright blue LED near the PMU is controlled by the PMU (with indirect instructions from the CPU).  The dim red LED near it signifies that the CPU is powered.  The red LED near the GNSS module, when blinking, is indicating that the GNSS module has a "fix", i.e., is receiving signals from enough satellites.  If either, or the blue LED, are lit, the board is not as close to "off" as it can be.
 
 If a battery is installed on the board, the T-Beam is never completely turned "off".  Always remove the battery from the holder before soldering anything to the board.
+
+After booting, SoftRF waits for the GNSS module to determine its location.  On a T-Beam (v1.x) the blue LED blinks rapidly (4 times per second) until a "fix" is achieved, at which point the GNSS red LED starts blinking slowly (once per second).  One can also see the number of satellites on the OLED display.  After that, if transmissions are off the blue LED is off.  If on, it stays lit, unless the battery voltage is low, in which case it blinks slowly.
 
 The T-Echo has a Reset button and a Mode button.  Pressing the first, or pressing and holding the second, turns it on.  To turn it off, press and hold the Mode button.  Press the Mode button briefly to cycle through several screens.  Some of the screens only show "NO FIX" if a GNSS fix is not yet available.  The last screen (added in my version) shows most of the SoftRF settings - see below about changing the settings.  Find more info about operating the T-Echo ("Badge Edition") here:
 https://github.com/lyusupov/SoftRF/wiki/Badge-Edition
@@ -141,7 +143,7 @@ The Web Interface (T-Beam only)
 
 After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
 
-Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
+Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (except in "winch" mode) is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
 
 
 Choosing the operational settings
@@ -151,9 +153,11 @@ Once the firmware is installed, before actual use in an aircraft, one must choos
 On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can choose the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, and go to the Settings page again, to check that your chosen settings are indeed in effect.
 
 On the T-Echo, adjusting the settings is more difficult.  An Android app is available that can display and change the basic settings, see here: https://github.com/lyusupov/SoftRF/wiki/SoftRF-Configuration-Tool
-But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID. A second method is to connect the T-Echo (or T-Beam, for that matter) via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottom will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo.  This will cause the T-Echo to reboot with the new settings.
+But that tool does not offer the "Legacy" alarm trigger method.  And does not know about the additional settings in my version that are absent from the mainline version of SoftRF, e.g., setting the aircraft ID.
 
-Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  See instructions later in this document in the "settings displayed, and adjusted, within the T-Echo" section.
+A second method is to connect the T-Echo (or T-Beam, for that matter) via a USB cable to a computer with has a "terminal" program that can access the USB port as if it was a serial port.  Alternatively, use a Bluetooth terminal app.  In a web browser, open up one of the HTML files from this folder: https://github.com/moshe-braner/SoftRF/tree/master/software/app/Settings - the settings1 file for the basic settings, and the settings2 file for the additional settings.  In these open HTML pages, one can select the settings in the browser.  When done, be sure to click somewhere outside the input field last changed.  The cryptic $PSRF... line of text at the bottom will change.  Copy that line, and paste it into the terminal program so that it will be sent to the T-Echo (or T-Beam).  This will cause the device to reboot with the new settings.
+
+Because adjusting the settings on the T-Echo is more difficult, I've added a third method of adjusting some of the settings in the T-Echo, within the device, using the display & buttons.  See instructions later in this document in the section "settings displayed, and adjusted, within the T-Echo".
 
 
 Description of the settings:
@@ -166,15 +170,15 @@ ICAO ID: you can enter any ID you want (6 HEX digits), but normally this would b
 
 ID type to use: You can choose Random, ICAO (the ID entered above), Device (the fixed device ID), or Anonymous.  The latter is random but is fixed for the flight, while Random changes during the flight.  If you choose ICAO (best), or device ID, you can register your chosen ID on http://ddb.glidernet.org/ as your aircraft.  If you don't register it then only the cryptic ID will show up on OGN viewers such as https://glidertracker.org/ instead of your N number or tail number.
 
-Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT want to include in traffic data (and collision warnings) reported by SoftRF.  E.g., if your towplane has FLARM and you tend to get unnecessary collision warning during the tow.  Leave as 000000 to not use this feature.  Note: signals from an aircraft ID identical to the ID of this one are always ignored, no need to enter that here.  E.g., if using two SoftRF and/or FLARM devices in the same aircraft, set both to the same ICAO ID - should probably also set Tx Power of one of them to "off" - and then SoftRF will ignore the other device.
+Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT want to include in traffic data (and collision warnings) reported by SoftRF.  E.g., if your towplane has FLARM and you tend to get unnecessary collision warning during the tow.  Leave as 000000 to not use this feature.  Note: signals from an aircraft ID identical to the ID of this one are always ignored, no need to enter that here.  E.g., if using two SoftRF and/or FLARM devices in the same aircraft, set both to the same ICAO ID and then SoftRF will ignore the other device.  (Should probably also set Tx Power of one of them to "off".)
 
-Aircraft ID to follow: You can enter an aircraft (or device) ID to prioritize in traffic reports.  E.g., your flying buddy in another aircraft.  Leave as 000000 to not use this feature.  Normally SoftRF reports up to 8 aircraft, selecting the closest ones.  If an ID to follow is specified, it will be shown even if it is not one of the 8 closest.  A close-by aircraft that is a collision danger will always take priority though.
+Aircraft ID to follow: You can enter an aircraft (or device) ID to prioritize in traffic reports.  E.g., your flying buddy in another aircraft.  Leave as 000000 to not use this feature.  SoftRF reports up to 8 aircraft, normally selecting the closest ones.  If an ID to follow is specified, it will be shown even if it is not one of the 8 closest.  A close-by aircraft that is a collision danger will always take priority though.
 
 Protocol:  Choose "Legacy" for the FLARM radio protocol.  Legacy is visible to FLARMS, to SoftRF devices in Legacy mode, and to OGN stations. OGNTP is invisible to FLARMS but visible to OGN stations.  If you are using this device to see and be seen by other gliders using FLARM, change it to Legacy.  For towplanes: If the device is setting off collision alerts on tow, it can be configured to OGNTP, so that it does not alert FLARMs, but is still visible to OGN receivers on the ground for logging purposes.
 
 Region: you must choose your geographical region, otherwise the radio will be on the wrong frequency and fail to communicate with the devices in other aircraft in your area.  E.g., choose EU (868 MHz) in Europe, and US (915 MHz) in the USA and Canada.
 
-Aircraft type: E.g., glider, powered plane, etc.  This is important for collision avoidance and situational awareness, and also for OGN tracking.
+Aircraft type: E.g., glider, powered plane, etc.  This is important for collision avoidance and situational awareness, and also for OGN tracking.  This version of SoftRF added the aircraft type "winch", see the relevant section below.
 
 Alarm trigger: this setting chooses an algorithm to base collision warnings on.  Recommended: "Legacy" (unique to my version), which mimics what FLARM does, predicting near-future paths of circling aircraft.  If neither aircraft is circling, this algorithm will automatically revert to the "Vector" method, which extrapolates straight lines.  And if movement is not determined, that (in my version) will revert to "Distance", which warns simply by the distance between the aircraft.  Thus, if you select "Legacy", then ALL the algorithms are used as appropriate.  If you select "None" then you will not get collision warnings.
 
@@ -220,7 +224,7 @@ Dump1090: yet another local data transfer protocol, usually leave Off.
 
 Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
 
-Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".
+Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".  Note: this feature currently supported only on T-Beam v1.0 and v1.1.
 
 Air Relay: Optional relaying of radio packets from other aircraft by airborne aircraft.  The relaying is transparent, and happens no more than once every 5 seconds in total, and once every 15 seconds for any given landed aircraft.  Packets are relayed one hop and not relayed again.  Recommended setting: "Landed", meaning aircraft that landed out (or back home) will be "seen" from farther away (and perhaps by an OGN ground station) if airborne traffic with SoftRF is in the area to relay the data.  Another option is to relay all aircraft that are more than 10 km away or 1 km lower (or landed).  Airborne traffic is relayed in a way that makes it visible to SoftRF but invisible to FLARM (and visible to OGNbase but probably not standard OGN ground stations), since otherwise the originating FLARM "sees itself".
 
@@ -275,6 +279,11 @@ The settings accessible via this method are:
 Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.  Use a Bluetooth or USB terminal app and the HTML files mentioned above.
 
 
+Winch mode
+
+The "aircraft type" winch is intended for a device mounted on the ground (e.g., at the winch): The transmitted aircraft type is "static", and the transmitted altitude alternates between 100, 200, 300 and 400 meters above ground level (1 second each, then repeat).  While in winch mode, clicking the middle button of the T-Beam (v1.x) toggles between full power transmissions and no transmissions.  This allows turning on the warnings when launches are about to happen, and pause them when launches are paused.  The transmissions being active is denoted by both the OLED display and the blue LED.
+
+
 Uploading voice files (T-Beam only)
 
 If the voice warnings are activated but audio data has not been uploaded, the warnings will say the single word "traffic".  To get the full voice messages, download the waves.tar file from this page:
@@ -295,7 +304,7 @@ The external device can be a dedicated display for traffic data, for example:
 (and my github repository includes an improved version of the firmware for SkyView:
   https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SkyView
 
-Alternatively, the external device can be a glide computer, such as the ILEC SN10, or an e-reader, phone or tablet running the XCsoar or Tophat software.  In some cases such a device benefits from SoftRF also sending position (GNSS) data, e.g., XCsoar or Tophat on an e-reader which does not have GNSS hadrware.
+Alternatively, the external device can be a glide computer, such as the ILEC SN10, or an e-reader, phone or tablet running the XCsoar or Tophat software.  In some cases such a device benefits from SoftRF also sending position (GNSS) data, e.g., XCsoar or Tophat on an e-reader which does not have GNSS hardware.
 
 The data can be sent out via a serial cable, a USB cable, WiFi (UDP or TCP), or Bluetooth (classic or LE).
 

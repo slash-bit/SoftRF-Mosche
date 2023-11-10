@@ -22,6 +22,8 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
+* vMB10h: added winch mode ("aircraft type") with variable reported altitude
+* vMB10f: auto turn-off Bluetooth upon web access to resolve memory limitation
 * vMB10d: now works on the new v1.2 model of the T-Beam with AXP2101
 * vMB09z: further compatibility improvements in transmissions and collision prediction
 * Collision-danger traffic VOICE warnings! (not just beeps)

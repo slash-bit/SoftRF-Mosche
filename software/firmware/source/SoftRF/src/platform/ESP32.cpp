@@ -22,10 +22,16 @@
 #include <SPI.h>
 #include <esp_err.h>
 #include <esp_wifi.h>
+
+#if defined(CONFIG_IDF_TARGET_ESP32)
+#include "esp_heap_caps.h"
+#endif
+
 #if !defined(CONFIG_IDF_TARGET_ESP32S2)
 #include <esp_bt.h>
 #include <BLEDevice.h>
 #endif /* CONFIG_IDF_TARGET_ESP32S2 */
+
 #include <soc/rtc_cntl_reg.h>
 #include <soc/efuse_reg.h>
 #include <Wire.h>
@@ -49,6 +55,7 @@
 #include "../driver/Baro.h"
 #include "../driver/Battery.h"
 #include "../driver/OLED.h"
+#include "../driver/GNSS.h"
 #include "../protocol/data/NMEA.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
@@ -124,6 +131,8 @@ void TFT_backlight_on()
 
 AXP20X_Class axp_xxx;
 XPowersPMU   axp_2xxx;
+
+uint32_t BlueLEDTimeMarker = 5000;
 
 static int esp32_board = ESP32_DEVKIT; /* default */
 static size_t ESP32_Min_AppPart_Size = 0;
@@ -414,6 +423,7 @@ static void ESP32_setup()
     case MakeFlashId(BOYA_ID, BOYA_BY25Q32AL):
     default:
       hw_info.model = SOFTRF_MODEL_PRIME_MK2;
+      heap_caps_malloc_extmem_enable(1024);    // <<< try and make libraries use less RAM
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
     default:
       esp32_board   = ESP32_S2_T8_V1_1;
@@ -561,9 +571,9 @@ static void ESP32_setup()
         axp_2xxx.clearIrqStatus();
 
         //These lines were added to lyusupov's version in Sep 2023:
-        //axp_2xxx.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
-        //axp_2xxx.disableTSPinMeasure();
-        //axp_2xxx.enableBattVoltageMeasure();
+        axp_2xxx.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+        axp_2xxx.disableTSPinMeasure();
+        axp_2xxx.enableBattVoltageMeasure();
 
         axp_2xxx.enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ |
                            XPOWERS_AXP2101_PKEY_SHORT_IRQ);
@@ -578,7 +588,7 @@ static void ESP32_setup()
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
 
-    /* use middle button on T-Beam v1.x to turn off Bluetooth */
+    /* use middle button on T-Beam v1.x to turn off Bluetooth (or transmissions) */
     if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
         if (hw_info.revision == 8 || hw_info.revision == 12) {
             middle_button_pin = (gpio_num_t) SOC_GPIO_PIN_TBEAM_V08_BUTTON;
@@ -1063,6 +1073,7 @@ static void ESP32_post_init()
     default              :  Serial.println(F("NULL"));      break;
   }
 
+#if !defined(EXCLUDE_D1090)
   Serial.print(F("D1090  - "));
   switch (settings->d1090)
   {
@@ -1072,6 +1083,7 @@ static void ESP32_post_init()
     case D1090_OFF       :
     default              :  Serial.println(F("NULL"));      break;
   }
+#endif
 
   Serial.println();
   switch (settings->bluetooth)
@@ -1165,6 +1177,9 @@ static void ESP32_loop()
   bool is_irq = false;
   bool down = false;
 
+  static int blue_LED_old_state = -1;
+  int blue_LED_new_state = blue_LED_old_state;
+
   switch (hw_info.pmu)
   {
   case PMU_AXP192:
@@ -1209,6 +1224,7 @@ static void ESP32_loop()
       }
     }
 
+#if 0
     if (isTimeToBattery()) {
       if (Battery_voltage() > Battery_threshold()) {
         axp_xxx.setChgLEDMode(AXP20X_LED_LOW_LEVEL);
@@ -1216,6 +1232,27 @@ static void ESP32_loop()
         axp_xxx.setChgLEDMode(AXP20X_LED_BLINK_1HZ);
       }
     }
+#else
+    // new functions for blue LED:
+    //   fast blink if waiting for GNSS
+    //   and turn off if not transmitting
+    if (millis() > BlueLEDTimeMarker) {
+      if (! isValidFix()) {
+        blue_LED_new_state = AXP20X_LED_BLINK_4HZ;
+      } else if (settings->txpower == RF_TX_POWER_OFF) {
+        blue_LED_new_state = AXP20X_LED_OFF;
+      } else if (Battery_voltage() < Battery_threshold()) {
+        blue_LED_new_state = AXP20X_LED_BLINK_1HZ;
+      } else {
+        blue_LED_new_state = AXP20X_LED_LOW_LEVEL;
+      }
+      if (blue_LED_new_state != blue_LED_old_state) {
+        axp_xxx.setChgLEDMode((axp_chgled_mode_t) blue_LED_new_state);
+        blue_LED_old_state = blue_LED_new_state;
+      }
+      BlueLEDTimeMarker = millis() + 1000;
+    }
+#endif
     break;
 
   case PMU_AXP2101:
@@ -1247,6 +1284,7 @@ static void ESP32_loop()
       }
     }
 
+#if 0
     if (isTimeToBattery()) {
       if (Battery_voltage() > Battery_threshold()) {
         axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_ON);
@@ -1254,6 +1292,24 @@ static void ESP32_loop()
         axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
       }
     }
+#else
+    if (millis() > BlueLEDTimeMarker) {
+      if (! isValidFix()) {
+        blue_LED_new_state = XPOWERS_CHG_LED_BLINK_4HZ;
+      } else if (settings->txpower == RF_TX_POWER_OFF) {
+        blue_LED_new_state = XPOWERS_CHG_LED_OFF;
+      } else if (Battery_voltage() < Battery_threshold()) {
+        blue_LED_new_state = XPOWERS_CHG_LED_BLINK_1HZ;
+      } else {
+        blue_LED_new_state = XPOWERS_CHG_LED_ON;
+      }
+      if (blue_LED_new_state != blue_LED_old_state) {
+        axp_2xxx.setChargingLedMode((xpowers_chg_led_mode_t) blue_LED_new_state);
+        blue_LED_old_state = blue_LED_new_state;
+      }
+      BlueLEDTimeMarker = millis() + 1000;
+    }
+#endif
     break;
 
   case PMU_NONE:
@@ -1369,7 +1425,9 @@ static void ESP32_fini(int reason)
       break;
 
     case PMU_AXP2101:
-      axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_OFF);
+      //axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_OFF);
+      axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
+             // The charging indicator is controlled by the charger
 
       axp_2xxx.disableButtonBatteryCharge();
 
@@ -1882,9 +1940,11 @@ static void ESP32_EEPROM_extension(int cmd)
     if (settings->gdl90 == GDL90_USB) {
       settings->gdl90 = GDL90_UART;
     }
+#if !defined(EXCLUDE_D1090)
     if (settings->d1090 == D1090_USB) {
       settings->d1090 = D1090_UART;
     }
+#endif
 #endif /* CONFIG_IDF_TARGET_ESP32 */
 #if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     if (settings->bluetooth != BLUETOOTH_OFF) {
@@ -2459,11 +2519,28 @@ static void ESP32_Display_fini(int reason)
 
 /* external Power is available from USB port (VBUS0) */
 bool ESP32_onExternalPower() {
-  if (axp_xxx.getVbusVoltage() > 4000) {
-    return true;
-  } else {
-    return false;
-  }
+    switch (hw_info.pmu)
+    {
+    case PMU_AXP192:
+    //case PMU_AXP202:
+        if (axp_xxx.getVbusVoltage() > 4000) {
+          return true;
+        } else {
+          return false;
+        }
+        break;
+    case PMU_AXP2101:
+        if (axp_2xxx.getVbusVoltage() > 4000) {
+          return true;
+        } else {
+          return false;
+        }
+        break;
+    case PMU_NONE:
+    default:
+        return true;
+        break;
+    }
 }
 
 static void ESP32_Battery_setup()
@@ -2694,8 +2771,10 @@ static void ESP32_WDT_fini()
 using namespace ace_button;
 
 AceButton button_1(SOC_GPIO_PIN_TBEAM_V05_BUTTON);
+AceButton button_2(SOC_GPIO_PIN_TBEAM_V08_BUTTON);
 
-// The event handler for the button.
+// The event handlers for the buttons
+
 void handleEvent(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
@@ -2713,6 +2792,35 @@ void handleEvent(AceButton* button, uint8_t eventType,
     case AceButton::kEventLongPressed:
       if (button == &button_1) {
         shutdown(SOFTRF_SHUTDOWN_BUTTON);
+      }
+      break;
+  }
+}
+
+void handleEvent2(AceButton* button, uint8_t eventType,
+    uint8_t buttonState) {
+
+  /* Use middle button on T-Beam to turn off Bluetooth */
+  /* this can help one reach the web interface */
+  /* But in winch mode use the button to turn transmissions on/off */
+
+  static bool done = false;
+
+  switch (eventType) {
+    case AceButton::kEventClicked:
+    case AceButton::kEventReleased:
+      if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
+          if (settings->txpower == RF_TX_POWER_OFF) {
+              settings->txpower = RF_TX_POWER_FULL;
+          } else {
+              settings->txpower = RF_TX_POWER_OFF;
+          }
+      } else if (settings->bluetooth != BLUETOOTH_OFF && done == false && millis() > 15000) {
+          if (SoC->Bluetooth_ops) {
+              Serial.println(F("Turning off Bluetooth due to button press"));
+              SoC->Bluetooth_ops->fini();
+              done = true;   // only do this once, until next reboot
+          }
       }
       break;
   }
@@ -2751,29 +2859,31 @@ static void ESP32_Button_setup()
     PageButtonConfig->setClickDelay(600);
     PageButtonConfig->setLongPressDelay(2000);
   }
+
+  if (middle_button_pin != SOC_UNUSED_PIN) {
+    button_2.init(middle_button_pin);
+    ButtonConfig* PageButtonConfig = button_2.getButtonConfig();
+    PageButtonConfig->setEventHandler(handleEvent2);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureClick);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+//  PageButtonConfig->setDebounceDelay(15);
+    PageButtonConfig->setClickDelay(600);
+    PageButtonConfig->setLongPressDelay(2000);
+  }
 }
 
 static void ESP32_Button_loop()
 {
-  /* use middle button on T-Beam to turn off Bluetooth */
-  /* this can help one reach the web interface */
-  static bool done = false;
-  if (settings->bluetooth != BLUETOOTH_OFF && middle_button_pin != SOC_UNUSED_PIN
-          && done == false && millis() > 15000) {
-    if (digitalRead(middle_button_pin) == 0) {
-      if (SoC->Bluetooth_ops) {
-          Serial.println(F("Turning off Bluetooth due to button press"));
-          SoC->Bluetooth_ops->fini();
-          done = true;   // only do this once, until next reboot
-      }
-    }
-  }
-
   if (( hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
        (hw_info.revision == 2 || hw_info.revision == 5)) ||
        esp32_board == ESP32_S2_T8_V1_1 ||
        esp32_board == ESP32_S3_DEVKIT) {
     button_1.check();
+  }
+
+  if (middle_button_pin != SOC_UNUSED_PIN) {
+    button_2.check();
   }
 }
 

@@ -1,6 +1,6 @@
 /*
  * MAVLinkHelper.cpp
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+ 
+#if !defined(EXCLUDE_MAVLINK)
 
 #include <TimeLib.h>
 #include <TinyGPS++.h>
@@ -102,3 +104,5 @@ void MAVLinkSetWiFiPower()
     MAVLinkAPisArmed = false;
   }
 }
+
+#endif /* EXCLUDE_MAVLINK */

@@ -1,6 +1,6 @@
 /*
  * MAVLinkHelper.h
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,6 +15,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+#if !defined(EXCLUDE_MAVLINK)
 
 #ifndef MAVLINKHELPER_H
 #define MAVLINKHELPER_H
@@ -37,3 +39,5 @@ void MAVLinkShareTraffic();
 void MAVLinkSetWiFiPower();
 
 #endif /* MAVLINKHELPER_H */
+
+#endif /* EXCLUDE_MAVLINK */

@@ -249,7 +249,7 @@ void alarmlogfile(){
 
 void handleSettings() {
 
-Serial.println("handleSettings()...");
+  Serial.println(F("handleSettings()..."));
 
   stop_bluetooth();
 
@@ -259,6 +259,7 @@ Serial.println("handleSettings()...");
   char *Settings_temp = (char *) malloc(size);
 
   if (Settings_temp == NULL) {
+    Serial.println(F(">>> not enough RAM"));
     return;
   }
 
@@ -411,7 +412,10 @@ Serial.println("handleSettings()...");
 </td>\
 </tr>"),
     (settings->rf_protocol == RF_PROTOCOL_LEGACY   ? legacy_proto_desc.name :
-    (settings->rf_protocol == RF_PROTOCOL_ADSB_UAT ? uat978_proto_desc.name :
+    (
+#if !defined(EXCLUDE_UAT978)
+     settings->rf_protocol == RF_PROTOCOL_ADSB_UAT ? uat978_proto_desc.name :
+#endif
     (settings->rf_protocol == RF_PROTOCOL_FANET    ? fanet_proto_desc.name  :
      "UNK")))
     );
@@ -454,6 +458,7 @@ Serial.println("handleSettings()...");
 <option %s value='%d'>Paraglider</option>\
 <option %s value='%d'>Balloon</option>\
 <option %s value='%d'>Static</option>\
+<option %s value='%d'>Winch</option>\
 </select>\
 </td>\
 </tr>\
@@ -530,6 +535,7 @@ Serial.println("handleSettings()...");
   (settings->aircraft_type == AIRCRAFT_TYPE_PARAGLIDER ? "selected" : ""),  AIRCRAFT_TYPE_PARAGLIDER,
   (settings->aircraft_type == AIRCRAFT_TYPE_BALLOON ? "selected" : ""),  AIRCRAFT_TYPE_BALLOON,
   (settings->aircraft_type == AIRCRAFT_TYPE_STATIC ? "selected" : ""),  AIRCRAFT_TYPE_STATIC,
+  (settings->aircraft_type == AIRCRAFT_TYPE_WINCH ? "selected" : ""),  AIRCRAFT_TYPE_WINCH,
   (settings->alarm == TRAFFIC_ALARM_NONE ? "selected" : ""),  TRAFFIC_ALARM_NONE,
   (settings->alarm == TRAFFIC_ALARM_DISTANCE ? "selected" : ""),  TRAFFIC_ALARM_DISTANCE,
   (settings->alarm == TRAFFIC_ALARM_VECTOR ? "selected" : ""),  TRAFFIC_ALARM_VECTOR,
@@ -864,6 +870,7 @@ Serial.println("handleSettings()...");
     size -= len;
   }
 
+#if !defined(EXCLUDE_D1090)
   /* Common part 5 */
   snprintf_P ( offset, size,
     PSTR("\
@@ -894,6 +901,7 @@ Serial.println("handleSettings()...");
     offset += len;
     size -= len;
   }
+#endif
 
   /* Common part 6 */
   snprintf_P ( offset, size,
@@ -1069,7 +1077,7 @@ Serial.println("handleSettings()...");
 
 void handleRoot() {
 
-Serial.println("handleRoot()...");
+  Serial.println(F("handleRoot()..."));
 
   stop_bluetooth();
 
@@ -1089,6 +1097,7 @@ Serial.println("handleRoot()...");
 
   char *Root_temp = (char *) malloc(2900);
   if (Root_temp == NULL) {
+    Serial.println(F(">>> not enough RAM"));
     return;
   }
 
@@ -1220,13 +1229,6 @@ Serial.println("handleRoot()...");
 }
 
 void handleInput() {
-
-  size_t size = 3500;
-
-  char *Input_temp = (char *) malloc(size);
-  if (Input_temp == NULL) {
-    return;
-  }
 
   char idbuf[6 + 1];
 
@@ -1379,10 +1381,16 @@ void handleInput() {
   //    if (settings->bluetooth == BLUETOOTH_OFF)
   //        settings->bluetooth = BLUETOOTH_SPP;
   //}
+#if !defined(EXCLUDE_D1090)
   if (nmea1 != NMEA_BLUETOOTH && nmea2 != NMEA_BLUETOOTH
           && settings->d1090 != D1090_BLUETOOTH && settings->gdl90 != GDL90_BLUETOOTH) {
       settings->bluetooth = BLUETOOTH_OFF;
   }
+#else
+  if (nmea1 != NMEA_BLUETOOTH && nmea2 != NMEA_BLUETOOTH && settings->gdl90 != GDL90_BLUETOOTH) {
+      settings->bluetooth = BLUETOOTH_OFF;
+  }
+#endif
   Serial.print(F("Bluetooth (adjusted) = ")); Serial.println(settings->bluetooth);
 
   /* enforce some hardware restrictions */
@@ -1393,8 +1401,15 @@ void handleInput() {
       settings->voice = VOICE_OFF;
   }
 
+  /* if winch mode, use full transmission power? */
+  //if (settings->aircraft_type == AIRCRAFT_TYPE_WINCH && settings->txpower == RF_TX_POWER_LOW)
+  //    settings->txpower == RF_TX_POWER_FULL;
+
   /* show new settings before rebooting */
-  snprintf_P ( Input_temp, size,
+  size_t size = 3500;
+  char *Input_temp = (char *) malloc(size);
+  if (Input_temp != NULL) {
+    snprintf_P ( Input_temp, size,
 PSTR("<html>\
 <head>\
 <meta http-equiv='refresh' content='15; url=/'>\
@@ -1452,75 +1467,79 @@ PSTR("<html>\
   <p align=center><h1 align=center>Restart is in progress... Please, wait!</h1></p>\
 </body>\
 </html>"),
-  settings->mode, settings->aircraft_id, settings->id_method,
-  settings->ignore_id, settings->follow_id,
-  settings->rf_protocol, settings->band,
-  settings->aircraft_type, settings->alarm, settings->txpower,
-  settings->volume, settings->strobe, settings->pointer,
-  settings->voice, settings->bluetooth,
-  settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
-  settings->nmea_out,
-  BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
-  BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
-  settings->nmea_out2,
-  BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p),
-  BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
-  settings->gdl90, settings->d1090,
-  settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-  settings->power_save, settings->power_external,
-  settings->freq_corr, settings->ppswire, settings->debug_flags, settings->logalarms,
-//  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
-  (settings->igc_key[0]? 0x88888888 : 0),
-  (settings->igc_key[1]? 0x88888888 : 0),
-  (settings->igc_key[2]? 0x88888888 : 0),
-  (settings->igc_key[3]? 0x88888888 : 0)
-      /* do not show the existing secret key */
-  );
+    settings->mode, settings->aircraft_id, settings->id_method,
+    settings->ignore_id, settings->follow_id,
+    settings->rf_protocol, settings->band,
+    settings->aircraft_type, settings->alarm, settings->txpower,
+    settings->volume, settings->strobe, settings->pointer,
+    settings->voice, settings->bluetooth,
+    settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
+    settings->nmea_out,
+    BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
+    BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
+    settings->nmea_out2,
+    BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p),
+    BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
+    settings->gdl90, settings->d1090,
+    settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
+    settings->power_save, settings->power_external,
+    settings->freq_corr, settings->ppswire, settings->debug_flags, settings->logalarms,
+  //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
+    (settings->igc_key[0]? 0x88888888 : 0),
+    (settings->igc_key[1]? 0x88888888 : 0),
+    (settings->igc_key[2]? 0x88888888 : 0),
+    (settings->igc_key[3]? 0x88888888 : 0)
+        /* do not show the existing secret key */
+    );
+    server.send ( 200, "text/html", Input_temp );
+    delay(1000);
+    free(Input_temp);
+  }
 
-Serial.println("New settings:");
-Serial.print(" Mode ");Serial.println(settings->mode);
-Serial.print(" Aircraft ID ");Serial.printf("%06X\r\n", settings->aircraft_id);
-Serial.print(" ID method ");Serial.println(settings->id_method);
-Serial.print(" Ignore ID ");Serial.printf("%06X\r\n", settings->ignore_id);
-Serial.print(" Follow ID ");Serial.printf("%06X\r\n", settings->follow_id);
-Serial.print(" Protocol ");Serial.println(settings->rf_protocol);
-Serial.print(" Band ");Serial.println(settings->band);
-Serial.print(" Aircraft type ");Serial.println(settings->aircraft_type);
-Serial.print(" Alarm trigger ");Serial.println(settings->alarm);
-Serial.print(" Tx Power ");Serial.println(settings->txpower);
-Serial.print(" Volume ");Serial.println(settings->volume);
-Serial.print(" Strobe ");Serial.println(settings->strobe);
-Serial.print(" LED pointer ");Serial.println(settings->pointer);
-Serial.print(" Voice ");Serial.println(settings->voice);
-Serial.print(" Bluetooth ");Serial.println(settings->bluetooth);
-Serial.print(" TCP mode ");Serial.println(settings->tcpmode);
-Serial.print(" TCP port ");Serial.println(settings->tcpport);
-Serial.print(" SSID ");Serial.println(settings->ssid);
-Serial.print(" PSK ");Serial.println(settings->psk);
-Serial.print(" Host IP ");Serial.println(settings->host_ip);
-Serial.print(" NMEA Out 1 ");Serial.println(settings->nmea_out);
-Serial.print(" NMEA GNSS ");Serial.println(settings->nmea_g);
-Serial.print(" NMEA Private ");Serial.println(settings->nmea_p);
-Serial.print(" NMEA Legacy ");Serial.println(settings->nmea_l);
-Serial.print(" NMEA Sensors ");Serial.println(settings->nmea_s);
-Serial.print(" NMEA Debug ");Serial.println(settings->nmea_d);
-Serial.print(" NMEA Out 2 ");Serial.println(settings->nmea_out2);
-Serial.print(" NMEA2 GNSS ");Serial.println(settings->nmea2_g);
-Serial.print(" NMEA2 Private ");Serial.println(settings->nmea2_p);
-Serial.print(" NMEA2 Legacy ");Serial.println(settings->nmea2_l);
-Serial.print(" NMEA2 Sensors ");Serial.println(settings->nmea2_s);
-Serial.print(" NMEA2 Debug ");Serial.println(settings->nmea2_d);
-Serial.print(" GDL90 ");Serial.println(settings->gdl90);
-Serial.print(" DUMP1090 ");Serial.println(settings->d1090);
-Serial.print(" Air-Relay ");Serial.println(settings->relay);
-Serial.print(" Stealth ");Serial.println(settings->stealth);
-Serial.print(" No track ");Serial.println(settings->no_track);
-Serial.print(" Power save ");Serial.println(settings->power_save);
-Serial.print(" Power external ");Serial.println(settings->power_external);
-Serial.print(" Freq. correction ");Serial.println(settings->freq_corr);
-Serial.print(" Alarm Log ");Serial.println(settings->logalarms);
-Serial.print(" PPS wire ");Serial.println(settings->ppswire);
-Serial.print(" debug_flags ");Serial.printf("%02X\r\n", settings->debug_flags);
+Serial.println(F("New settings:"));
+Serial.print(F(" Mode "));Serial.println(settings->mode);
+Serial.print(F(" Aircraft ID "));Serial.printf("%06X\r\n", settings->aircraft_id);
+Serial.print(F(" ID method "));Serial.println(settings->id_method);
+Serial.print(F(" Ignore ID "));Serial.printf("%06X\r\n", settings->ignore_id);
+Serial.print(F(" Follow ID "));Serial.printf("%06X\r\n", settings->follow_id);
+Serial.print(F(" Protocol "));Serial.println(settings->rf_protocol);
+Serial.print(F(" Band "));Serial.println(settings->band);
+Serial.print(F(" Aircraft type "));Serial.println(settings->aircraft_type);
+Serial.print(F(" Alarm trigger "));Serial.println(settings->alarm);
+Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
+Serial.print(F(" Volume "));Serial.println(settings->volume);
+Serial.print(F(" Strobe "));Serial.println(settings->strobe);
+Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
+Serial.print(F(" Voice "));Serial.println(settings->voice);
+Serial.print(F(" Bluetooth "));Serial.println(settings->bluetooth);
+Serial.print(F(" TCP mode "));Serial.println(settings->tcpmode);
+Serial.print(F(" TCP port "));Serial.println(settings->tcpport);
+Serial.print(F(" SSID "));Serial.println(settings->ssid);
+Serial.print(F(" PSK "));Serial.println(settings->psk);
+Serial.print(F(" Host IP "));Serial.println(settings->host_ip);
+Serial.print(F(" NMEA Out 1 "));Serial.println(settings->nmea_out);
+Serial.print(F(" NMEA GNSS "));Serial.println(settings->nmea_g);
+Serial.print(F(" NMEA Private "));Serial.println(settings->nmea_p);
+Serial.print(F(" NMEA Legacy "));Serial.println(settings->nmea_l);
+Serial.print(F(" NMEA Sensors "));Serial.println(settings->nmea_s);
+Serial.print(F(" NMEA Debug "));Serial.println(settings->nmea_d);
+Serial.print(F(" NMEA Out 2 "));Serial.println(settings->nmea_out2);
+Serial.print(F(" NMEA2 GNSS "));Serial.println(settings->nmea2_g);
+Serial.print(F(" NMEA2 Private "));Serial.println(settings->nmea2_p);
+Serial.print(F(" NMEA2 Legacy "));Serial.println(settings->nmea2_l);
+Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
+Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
+Serial.print(F(" GDL90 "));Serial.println(settings->gdl90);
+Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);
+Serial.print(F(" Air-Relay "));Serial.println(settings->relay);
+Serial.print(F(" Stealth "));Serial.println(settings->stealth);
+Serial.print(F(" No track "));Serial.println(settings->no_track);
+Serial.print(F(" Power save "));Serial.println(settings->power_save);
+Serial.print(F(" Power external "));Serial.println(settings->power_external);
+Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
+Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
+Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
+Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)
 if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
 Serial.print(" IGC key");
@@ -1530,9 +1549,7 @@ Serial.printf(" %08X", (settings->igc_key[2]? 0x88888888 : 0));
 Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
 }
 #endif
-  server.send ( 200, "text/html", Input_temp );
-  delay(1000);
-  free(Input_temp);
+
   SoC->WDT_fini();
   if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
   EEPROM_store();
@@ -1568,10 +1585,10 @@ bool handleFileRead(String path) { // send the requested file to the client (if 
     File file = SPIFFS.open(path, "r");                    // Open the file
     size_t sent = server.streamFile(file, contentType);    // Send it to the client
     file.close();                                          // Close the file again
-    Serial.println(String("\tSent file: ") + path);
+    Serial.println(String(F("\tSent file: ")) + path);
     return true;
   }
-  Serial.println(String("\tFile Not Found: ") + path);
+  Serial.println(String(F("\tFile Not Found: ")) + path);
   return false;
 }
 

@@ -1,6 +1,6 @@
 /*
  * D1090Helper.h
- * Copyright (C) 2016-2021 Linar Yusupov
+ * Copyright (C) 2016-2022 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#if !defined(EXCLUDE_D1090)
+
 #ifndef D1090HELPER_H
 #define D1090HELPER_H
 
@@ -30,5 +32,8 @@ enum
 };
 
 void D1090_Export(void);
+void D1090_Import(uint8_t *);
 
 #endif /* D1090HELPER_H */
+
+#endif /* EXCLUDE_D1090 */

@@ -18,6 +18,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#if !defined(EXCLUDE_UAT978)
+
 #include <stdint.h>
 
 #include <protocol.h>
@@ -103,3 +105,5 @@ size_t uat978_encode(void *pkt, ufo_t *this_aircraft) {
 
   return (0);
 }
+
+#endif /* EXCLUDE_UAT978 */

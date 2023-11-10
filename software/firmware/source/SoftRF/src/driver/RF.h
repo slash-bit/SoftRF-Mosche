@@ -43,13 +43,20 @@
 
 #define maxof2(a,b)       (a > b ? a : b)
 #define maxof3(a,b,c)     maxof2(maxof2(a,b),c)
+#define maxof4(a,b,c,d)   maxof2(maxof2(a,b),maxof2(c,d))
 #define maxof5(a,b,c,d,e) maxof2(maxof2(a,b),maxof3(c,d,e))
 
 /* Max. paket's payload size for all supported RF protocols */
 //#define MAX_PKT_SIZE  32 /* 48 = UAT LONG_FRAME_DATA_BYTES */
+
+#if !defined(EXCLUDE_UAT978)
 #define MAX_PKT_SIZE  maxof5(LEGACY_PAYLOAD_SIZE, OGNTP_PAYLOAD_SIZE, \
                              P3I_PAYLOAD_SIZE, FANET_PAYLOAD_SIZE, \
                              UAT978_PAYLOAD_SIZE)
+#else
+#define MAX_PKT_SIZE  maxof4(LEGACY_PAYLOAD_SIZE, OGNTP_PAYLOAD_SIZE, \
+                             P3I_PAYLOAD_SIZE, FANET_PAYLOAD_SIZE)
+#endif
 
 #define RXADDR {0x31, 0xfa , 0xb6} // Address of this device (4 bytes)
 #define TXADDR {0x31, 0xfa , 0xb6} // Address of device to send to (4 bytes)

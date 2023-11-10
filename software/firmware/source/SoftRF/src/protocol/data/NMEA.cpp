@@ -59,7 +59,7 @@ static int WiFi_connect_TCP()
 //Serial.println("Connected as TCP client");
         return 1;
     }
-Serial.println("TCP host not responding to ping");
+Serial.println(F("TCP host not responding to ping"));
     return 0;
 }
 
@@ -111,7 +111,7 @@ db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_
     if (client.connected())
     {
 if (db && client.available())
-Serial.println("TCP_input_flushed");
+Serial.println(F("TCP_input_flushed"));
         while (client.available()) {
             char c = client.read();
             yield();

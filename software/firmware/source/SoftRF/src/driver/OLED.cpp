@@ -263,7 +263,11 @@ static void OLED_radio()
     u8x8->draw2x2String(0, 6, buf);
     prev_rx_packets_counter = rx_packets_counter;
   }
-  if (tx_packets_counter != prev_tx_packets_counter) {
+
+  if (tx_packets_counter > 0 && settings->txpower == RF_TX_POWER_OFF) {   // for winch mode
+    u8x8->draw2x2String(8, 6, "OFF");
+    prev_tx_packets_counter = tx_packets_counter = 0;
+  } else if (tx_packets_counter != prev_tx_packets_counter) {
     disp_value = tx_packets_counter % 1000;
     itoa(disp_value, buf, 10);
 
@@ -274,7 +278,6 @@ static void OLED_radio()
         strcat_P(buf,PSTR(" "));
       };
     }
-
     u8x8->draw2x2String(8, 6, buf);
     prev_tx_packets_counter = tx_packets_counter;
   }

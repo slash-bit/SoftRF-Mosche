@@ -164,7 +164,9 @@ void EEPROM_defaults()
 #endif
 
   settings->gdl90      = GDL90_OFF;
+#if !defined(EXCLUDE_D1090)
   settings->d1090      = D1090_OFF;
+#endif
   settings->json       = JSON_OFF;
   settings->stealth    = false;
   settings->no_track   = false;
