@@ -303,13 +303,13 @@ bool legacy_decode(void *legacy_pkt, ufo_t *this_aircraft, ufo_t *fop) {
           fop->latitude, fop->longitude, fop->altitude,
           course, turnrate, vs10, smult, fop->airborne, unk2,
           ns[0], ns[1], ns[2], ns[3], ew[0], ew[1], ew[2], ew[3]);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
         if (settings->debug_flags & DEBUG_RESVD1) {
           /* also output the raw (but decrypted) packet as a whole, in hex */
           snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
             fop->addr, fop->gnsstime_ms,
             bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
         }
       }
     }

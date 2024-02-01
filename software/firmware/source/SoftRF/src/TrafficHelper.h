@@ -82,6 +82,7 @@ extern ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
 extern uint8_t fo_raw[34];
 extern traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 extern int max_alarm_level;
+extern bool alarm_ahead;
 
 #if defined(ESP32)
 extern File AlarmLog;

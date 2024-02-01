@@ -51,6 +51,8 @@
 
 #include <core_version.h>
 
+bool BTactive = false;
+
 BLEServer* pServer = NULL;
 BLECharacteristic* pUARTCharacteristic = NULL;
 BLECharacteristic* pBATCharacteristic  = NULL;
@@ -120,6 +122,8 @@ static void ESP32_Bluetooth_setup()
       esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
 
       SerialBT.begin(BT_name.c_str());
+
+      BTactive = true;
     }
     break;
 #endif /* CONFIG_IDF_TARGET_ESP32S3 */
@@ -266,6 +270,8 @@ static void ESP32_Bluetooth_setup()
       BLEDevice::startAdvertising();
 
       BLE_Advertising_TimeMarker = millis();
+
+      BTactive = true;
     }
     break;
   case BLUETOOTH_A2DP_SOURCE:
@@ -274,15 +280,19 @@ static void ESP32_Bluetooth_setup()
 
     bt_app_main();
 #endif
+    BTactive = false;
     break;
   case BLUETOOTH_OFF:
   default:
+    BTactive = false;
     break;
   }
 }
 
 static void ESP32_Bluetooth_loop()
 {
+  if (BTactive == false)
+    return;
   switch(settings->bluetooth)
   {
   case BLUETOOTH_LE_HM10_SERIAL:
@@ -336,9 +346,10 @@ static void ESP32_Bluetooth_loop()
 
 static void ESP32_Bluetooth_fini()
 {
-  static bool done = false;
-  if (done)
+  if (BTactive == false)
       return;   // only do this once per boot
+  BTactive = false;   // until next reboot
+  delay(200);         // let data bridging flush out
   if (settings->bluetooth == BLUETOOTH_LE_HM10_SERIAL) {
       BLEDevice::deinit();
   } else if (settings->bluetooth == BLUETOOTH_SPP) {
@@ -347,7 +358,6 @@ static void ESP32_Bluetooth_fini()
       esp_bt_controller_disable();
       esp_bt_controller_deinit();
   }
-  done = true;
   delay(500);
 }
 

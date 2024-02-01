@@ -16,7 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// this file based on v1.2.
+// This file originally based on v1.2.
+// Major revision in Jan. 2024: buffer each input separately, for bridging.
 
 #include <TimeLib.h>
 
@@ -29,9 +30,17 @@
 #include "../../driver/EEPROM.h"
 #include "../../driver/Battery.h"
 #include "../../driver/Baro.h"
+#include "../../driver/Bluetooth.h"
 #include "../../TrafficHelper.h"
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
+
+uint8_t NMEA_Source = NMEA_OFF;   // identifies which port a sentence came from
+
+char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
+char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
+
+static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
 
 #if defined(NMEA_TCP_SERVICE)
 
@@ -69,14 +78,14 @@ static int WiFi_disconnect_TCP()
     return 0;
 }
 
-static int WiFi_transmit_TCP(const byte *buf, size_t size)
+static int WiFi_transmit_TCP(const char *buf, size_t size)
 {
     if (client.connected())
     {
-        client.write(buf, size);
+        client.write((byte *) buf, size);
 if (size > 1 && (settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2)) {
 Serial.print("TCP<");
-Serial.print((char *)buf);
+Serial.print(buf);
 }
         return 0;
     }
@@ -127,11 +136,6 @@ static int WiFi_isconnected_TCP()
 }
 
 #endif // defined(NMEA_TCP_SERVICE)
-
-char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
-char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
-
-static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
 
 #if defined(USE_NMEALIB)
 #include <nmealib.h>
@@ -200,6 +204,10 @@ TinyGPSCustom D_NMEA2_sensors;
 TinyGPSCustom D_NMEA2_debug;
 TinyGPSCustom D_relay;
 TinyGPSCustom D_bluetooth;  /* 17 */
+TinyGPSCustom D_baudrate2;
+TinyGPSCustom D_invert2;
+TinyGPSCustom D_extern1;
+TinyGPSCustom D_extern2;  /* 21 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -265,18 +273,65 @@ void sendPFLAV()
     if (millisnow > whensend) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAE,A,0,0*"));
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 16);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAV,A,2.4,7.20,%s-%s*"),
                    SOFTRF_IDENT, SOFTRF_FIRMWARE_VERSION);  // our version in obstacle db text field
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 48);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
       whensend = millisnow + 73000;
     }
   }
 }
 
+// copy into plain static variables for efficiency in NMEA_Loop():
+bool is_a_prime_mk2 = false;
+bool has_serial2 = false;
+
 void NMEA_setup()
 {
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+
+    is_a_prime_mk2 = true;
+
+    // use Serial2 as an auxillary port for data bridging
+    uint32_t Serial2Baud = 0;
+    switch (settings->baudrate2)
+    {
+    case BAUD_4800:
+      Serial2Baud = 4800;
+      break;
+    case BAUD_9600:
+      Serial2Baud = 9600;
+      break;
+    case BAUD_19200:
+      Serial2Baud = 19200;
+      break;
+    case BAUD_38400:
+      Serial2Baud = 38400;
+      break;
+    case BAUD_57600:
+      Serial2Baud = 57600;
+      break;
+    case BAUD_115200:
+      Serial2Baud = 115200;
+      break;
+    case BAUD_DEFAULT:
+    default:
+      // note BAUD_DEFAULT here means Serial2 disabled, not 38400
+      Serial2Baud = 0;
+      break;
+    }
+    if (Serial2Baud != 0) {
+        Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
+        Serial2.setRxBufferSize(SerialBufSize);
+        has_serial2 = true;
+        Serial.printf("Serial2 started, at baud rate %d, logic:%d\r\n",
+               Serial2Baud, settings->invert2);
+    } else {
+        Serial.print(F("Serial2 NOT started"));
+    }
+  }
+
 #if defined(USE_NMEA_CFG)
   const char *psrf_c = "PSRFC";
   int term_num = 1;
@@ -313,14 +368,18 @@ void NMEA_setup()
   D_power_ext.begin     (gnss, psrf_d, term_num++);
   D_NMEA_debug.begin    (gnss, psrf_d, term_num++);
   D_debug_flags.begin   (gnss, psrf_d, term_num++);
-  D_NMEA2.begin         (gnss, psrf_d, term_num++);
+  D_NMEA2.begin         (gnss, psrf_d, term_num++); /* 10 */
   D_NMEA2_gnss.begin    (gnss, psrf_d, term_num++);
   D_NMEA2_private.begin (gnss, psrf_d, term_num++);
   D_NMEA2_legacy.begin  (gnss, psrf_d, term_num++);
   D_NMEA2_sensors.begin (gnss, psrf_d, term_num++);
   D_NMEA2_debug.begin   (gnss, psrf_d, term_num++);
   D_relay.begin         (gnss, psrf_d, term_num++);
-  D_bluetooth.begin     (gnss, psrf_d, term_num++); /* 17 */
+  D_bluetooth.begin     (gnss, psrf_d, term_num++);
+  D_baudrate2.begin     (gnss, psrf_d, term_num++);
+  D_invert2.begin       (gnss, psrf_d, term_num++);
+  D_extern1.begin       (gnss, psrf_d, term_num++);
+  D_extern2.begin       (gnss, psrf_d, term_num++); /* 21 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -389,140 +448,36 @@ void NMEA_setup()
   sendPFLAV();
 }
 
-void NMEA_loop()
+void NMEA_Out(uint8_t dest, char *buf, size_t size, bool nl)
 {
-  sendPFLAV();
-
-  if ((settings->nmea_s || settings->nmea2_s)
-      && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
-
-    int altitude = constrain(
-            (int) (ThisAircraft.pressure_altitude * _GPS_FEET_PER_METER),
-            -1000, 60000);
-
-    /* https://developer.garmin.com/downloads/legacy/uploads/2015/08/190-00684-00.pdf */
-    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PGRMZ,%d,f,%c*"),
-               altitude, isValidGNSSFix() ? '3' : '1'); /* feet , 3D fix */
-
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-
-#if !defined(EXCLUDE_LK8EX1)
-    char str_Vcc[6];
-    dtostrf(Battery_voltage(), 3, 1, str_Vcc);
-
-    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$LK8EX1,999999,%d,%d,%d,%s*"),
-            constrain((int) ThisAircraft.pressure_altitude, -1000, 99998), /* meters */
-            (int) ((ThisAircraft.vs * 100) / (_GPS_FEET_PER_METER * 60)),  /* cm/s   */
-            constrain((int) Baro_temperature(), -99, 98),                  /* deg. C */
-            str_Vcc);
-
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_s, settings->nmea2_s, (byte *) NMEABuffer, strlen(NMEABuffer), false);
-
-#endif /* EXCLUDE_LK8EX1 */
-
-    PGRMZ_TimeMarker = millis();
-  }
-
-#if defined(ENABLE_AHRS)
-  if ((settings->nmea_s  || settings->nmea2_s) && isTimeToRPYL()) {
-
-    AHRS_NMEA();
-
-    RPYL_TimeMarker = millis();
-  }
-#endif /* ENABLE_AHRS */
-
-#if defined(NMEA_TCP_SERVICE)
-
-  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-
-    switch (settings->tcpmode)
-    {
-
-    case TCP_MODE_CLIENT:
-
-    WiFi_flush_TCP();
-    break;
-
-    case TCP_MODE_SERVER:
-  
-    uint8_t i;
-
-    if (NmeaTCPServer.hasClient()) {
-      for(i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
-        // find free/disconnected spot
-        if (!NmeaTCP[i].client || !NmeaTCP[i].client.connected()) {
-          if(NmeaTCP[i].client) {
-            NmeaTCP[i].client.stop();
-            NmeaTCP[i].connect_ts = 0;
-          }
-          NmeaTCP[i].client = NmeaTCPServer.available();
-          NmeaTCP[i].connect_ts = now();
-          NmeaTCP[i].ack = false;
-          NmeaTCP[i].client.print(F("PASS?"));
-          break;
-        }
-      }
-      if (i >= MAX_NMEATCP_CLIENTS) {
-        // no free/disconnected spot so reject
-        NmeaTCPServer.available().stop();
-      }
-    }
-
-    for (i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
-      if (NmeaTCP[i].client && NmeaTCP[i].client.connected() &&
-         !NmeaTCP[i].ack && NmeaTCP[i].connect_ts > 0 &&
-         (now() - NmeaTCP[i].connect_ts) >= NMEATCP_ACK_TIMEOUT) {
-
-          /* Clean TCP input buffer from any pass codes sent by client */
-          while (NmeaTCP[i].client.available()) {
-            char c = NmeaTCP[i].client.read();
-            yield();
-          }
-          /* send acknowledge */
-          NmeaTCP[i].client.print(F("AOK"));
-          NmeaTCP[i].ack = true;
-      }
-    }
-
-    break;
-
-    default:
-      // should not happen
-      break;
-  }
-  }
+#if 0
+  Serial.print("NMEA_Out(");
+  Serial.print(dest);
+  Serial.print("): ", dest);
+  Serial.write(buf, size);
+  if (nl) Serial.write('\n');
 #endif
-}
-
-void NMEA_fini()
-{
-#if defined(NMEA_TCP_SERVICE)
-  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-    if (settings->tcpmode == TCP_MODE_SERVER)
-        NmeaTCPServer.stop();
-    else if (settings->tcpmode == TCP_MODE_CLIENT)
-        WiFi_disconnect_TCP();
-  }
-#endif /* NMEA_TCP_SERVICE */
-}
-
-void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
-{
   switch (dest)
   {
   case NMEA_UART:
     {
       if (SoC->UART_ops) {
-        SoC->UART_ops->write(buf, size);
+        SoC->UART_ops->write((byte*) buf, size);
         if (nl)
           SoC->UART_ops->write((byte *) "\n", 1);
       } else {
-        SerialOutput.write(buf, size);
+        Serial.write(buf, size);
         if (nl)
-          SerialOutput.write('\n');
+          Serial.write('\n');
+      }
+    }
+    break;
+  case NMEA_UART2:
+    {
+      if (has_serial2) {
+        Serial2.write(buf, size);
+        if (nl)
+          Serial2.write('\n');
       }
     }
     break;
@@ -558,7 +513,7 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
     else if (settings->tcpmode == TCP_MODE_CLIENT) {
         WiFi_transmit_TCP(buf, size);
         if (nl)
-          WiFi_transmit_TCP((const byte *)"\n", 1);
+          WiFi_transmit_TCP("\n", 1);
     }
 #endif
     }
@@ -566,7 +521,7 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
   case NMEA_USB:
     {
       if (SoC->USB_ops) {
-        SoC->USB_ops->write(buf, size);
+        SoC->USB_ops->write((byte *) buf, size);
         if (nl)
           SoC->USB_ops->write((byte *) "\n", 1);
       }
@@ -574,8 +529,8 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
     break;
   case NMEA_BLUETOOTH:
     {
-      if (SoC->Bluetooth_ops) {
-        SoC->Bluetooth_ops->write(buf, size);
+      if (BTactive && SoC->Bluetooth_ops) {
+        SoC->Bluetooth_ops->write((byte *) buf, size);
         if (nl)
           SoC->Bluetooth_ops->write((byte *) "\n", 1);
       }
@@ -585,13 +540,289 @@ void NMEA_Out(uint8_t dest, byte *buf, size_t size, bool nl)
   default:
     break;
   }
+  yield();
 }
 
-void NMEA_Outs(bool out1, bool out2, byte *buf, size_t size, bool nl) {
+void NMEA_Outs(bool out1, bool out2, char *buf, size_t size, bool nl) {
     if (out1)
         NMEA_Out(settings->nmea_out,  buf, size, nl);
     if (out2)
         NMEA_Out(settings->nmea_out2, buf, size, nl);
+}
+
+// Send buffered sentences to bridged outputs
+bool NMEA_bridge_sent = false;
+void NMEA_bridge_send(char *buf, int len)
+{
+#if 0
+    Serial.print("bridge_send(");
+    Serial.print(NMEA_Source);
+    Serial.print("): ");
+    Serial.write(buf, len);
+#endif
+    // First check whether it is GNSS or FLARM sentences, skip them (echo)
+    if (buf[1]=='G' && buf[2]=='P')
+        return;
+    if (buf[1]=='P' && buf[2]=='F' && buf[3]=='L' && buf[4]=='A')
+        return;
+
+#if defined(USE_NMEA_CFG)
+    // Also trap PSRF config sentences, process internally instead
+    // Not sure whether to process SKV sentences here or pass them on?
+    if (buf[1]=='P' && buf[2]=='S' && buf[3]=='R' && buf[4]=='F') {
+        for (int i=0; i<len; i++) {
+            if (gnss.encode(buf[i])) {   // valid sentence
+                NMEA_Process_SRF_SKV_Sentences();
+                NMEA_bridge_sent = true;
+            }
+        }
+        // if $PSRF but not a valid sentence, send it back to the source:
+        NMEA_Out(NMEA_Source, buf, len, false);
+        NMEA_Out(NMEA_Source, "-- invalid", 10, true);
+        NMEA_bridge_sent = true;
+    }
+#endif
+
+    // send to configured outputs, but do not echo to source
+    if (settings->nmea_e && settings->nmea_out != NMEA_Source) {
+        NMEA_Out(settings->nmea_out, buf, len, false);
+        NMEA_bridge_sent = true;
+    }
+    if (settings->nmea2_e && settings->nmea_out2 != NMEA_Source) {
+        NMEA_Out(settings->nmea_out2, buf, len, false);
+        NMEA_bridge_sent = true;
+    }
+}
+
+// set up separate buffers for potentially-bridged output from each input
+// common code for all these buffers:
+void NMEA_bridge_buf(char c, char* buf, int& n)
+{
+    if (c == '$') {        // start new sentence, drop any preceding data
+        n = 0;
+        // fall through to buf[n++] = c;
+    } else if (n == 0) {   // wait for a '$'
+        if (c != '!')      // start new sentence of some related protocols
+            return;
+        // else fall through to buf[n++] = c;
+    } else if (c=='\r' || c=='\n') {
+        if (n > 5) {                  // ensures reading buf[n-3] below is safe
+            // sentences missing "*xx" ending are ignored unless started with '!'
+            if (buf[0] == '!' || buf[n-3] == '*') {
+                buf[n++] = '\r';
+                buf[n++] = '\n';      // add a proper line-ending
+                buf[n]   = '\0';
+                NMEA_bridge_send(buf, n);
+            }
+        }
+        n = 0;
+        return;
+    } else if (n >= 128) {
+        n = 0;
+        return;
+    }
+    buf[n++] = c;
+}
+
+void NMEA_loop()
+{
+  NMEA_bridge_sent = false;
+
+  if (is_a_prime_mk2) {
+
+    /*
+     * Check SW/HW UARTs, USB, TCP and BT for data
+     */
+    int c;
+
+    NMEA_Source = NMEA_UART;
+    static char uart_buf[128+3];
+    static int uart_n = 0;
+    if (SoC->USB_ops) {
+      while (SoC->USB_ops && SoC->USB_ops->available() > 0) {
+        c = SoC->USB_ops->read();
+        NMEA_bridge_buf(c, uart_buf, uart_n);
+      }
+    } else {
+      while (Serial.available() > 0) {
+        c = Serial.read();
+//if (c == '$')
+//Serial.println("Serial received $");
+        NMEA_bridge_buf(c, uart_buf, uart_n);
+      }
+    }
+
+    static char uart2_buf[128+3];
+    static int uart2_n = 0;
+    if (has_serial2) {
+      NMEA_Source = NMEA_UART2;
+      while (Serial2.available() > 0) {
+        c = Serial2.read();
+        NMEA_bridge_buf(c, uart2_buf, uart2_n);
+      }
+    }
+
+    if (NMEA_bridge_sent) {
+        yield();
+        return;           // check wireless inputs next time around
+    }
+
+    static char bt_buf[128+3];
+    static int bt_n = 0;
+    if (SoC->Bluetooth_ops) {
+      NMEA_Source = NMEA_BLUETOOTH;
+      while (BTactive && SoC->Bluetooth_ops->available() > 0) {
+        c = SoC->Bluetooth_ops->read();
+//if (c == '$')
+//Serial.println("BT received $");
+        NMEA_bridge_buf(c, bt_buf, bt_n);
+      }
+    }
+
+#if defined(NMEA_TCP_SERVICE)
+    static char tcpinbuf[128];
+    static char tcpoutbuf[128+3];
+    static int tcp_n = 0;
+    if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+     // note TCP input will not be polled unless TCP output is active
+    NMEA_Source = NMEA_TCP;
+    if (settings->tcpmode == TCP_MODE_CLIENT) {
+      while (1) {
+        int n = WiFi_receive_TCP(tcpinbuf, 128);
+        if (n <= 0)
+            break;
+        for (int i=0; i<n; i++) {
+            NMEA_bridge_buf(tcpinbuf[i], tcpoutbuf, tcp_n);
+        }
+      }
+    }
+    else if (settings->tcpmode == TCP_MODE_SERVER) {
+      for (int i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
+        if (NmeaTCP[i].client && NmeaTCP[i].client.connected()) {
+          while (NmeaTCP[i].client.available()) {
+            c = NmeaTCP[i].client.read();
+            NMEA_bridge_buf(c, tcpoutbuf, tcp_n);
+          }
+        }
+      }
+      // note this may collect input from more than one client and their sentences may
+      //   get mixed - to avoid that would need MAX_NMEATCP_CLIENTS separate buffers
+    }
+    }
+#endif
+
+    if (NMEA_bridge_sent) {
+        yield();
+        return;           // process sensors next time around
+    }
+
+  }  // end if (is_a_prime_mk2)
+
+  sendPFLAV();
+
+  if ((settings->nmea_s || settings->nmea2_s)
+      && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
+
+    int altitude = constrain(
+            (int) (ThisAircraft.pressure_altitude * _GPS_FEET_PER_METER),
+            -1000, 60000);
+
+    /* https://developer.garmin.com/downloads/legacy/uploads/2015/08/190-00684-00.pdf */
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PGRMZ,%d,f,%c*"),
+               altitude, isValidGNSSFix() ? '3' : '1'); /* feet , 3D fix */
+
+    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, strlen(NMEABuffer), false);
+
+#if !defined(EXCLUDE_LK8EX1)
+    char str_Vcc[6];
+    dtostrf(Battery_voltage(), 3, 1, str_Vcc);
+
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$LK8EX1,999999,%d,%d,%d,%s*"),
+            constrain((int) ThisAircraft.pressure_altitude, -1000, 99998), /* meters */
+            (int) ((ThisAircraft.vs * 100) / (_GPS_FEET_PER_METER * 60)),  /* cm/s   */
+            constrain((int) Baro_temperature(), -99, 98),                  /* deg. C */
+            str_Vcc);
+
+    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, strlen(NMEABuffer), false);
+
+#endif /* EXCLUDE_LK8EX1 */
+
+    PGRMZ_TimeMarker = millis();
+  }
+
+#if defined(ENABLE_AHRS)
+  if ((settings->nmea_s  || settings->nmea2_s) && isTimeToRPYL()) {
+
+    AHRS_NMEA();
+
+    RPYL_TimeMarker = millis();
+  }
+#endif /* ENABLE_AHRS */
+
+#if defined(NMEA_TCP_SERVICE)
+
+  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+
+   if (settings->tcpmode == TCP_MODE_SERVER) {
+
+    // TCP clients housekeeping:
+  
+    int i;
+
+    if (NmeaTCPServer.hasClient()) {
+      for(i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
+        // find free/disconnected spot
+        if (!NmeaTCP[i].client || !NmeaTCP[i].client.connected()) {
+          if(NmeaTCP[i].client) {
+            NmeaTCP[i].client.stop();
+            NmeaTCP[i].connect_ts = 0;
+          }
+          NmeaTCP[i].client = NmeaTCPServer.available();
+          NmeaTCP[i].connect_ts = now();
+          NmeaTCP[i].ack = false;
+          NmeaTCP[i].client.print(F("PASS?"));
+          break;
+        }
+      }
+      if (i >= MAX_NMEATCP_CLIENTS) {
+        // no free/disconnected spot so reject
+        NmeaTCPServer.available().stop();
+      }
+    }
+
+    for (i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
+      if (NmeaTCP[i].client && NmeaTCP[i].client.connected() &&
+         !NmeaTCP[i].ack && NmeaTCP[i].connect_ts > 0 &&
+         (now() - NmeaTCP[i].connect_ts) >= NMEATCP_ACK_TIMEOUT) {
+
+          /* Clean TCP input buffer from any pass codes sent by client */
+          //while (NmeaTCP[i].client.available()) {
+          //  char c = NmeaTCP[i].client.read();
+          //  yield();
+          //}
+          /* send acknowledge */
+          NmeaTCP[i].client.print(F("AOK"));
+          NmeaTCP[i].ack = true;
+      }
+    }
+   }
+  }
+#endif
+
+}
+
+void NMEA_fini()
+{
+#if defined(NMEA_TCP_SERVICE)
+  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+    if (settings->tcpmode == TCP_MODE_SERVER)
+        NmeaTCPServer.stop();
+    else if (settings->tcpmode == TCP_MODE_CLIENT)
+        WiFi_disconnect_TCP();
+  }
+#endif /* NMEA_TCP_SERVICE */
 }
 
 void NMEA_Export()
@@ -763,7 +994,9 @@ void NMEA_Export()
          if (fop->callsign[0] == '\0') {
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
+//            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
+// aircraft type is supposed to be hex:
+              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
               alt_diff, addr_type, id, NMEA_CallSign_Prefix[fop->protocol], id,
               course, speed, ltrim(str_climb_rate), fop->aircraft_type
@@ -776,7 +1009,7 @@ void NMEA_Export()
            fop->callsign[sizeof(fop->callsign)-1] = '\0';
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
+              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
               alt_diff, addr_type, id, fop->callsign,
               course, speed, ltrim(str_climb_rate), fop->aircraft_type
@@ -784,7 +1017,7 @@ void NMEA_Export()
          }
 
          NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-         NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+         NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 
         }  /* done skipping the HP object */
 
@@ -848,7 +1081,7 @@ void NMEA_Export()
     }
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
     static int beatcount = 0;
@@ -856,12 +1089,12 @@ void NMEA_Export()
         return;
     beatcount = 0;
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-            PSTR("$PSRFH,%06X,%d,%d,%d,%d*"),
+            PSTR("$PSRFH,%06X,%d,%d,%d,%d,%d*"),
             ThisAircraft.addr,settings->rf_protocol,
-            rx_packets_counter,tx_packets_counter,(int)(voltage*100));
+            rx_packets_counter,tx_packets_counter,(int)(voltage*100),ESP.getFreeHeap());
 
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
 }
 
@@ -942,7 +1175,8 @@ void NMEA_Position()
       (NMEALIB_SENTENCE_GPGGA | NMEALIB_SENTENCE_GPGSA | NMEALIB_SENTENCE_GPRMC));
 
     if (gen_sz) {
-      NMEA_Outs(settings->nmea_g, settings->nmea2_g, (byte *) nmealib_buf.buffer, gen_sz, false);
+      strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
+      NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
     }
   }
 }
@@ -997,7 +1231,7 @@ void NMEA_GGA()
 
   if (gen_sz) {
     strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
-    NMEA_Outs(settings->nmea_g, settings->nmea2_g, (byte *) nmealib_buf.buffer, gen_sz, false);
+    NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
   }
 }
 
@@ -1014,8 +1248,6 @@ void NMEA_GGA()
 //#define SERIAL_FLUSH()       Serial.flush()
 //#endif
 
-uint8_t NMEA_Source;
-
 void nmea_cfg_send()
 {
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
@@ -1024,7 +1256,7 @@ void nmea_cfg_send()
 #else
     uint8_t dest = NMEA_Source;
 #endif /* USE_NMEA_CFG */
-    NMEA_Out(dest, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Out(dest, NMEABuffer, strlen(NMEABuffer), false);
 }
 
 static void nmea_cfg_restart()
@@ -1291,6 +1523,26 @@ void NMEA_Process_SRF_SKV_Sentences()
           if (D_bluetooth.isUpdated()) {
             settings->bluetooth = atoi(D_bluetooth.value());
             Serial.print(F("Bluetooth = ")); Serial.println(settings->bluetooth);
+            cfg_is_updated = true;
+          }
+          if (D_baudrate2.isUpdated()) {
+            settings->baudrate2 = atoi(D_baudrate2.value());
+            Serial.print(F("Baud rate 2 = ")); Serial.println(settings->baudrate2);
+            cfg_is_updated = true;
+          }
+          if (D_invert2.isUpdated()) {
+            settings->invert2 = atoi(D_invert2.value());
+            Serial.print(F("Serial2 logic = ")); Serial.println(settings->invert2);
+            cfg_is_updated = true;
+          }
+          if (D_extern1.isUpdated()) {
+            settings->nmea_e = atoi(D_extern1.value());
+            Serial.print(F("NMEA1_ext = ")); Serial.println(settings->nmea_e);
+            cfg_is_updated = true;
+          }
+          if (D_extern2.isUpdated()) {
+            settings->nmea2_e = atoi(D_extern2.value());
+            Serial.print(F("NMEA2_ext = ")); Serial.println(settings->nmea2_e);
             cfg_is_updated = true;
           }
 

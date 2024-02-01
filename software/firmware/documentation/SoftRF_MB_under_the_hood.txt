@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated July 7, 2023
-to fit software version MB09z based on v1.0 with some parts of v1.2
+This version last updated Jan. 31, 2024
+to fit software version MB110 based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -156,7 +156,7 @@ Allow two NMEA output route simultaneously.  For example, BT & USB.  Also allow 
 
 Visual alarms and strobe driver
 
-Added a "strobe control" MODULE.  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection to pin 25 on the T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  New files: driver/Strobe.h and .cpp.
+Added a "strobe control" MODULE.  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection to pin 33 on the T-Beam, although SoftRF now also sends a special $PSKSF NMEA message whenever a flash happens (or could happen).  In the future, can create a separate device (SkyStrobe - similar to the SkyView?), possibly embedded into the strobe unit, that can receive data from SoftRF (or FLARM, wired or wirelessly), and control the strobe based on that data.  New files: driver/Strobe.h and .cpp.
 
 Improved audio alarms
 
@@ -176,7 +176,17 @@ Revived the option of connecting to an external WiFi network.  Can enter the SSI
 
 Voice output
 
-This new module uses WAV files(sample rate 8000, bit depth 8, about about 70 KBytes) stored in SPIFFS inside waves.tar.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25.  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.   Added methods to upload the tar file via the web interface.  Files: driver/Voice.cpp and .h, Waves.cpp, and changes in UI/Web.cpp.
+This new module uses WAV files (sample rate 8000, bit depth 8, about 70 KBytes total) stored in SPIFFS inside the single file waves.tar.  The sound is sent out as an I2S data stream.  It can go to an external I2S decoder/amplifier (NOT TESTED so far), or to the internal DAC which converts it to an analog signal on pin 25 (tested).  The exact I2S configuration, in Voice.cpp, is critical to make this work.  As it turns out, and counter to rumors, it works in the Arduino ESP32 Core v2.0.3.   Added methods to upload the tar file via the web interface.  Files: driver/Voice.cpp and .h, Waves.cpp, and changes in UI/Web.cpp.
+
+Memory use
+
+Once the library objects are created, SoftRF uses up almost all available heap space.  It is no longer possible to have the web server and Bluetooth active simultaneously.  Accessing the web server now turns Bluetooth off until the next reboot.  To try and free up some heap space, blocks bigger than 1 KB (rather than the default 4 KB) are now allocated in PSRAM (on the T-Beam) - this is still experimental, watching for unintended consequences.
+
+Data bridging
+
+Version MB110 on the T-Beam (versions 1.0, 1.1 & 1.2) added use of a secondary serial port, and the ability to forward data from 1-3 input ports to 1-2 output ports.  This can eliminate the need for an IOIO box or Bluetooth dongle.  GNSS and FLARM messages are not forwarded.  Other messages are forwarded to the designated output routes.  Only complete NMEA sentences, $ through * plus checksum, are forwarded, but the checksum is not checked for validity.  Note that due to the way the T-Beam is designed, the same data is sent out via both the USB interface and the primary serial port (UART) pins.  They cannot be separated.  Since debugging messages may appear on the primary serial port, and it is also connected to the USB port, the secondary serial port is a bit more efficient as an interface to other instruments.
+
+To achieve this functionality, the input/output structure of SoftRF had to be significantly revised.  Originally, the code in GNSS.cpp polled all input ports, and pulled GNSS data from wherever it arrived.  Since GNSS data may arrive from external devices, this may clash with data from the internal GNSS module.  Moreover, the data polling was character by character.  It looped within the same source as long as it had data waiting, but if the source paused sending before a sentence is complete then the next source would be polled.  Thus characters arriving from more than one source may get mixed together, garbling NMEA sentences.  "Serial", i.e., UART0, is the main serial port which is also (on the T-Beam) connected to the USB port.  "Serial1", i.e., UART1, is used to communicate with the GNSS module.  "Serial2", i.e., UART2, is dedicated to UAT receiver input.  In this version the UAT functionality is commented out (#define EXCLUDE_UATM in in ESP32.h) and UART2 is used for the auxillary general-purpose serial port, and mapped (tentatively) to pins 0 (rx) and 4 (tx).  (Note that pin 0 is also a strapping pin pulled down by the USB interface, and pin 4 also drives the red LED on the T-Beam board.)  And, GNSS data is taken *only* from the internal GNSS module.  NMEA sentences from external sources are polled in NMEA.cpp and handled separately.  Characters from each source are collected into separate buffers, and processed when a full NMEA sentence has accumulated.  $PSRF* sentences are still interpreted to allow configuration of SoftRF settings via that route.
 
 
 KNOWN ISSUES

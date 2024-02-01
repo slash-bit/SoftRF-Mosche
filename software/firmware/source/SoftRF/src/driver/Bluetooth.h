@@ -29,6 +29,8 @@ enum
 	BLUETOOTH_A2DP_SOURCE
 };
 
+extern bool BTactive;
+
 #if defined(ESP32)
 #include "sdkconfig.h"
 #endif

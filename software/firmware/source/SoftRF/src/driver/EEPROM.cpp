@@ -83,7 +83,7 @@ void EEPROM_setup()
 
   SoC->EEPROM_extension(cmd);
 
-  // >>> can remove this after next chance in EEPROM version ID:
+  // >>> can remove this after next change in EEPROM version ID:
   if (settings->relay > RELAY_ALL)  settings->relay = RELAY_LANDED;
 }
 
@@ -110,12 +110,12 @@ void EEPROM_defaults()
   /* This will speed up 'factory' boot sequence on Editions other than Standalone */
   if (hw_info.model == SOFTRF_MODEL_STANDALONE
    || hw_info.model == SOFTRF_MODEL_PRIME) {
-    settings->volume  = BUZZER_VOLUME_FULL;
+    settings->volume  = BUZZER_OFF;
     settings->strobe  = STROBE_OFF;
     settings->pointer = DIRECTION_NORTH_UP;
   } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     settings->volume  = BUZZER_VOLUME_FULL;
-    settings->strobe  = STROBE_ALARM;
+    settings->strobe  = STROBE_OFF;    // was STROBE_ALARM
     settings->pointer = LED_OFF;
   } else {
     settings->volume  = BUZZER_OFF;
@@ -136,12 +136,14 @@ void EEPROM_defaults()
   settings->nmea_l  = true;
   settings->nmea_s  = true;
   settings->nmea_d  = false;
+  settings->nmea_e  = false;
 
   settings->nmea2_g = true;
   settings->nmea2_p = false;
   settings->nmea2_l = true;
   settings->nmea2_s = true;
   settings->nmea2_d = false;
+  settings->nmea2_e = false;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   settings->nmea_out   = NMEA_USB;
@@ -174,7 +176,9 @@ void EEPROM_defaults()
                                            POWER_SAVE_NORECEIVE : POWER_SAVE_NONE;
   settings->power_external = 0;
   settings->freq_corr  = 0;
-  settings->baud_rate  = BAUD_DEFAULT;
+  settings->baud_rate  = BAUD_DEFAULT;      // Serial  - meaning 38400
+  settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
+  settings->invert2    = false;
   settings->igc_key[0] = 0;
   settings->igc_key[1] = 0;
   settings->igc_key[2] = 0;

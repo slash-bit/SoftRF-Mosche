@@ -38,7 +38,11 @@ function UpdateChecksum()
       + document.getElementById("sens2").value + ","
       + document.getElementById("debug2").value + ","
       + document.getElementById("relay").value + ","
-      + document.getElementById("bluetooth").value;
+      + document.getElementById("bluetooth").value + ","
+      + document.getElementById("baudrate2").value + ","
+      + document.getElementById("invert2").value + ","
+      + document.getElementById("extern1").value + ","
+      + document.getElementById("extern2").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -99,6 +103,20 @@ function SelBaud()
 {
   var baud = document.getElementById("Bauds");
   document.getElementById("baud_rate").value = baud.options[baud.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelBaud2()
+{
+  var baud2 = document.getElementById("Bauds2");
+  document.getElementById("baudrate2").value = baud2.options[baud2.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelInv2()
+{
+  var inv2 = document.getElementById("Inv2");
+  document.getElementById("invert2").value = inv2.options[inv2.selectedIndex].value;
   UpdateChecksum();
 }
 
@@ -198,6 +216,28 @@ function SelDebug2()
   UpdateChecksum();
 }
 
+function SelExtern1()
+{
+  var extern1 = document.getElementsByName('nmea_e');
+  for (var i = 0; i < extern1.length; i++) {
+      if (extern1[i].type == "radio" && extern1[i].checked) {
+        document.getElementById("extern1").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
+function SelExtern2()
+{
+  var extern2 = document.getElementsByName('nmea2_e');
+  for (var i = 0; i < extern2.length; i++) {
+      if (extern2[i].type == "radio" && extern2[i].checked) {
+        document.getElementById("extern2").value = i;
+      }
+  }
+  UpdateChecksum();
+}
+
 function SelRelay()
 {
   var relay = document.getElementsByName('relay');
@@ -217,6 +257,8 @@ function InitSettings()
   document.getElementById("ignore_id").value   = "000000";
   document.getElementById("follow_id").value   = "000000";
   document.getElementById("baud_rate").value   = 0;
+  document.getElementById("baudrate2").value   = 0;
+  document.getElementById("invert2").value     = 0;
   document.getElementById("bluetooth").value   = 0;
   document.getElementById("power_ext").value   = 0;
   document.getElementById("NMEA_debug").value  = 0;
@@ -227,6 +269,8 @@ function InitSettings()
   document.getElementById("legacy2").value     = 1;
   document.getElementById("sens2").value       = 1;
   document.getElementById("debug2").value      = 0;
+  document.getElementById("extern1").value     = 0;
+  document.getElementById("extern2").value     = 0;
   document.getElementById("relay").value       = 1;
 
   UpdateChecksum();
@@ -283,7 +327,7 @@ If you are affected - please, consider to update
 </tr>
 
 <tr>
-<th align=left>Baud rate</th>
+<th align=left>Baud rate - main</th>
 <td align=right>
 <select id="Bauds" onchange="SelBaud()">
 <option selected value=0>Default</option>
@@ -293,6 +337,31 @@ If you are affected - please, consider to update
 <option value=4>38400</option>
 <option value=5>57600</option>
 <option value=6>115200</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>Baud rate - aux</th>
+<td align=right>
+<select id="Bauds2" onchange="SelBaud2()">
+<option selected value=0>Disabled</option>
+<option value=1>4800</option>
+<option value=2>9600</option>
+<option value=3>19200</option>
+<option value=4>38400</option>
+<option value=5>57600</option>
+<option value=6>115200</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>Serial Logic - aux</th>
+<td align=right>
+<select id="Inv2" onchange="SelInv2()">
+<option selected value=0>Normal</option>
+<option value=1>Inverted</option>
 </select>
 </td>
 </tr>
@@ -331,6 +400,13 @@ If you are affected - please, consider to update
 <td align=right>
 <input type='radio' name='nmea_d' value='0' onchange="SelDebug()" checked>Off
 <input type='radio' name='nmea_d' value='1' onchange="SelDebug()">On
+</td>
+</tr>
+<tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;External</th>
+<td align=right>
+<input type='radio' name='nmea_e' value='0' onchange="SelExtern1()" checked>Off
+<input type='radio' name='nmea_e' value='1' onchange="SelExtern1()">On
 </td>
 </tr>
 
@@ -392,6 +468,14 @@ If you are affected - please, consider to update
 </td>
 </tr>
 <tr>
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;External</th>
+<td align=right>
+<input type='radio' name='nmea2_e' value='0' onchange="SelExtern2()" checked>Off
+<input type='radio' name='nmea2_e' value='1' onchange="SelExtern2()">On
+</td>
+</tr>
+
+<tr>
 <th align=left>Air Relay</th>
 <td align=right>
 <input type='radio' name='relay' value='0' onchange="SelRelay()">Off
@@ -407,6 +491,8 @@ If you are affected - please, consider to update
 <!-- Ignore:    --><input type="hidden" id="ignore_id" size="6">
 <!-- Follow:    --><input type="hidden" id="follow_id" size="6">
 <!-- Baud rate: --><input type="hidden" id="baud_rate" size="1">
+<!-- Baudrate2: --><input type="hidden" id="baudrate2" size="1">
+<!-- Invert2:   --><input type="hidden" id="invert2" size="1">
 <!-- Bluetooth: --><input type="hidden" id="bluetooth" size="1">
 <!-- Power_ext: --><input type="hidden" id="power_ext" size="1">
 <!-- Debug1:    --><input type="hidden" id="NMEA_debug" size="1">
@@ -418,6 +504,8 @@ If you are affected - please, consider to update
 <!-- Sensors2:  --><input type="hidden" id="sens2" size="1">
 <!-- Debug2:    --><input type="hidden" id="debug2" size="1">
 <!-- Relay:     --><input type="hidden" id="relay" size="1">
+<!-- Extern1:   --><input type="hidden" id="extern1" size="1">
+<!-- Extern2:   --><input type="hidden" id="extern2" size="1">
 
 <h4 align=center>NMEA control sentence:</h4>
 <hr>

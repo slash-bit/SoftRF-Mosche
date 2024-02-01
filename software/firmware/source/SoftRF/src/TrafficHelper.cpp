@@ -50,6 +50,7 @@ ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
 uint8_t fo_raw[34];
 traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 int max_alarm_level = ALARM_LEVEL_NONE;
+bool alarm_ahead = false;                    /* global, used for visual displays */
 
 static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
 
@@ -247,7 +248,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
       this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
          this_aircraft->speed, this_aircraft->course,
       fop->latitude, fop->longitude, fop->altitude, fop->speed, fop->course);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
   }
 
   return rval;
@@ -507,7 +508,7 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
           fop->addr, fop->projtime_ms, this_aircraft->projtime_ms, rval, mintime, minsqdist, sqspeed,
           this_aircraft->speed, this_aircraft->heading, this_aircraft->turnrate,
           fop->dy, fop->dx, fop->alt_diff, fop->speed, fop->heading, fop->turnrate);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
     }
   }
 
@@ -606,7 +607,7 @@ void air_relay()
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSARL,1,%06X,%ld\r\n"),
             fo.addr, fo.timerelayed);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
         }
     } else {
 #if 0
@@ -614,7 +615,7 @@ void air_relay()
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSARL,0,%06X,%ld\r\n"),
             fo.addr, ThisAircraft.timestamp);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
         }
 #endif
     }
@@ -864,6 +865,7 @@ void Traffic_loop()
 
     ufo_t *mfop = NULL;
     max_alarm_level = ALARM_LEVEL_NONE;          /* global, used for visual displays */
+    alarm_ahead = false;                         /* global, used for strobe pattern */
     int sound_alarm_level = ALARM_LEVEL_NONE;    /* local, used for sound alerts */
     int alarmcount = 0;
 
@@ -880,8 +882,13 @@ void Traffic_loop()
           /* else Traffic_Update(fop) was called last time a radio packet came in */
 
           /* determine the highest alarm level seen at the moment */
-          if (fop->alarm_level > max_alarm_level)
+          if (fop->alarm_level > max_alarm_level) {
               max_alarm_level = fop->alarm_level;
+              int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
+              rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
+              if (abs(rel_bearing) < 45)
+                  alarm_ahead = true;    // at least > ALARM_LEVEL_NONE
+          }
 
           /* figure out what is the highest alarm level needing a sound alert */
           if (fop->alarm_level > fop->alert_level
@@ -933,7 +940,7 @@ void Traffic_loop()
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSRAA,%d*"), sound_alarm_level-1);
           NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-          NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
       }
       if (mfop != NULL) {
         // if (notified)

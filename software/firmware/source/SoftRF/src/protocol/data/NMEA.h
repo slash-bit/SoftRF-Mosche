@@ -32,7 +32,8 @@ enum
 	NMEA_UDP,
 	NMEA_TCP,
 	NMEA_USB,
-	NMEA_BLUETOOTH
+	NMEA_BLUETOOTH,
+	NMEA_UART2
 };
 
 #define NMEA_BUFFER_SIZE    128
@@ -55,21 +56,21 @@ void NMEA_loop(void);
 void NMEA_fini();
 void NMEA_Export(void);
 void NMEA_Position(void);
-// void NMEA_Out(uint8_t, byte *, size_t, bool);
-void NMEA_Outs(bool, bool, byte *, size_t, bool);
+void NMEA_Out(uint8_t, char *, size_t, bool);
+void NMEA_Outs(bool, bool, char *, size_t, bool);
 void NMEA_GGA(void);
 void NMEA_add_checksum(char *, size_t);
 
 char *bytes2Hex(byte *, size_t);
 
+extern uint8_t NMEA_Source;
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
 extern char GPGGA_Copy[NMEA_BUFFER_SIZE];
+extern bool has_serial2;
 
 #if defined(USE_NMEA_CFG)
 void NMEA_Process_SRF_SKV_Sentences(void);
 #endif /* USE_NMEA_CFG */
-
-extern uint8_t NMEA_Source;
 
 #if defined(NMEA_TCP_SERVICE)
 

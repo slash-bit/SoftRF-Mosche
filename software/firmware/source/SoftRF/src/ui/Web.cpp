@@ -90,18 +90,14 @@ void stop_bluetooth()
 {
   Serial.print(F("Free memory: "));
   Serial.println(ESP.getFreeHeap());
-  static bool done = false;
-  if (done)
-      return;   // only do this once per boot
   if (settings->bluetooth != BLUETOOTH_OFF) {
       if (SoC->Bluetooth_ops) {
           Serial.println(F("Stopping Bluetooth for web access"));
           SoC->Bluetooth_ops->fini();
-          done = true;   // only do this once, until next reboot
       }
   }
   yield();
-  Serial.print(F("Free memory: "));
+  Serial.print(F("Free memory (BT off): "));
   Serial.println(ESP.getFreeHeap());
 }
 
@@ -252,6 +248,10 @@ void handleSettings() {
   Serial.println(F("handleSettings()..."));
 
   stop_bluetooth();
+
+  bool is_prime_mk2 = false;
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8)
+    is_prime_mk2 = true;
 
   size_t size = 10900;
   char *offset;
@@ -650,12 +650,12 @@ void handleSettings() {
 <td align=right>\
 <select name='nmea_out'>\
 <option %s value='%d'>Off</option>\
-<option %s value='%d'>Serial</option>\
-<option %s value='%d'>UDP</option>"),
+<option %s value='%d'>UDP</option>\
+<option %s value='%d'>Serial</option>"),
   settings->ssid, "hidepass",
-  (settings->nmea_out == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
-  (settings->nmea_out == NMEA_UART ? "selected" : ""), NMEA_UART,
-  (settings->nmea_out == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
+  (settings->nmea_out == NMEA_OFF   ? "selected" : ""), NMEA_OFF,
+  (settings->nmea_out == NMEA_UDP   ? "selected" : ""), NMEA_UDP,
+  (settings->nmea_out == NMEA_UART  ? "selected" : ""), NMEA_UART);
 
   len = strlen(offset);
   offset += len;
@@ -663,13 +663,23 @@ void handleSettings() {
 
   /* SoC specific part 2 */
   if (SoC->id == SOC_ESP32) {
-    snprintf_P ( offset, size,
-      PSTR("\
-<option %s value='%d'>TCP</option>\
-<option %s value='%d'>Bluetooth</option>"),
-    (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP,
-    (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH);
-
+    if (is_prime_mk2) {
+     snprintf_P ( offset, size,
+       PSTR("\
+<option %s value='%d'>Serial 2</option>\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+     (settings->nmea_out == NMEA_UART2 ? "selected" : ""), NMEA_UART2,
+     (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
+     (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+    } else {
+     snprintf_P ( offset, size,
+       PSTR("\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+     (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
+     (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+    }
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -714,12 +724,20 @@ void handleSettings() {
 <input type='radio' name='nmea_d' value='0' %s>Off\
 <input type='radio' name='nmea_d' value='1' %s>On\
 </td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;External</th>\
+<td align=right>\
+<input type='radio' name='nmea_e' value='0' %s>Off\
+<input type='radio' name='nmea_e' value='1' %s>On\
+</td>\
 </tr>"),
   (!settings->nmea_g ? "checked" : "") , (settings->nmea_g ? "checked" : ""),
   (!settings->nmea_p ? "checked" : "") , (settings->nmea_p ? "checked" : ""),
   (!settings->nmea_l ? "checked" : "") , (settings->nmea_l ? "checked" : ""),
   (!settings->nmea_s ? "checked" : "") , (settings->nmea_s ? "checked" : ""),
-  (!settings->nmea_d ? "checked" : "") , (settings->nmea_d ? "checked" : ""));
+  (!settings->nmea_d ? "checked" : "") , (settings->nmea_d ? "checked" : ""),
+  (!settings->nmea_e ? "checked" : "") , (settings->nmea_e ? "checked" : ""));
 
     len = strlen(offset);
     offset += len;
@@ -733,28 +751,41 @@ void handleSettings() {
 <td align=right>\
 <select name='nmea_out2'>\
 <option %s value='%d'>Off</option>\
-<option %s value='%d'>Serial</option>\
-<option %s value='%d'>UDP</option>"),
-  (settings->nmea_out2 == NMEA_OFF  ? "selected" : ""), NMEA_OFF,
-  (settings->nmea_out2 == NMEA_UART ? "selected" : ""), NMEA_UART,
-  (settings->nmea_out2 == NMEA_UDP  ? "selected" : ""), NMEA_UDP);
+<option %s value='%d'>UDP</option>\
+<option %s value='%d'>Serial</option>"),
+  (settings->nmea_out2 == NMEA_OFF   ? "selected" : ""), NMEA_OFF,
+  (settings->nmea_out2 == NMEA_UDP   ? "selected" : ""), NMEA_UDP,
+  (settings->nmea_out2 == NMEA_UART  ? "selected" : ""), NMEA_UART);
 
   len = strlen(offset);
   offset += len;
   size -= len;
 
-  if (SoC->id == SOC_ESP32) {
-    snprintf_P ( offset, size,
-      PSTR("\
-<option %s value='%d'>TCP</option>\
-<option %s value='%d'>Bluetooth</option>"),
-    (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP,
-    (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH);
 
+  if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+     snprintf_P ( offset, size,
+       PSTR("\
+<option %s value='%d'>Serial 2</option>\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+     (settings->nmea_out2 == NMEA_UART2 ? "selected" : ""), NMEA_UART2,
+     (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
+     (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+    } else {
+     snprintf_P ( offset, size,
+       PSTR("\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+     (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
+     (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+    }
     len = strlen(offset);
     offset += len;
     size -= len;
   }
+
+Serial.println(F("Settings page part 4 done"));
 
     snprintf_P ( offset, size,
       PSTR("\
@@ -795,12 +826,20 @@ void handleSettings() {
 <input type='radio' name='nmea2_d' value='0' %s>Off\
 <input type='radio' name='nmea2_d' value='1' %s>On\
 </td>\
+</tr>\
+<tr>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;External</th>\
+<td align=right>\
+<input type='radio' name='nmea2_e' value='0' %s>Off\
+<input type='radio' name='nmea2_e' value='1' %s>On\
+</td>\
 </tr>"),
   (!settings->nmea2_g ? "checked" : "") , (settings->nmea2_g ? "checked" : ""),
   (!settings->nmea2_p ? "checked" : "") , (settings->nmea2_p ? "checked" : ""),
   (!settings->nmea2_l ? "checked" : "") , (settings->nmea2_l ? "checked" : ""),
   (!settings->nmea2_s ? "checked" : "") , (settings->nmea2_s ? "checked" : ""),
-  (!settings->nmea2_d ? "checked" : "") , (settings->nmea2_d ? "checked" : ""));
+  (!settings->nmea2_d ? "checked" : "") , (settings->nmea2_d ? "checked" : ""),
+  (!settings->nmea2_e ? "checked" : "") , (settings->nmea2_e ? "checked" : ""));
 
     len = strlen(offset);
     offset += len;
@@ -821,6 +860,29 @@ void handleSettings() {
 <option %s value='%d'>115200</option>\
 </select>\
 </td>\
+</tr>\
+<tr>\
+<th align=left>Aux Serial Port Baud Rate:</th>\
+<td align=right>\
+<select name='baudrate2'>\
+<option %s value='%d'>Disabled</option>\
+<option %s value='%d'>4800</option>\
+<option %s value='%d'>9600</option>\
+<option %s value='%d'>19200</option>\
+<option %s value='%d'>38400</option>\
+<option %s value='%d'>57600</option>\
+<option %s value='%d'>115200</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>Aux Serial Port Logic:</th>\
+<td align=right>\
+<select name='invert2'>\
+<option %s value='%d'>Normal</option>\
+<option %s value='%d'>Inverted</option>\
+</select>\
+</td>\
 </tr>"),
     (settings->baud_rate == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
     (settings->baud_rate == BAUD_4800    ? "selected" : ""), BAUD_4800,
@@ -828,7 +890,16 @@ void handleSettings() {
     (settings->baud_rate == BAUD_19200   ? "selected" : ""), BAUD_19200,
     (settings->baud_rate == BAUD_38400   ? "selected" : ""), BAUD_38400,
     (settings->baud_rate == BAUD_57600   ? "selected" : ""), BAUD_57600,
-    (settings->baud_rate == BAUD_115200  ? "selected" : ""), BAUD_115200
+    (settings->baud_rate == BAUD_115200  ? "selected" : ""), BAUD_115200,
+    (settings->baudrate2 == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
+    (settings->baudrate2 == BAUD_4800    ? "selected" : ""), BAUD_4800,
+    (settings->baudrate2 == BAUD_9600    ? "selected" : ""), BAUD_9600,
+    (settings->baudrate2 == BAUD_19200   ? "selected" : ""), BAUD_19200,
+    (settings->baudrate2 == BAUD_38400   ? "selected" : ""), BAUD_38400,
+    (settings->baudrate2 == BAUD_57600   ? "selected" : ""), BAUD_57600,
+    (settings->baudrate2 == BAUD_115200  ? "selected" : ""), BAUD_115200,
+    (!settings->invert2 ? "selected" : ""), 0,
+    ( settings->invert2 ? "selected" : ""), 1
     );
   
   len = strlen(offset);
@@ -858,7 +929,7 @@ void handleSettings() {
   offset += len;
   size -= len;
 
-  /* SoC specific part 3 */
+  /* SoC specific part 5 */
   if (SoC->id == SOC_ESP32) {
     snprintf_P ( offset, size,
       PSTR("\
@@ -1283,6 +1354,8 @@ void handleInput() {
       settings->nmea_s = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_d")) {
       settings->nmea_d = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea_e")) {
+      settings->nmea_e = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea_out2")) {
       settings->nmea_out2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea2_g")) {
@@ -1295,8 +1368,14 @@ void handleInput() {
       settings->nmea2_s = server.arg(i).toInt();
     } else if (server.argName(i).equals("nmea2_d")) {
       settings->nmea2_d = server.arg(i).toInt();
+    } else if (server.argName(i).equals("nmea2_e")) {
+      settings->nmea2_e = server.arg(i).toInt();
     } else if (server.argName(i).equals("baud_rate")) {
       settings->baud_rate = server.arg(i).toInt();
+    } else if (server.argName(i).equals("baudrate2")) {
+      settings->baudrate2 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("invert2")) {
+      settings->invert2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
       settings->gdl90 = server.arg(i).toInt();
     } else if (server.argName(i).equals("d1090")) {
@@ -1370,10 +1449,11 @@ void handleInput() {
 //  bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
   bool wifi1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP);
   bool wifi2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP);
-  if (wifi1 && nmea2==NMEA_BLUETOOTH)
-        nmea2 = NMEA_OFF;      // only one wireless output type possible
-  if (wifi2 && nmea1==NMEA_BLUETOOTH)
-        nmea2 = NMEA_OFF;
+// >>> try and allow Bluetooth along with WiFi:
+//  if (wifi1 && nmea2==NMEA_BLUETOOTH)
+//        nmea2 = NMEA_OFF;      // only one wireless output type possible
+//  if (wifi2 && nmea1==NMEA_BLUETOOTH)
+//        nmea2 = NMEA_OFF;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
   settings->nmea_out2 = nmea2;
   //if (nmea1==NMEA_BLUETOOTH || nmea2==NMEA_BLUETOOTH
@@ -1406,7 +1486,7 @@ void handleInput() {
   //    settings->txpower == RF_TX_POWER_FULL;
 
   /* show new settings before rebooting */
-  size_t size = 3500;
+  size_t size = 3800;
   char *Input_temp = (char *) malloc(size);
   if (Input_temp != NULL) {
     snprintf_P ( Input_temp, size,
@@ -1433,6 +1513,9 @@ PSTR("<html>\
 <tr><th align=left>Strobe</th><td align=right>%d</td></tr>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Voice</th><td align=right>%d</td></tr>\
+<tr><th align=left>Baud 1</th><td align=right>%d</td></tr>\
+<tr><th align=left>Baud 2</th><td align=right>%d</td></tr>\
+<tr><th align=left>Invert 2</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP mode</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP port</th><td align=right>%d</td></tr>\
@@ -1444,12 +1527,14 @@ PSTR("<html>\
 <tr><th align=left>NMEA Legacy</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Sensors</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Debug</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA External</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA Out 2</th><td align=right>%d</td></tr>\
 <tr><th align=left>NMEA2 GNSS</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Private</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Legacy</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Sensors</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
+<tr><th align=left>NMEA2 External</th><td align=right>%s</td></tr>\
 <tr><th align=left>GDL90</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
 <tr><th align=left>Air-Relay</th><td align=right>%d</td></tr>\
@@ -1471,15 +1556,16 @@ PSTR("<html>\
     settings->ignore_id, settings->follow_id,
     settings->rf_protocol, settings->band,
     settings->aircraft_type, settings->alarm, settings->txpower,
-    settings->volume, settings->strobe, settings->pointer,
-    settings->voice, settings->bluetooth,
-    settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
+    settings->volume, settings->strobe, settings->pointer, settings->voice,
+    settings->baud_rate, settings->baudrate2, settings->invert2,
+    settings->bluetooth, settings->tcpmode, settings->tcpport,
+    settings->ssid, settings->host_ip,
     settings->nmea_out,
-    BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p),
-    BOOL_STR(settings->nmea_l), BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d),
+    BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p), BOOL_STR(settings->nmea_l),
+    BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d), BOOL_STR(settings->nmea_e),
     settings->nmea_out2,
-    BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p),
-    BOOL_STR(settings->nmea2_l), BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d),
+    BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p), BOOL_STR(settings->nmea2_l),
+    BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d), BOOL_STR(settings->nmea2_e),
     settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
     settings->power_save, settings->power_external,
@@ -1511,6 +1597,9 @@ Serial.print(F(" Volume "));Serial.println(settings->volume);
 Serial.print(F(" Strobe "));Serial.println(settings->strobe);
 Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
 Serial.print(F(" Voice "));Serial.println(settings->voice);
+Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
+Serial.print(F(" Baud 2 "));Serial.println(settings->baudrate2);
+Serial.print(F(" Invert 2 "));Serial.println(settings->invert2);
 Serial.print(F(" Bluetooth "));Serial.println(settings->bluetooth);
 Serial.print(F(" TCP mode "));Serial.println(settings->tcpmode);
 Serial.print(F(" TCP port "));Serial.println(settings->tcpport);
@@ -1523,12 +1612,14 @@ Serial.print(F(" NMEA Private "));Serial.println(settings->nmea_p);
 Serial.print(F(" NMEA Legacy "));Serial.println(settings->nmea_l);
 Serial.print(F(" NMEA Sensors "));Serial.println(settings->nmea_s);
 Serial.print(F(" NMEA Debug "));Serial.println(settings->nmea_d);
+Serial.print(F(" NMEA External "));Serial.println(settings->nmea_e);
 Serial.print(F(" NMEA Out 2 "));Serial.println(settings->nmea_out2);
 Serial.print(F(" NMEA2 GNSS "));Serial.println(settings->nmea2_g);
 Serial.print(F(" NMEA2 Private "));Serial.println(settings->nmea2_p);
 Serial.print(F(" NMEA2 Legacy "));Serial.println(settings->nmea2_l);
 Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
 Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
+Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
 Serial.print(F(" GDL90 "));Serial.println(settings->gdl90);
 Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);
 Serial.print(F(" Air-Relay "));Serial.println(settings->relay);

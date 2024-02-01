@@ -1044,6 +1044,7 @@ static void ESP32_post_init()
   switch (settings->nmea_out)
   {
     case NMEA_UART       :  Serial.println(F("UART"));      break;
+    case NMEA_UART2      :  Serial.println(F("UART2"));     break;
     case NMEA_USB        :  Serial.println(F("USB CDC"));   break;
     case NMEA_UDP        :  Serial.println(F("UDP"));       break;
     case NMEA_TCP        :  Serial.println(F("TCP"));       break;
@@ -1055,6 +1056,7 @@ static void ESP32_post_init()
   switch (settings->nmea_out2)
   {
     case NMEA_UART       :  Serial.println(F("UART"));      break;
+    case NMEA_UART2      :  Serial.println(F("UART2"));     break;
     case NMEA_UDP        :  Serial.println(F("UDP"));       break;
     case NMEA_TCP        :  Serial.println(F("TCP"));       break;
     case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
@@ -1066,8 +1068,10 @@ static void ESP32_post_init()
   switch (settings->gdl90)
   {
     case GDL90_UART      :  Serial.println(F("UART"));      break;
+//  case GDL90_UART2     :  Serial.println(F("UART2"));     break;
     case GDL90_USB       :  Serial.println(F("USB CDC"));   break;
     case GDL90_UDP       :  Serial.println(F("UDP"));       break;
+//  case GDL90_TCP       :  Serial.println(F("TCP"));       break;
     case GDL90_BLUETOOTH :  Serial.println(F("Bluetooth")); break;
     case GDL90_OFF       :
     default              :  Serial.println(F("NULL"));      break;
@@ -1078,7 +1082,10 @@ static void ESP32_post_init()
   switch (settings->d1090)
   {
     case D1090_UART      :  Serial.println(F("UART"));      break;
+//  case D1090_UART2     :  Serial.println(F("UART2"));     break;
     case D1090_USB       :  Serial.println(F("USB CDC"));   break;
+//  case D1090_UDP       :  Serial.println(F("UDP"));       break;
+//  case D1090_TCP       :  Serial.println(F("TCP"));       break;
     case D1090_BLUETOOTH :  Serial.println(F("Bluetooth")); break;
     case D1090_OFF       :
     default              :  Serial.println(F("NULL"));      break;
@@ -1320,6 +1327,20 @@ static void ESP32_loop()
 
 static void ESP32_fini(int reason)
 {
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_LED_V11)
+    // if Serial2 used this pin, turn red LED back on to show when ESP32 turns off
+    if (has_serial2) {
+        has_serial2 = false;    // in NMEA.cpp
+        delay(300);
+        Serial2.end();
+        pinMode(SOC_GPIO_PIN_TBEAM_LED_V11, OUTPUT);
+        digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V11, LOW);
+        delay(1000);
+    }
+#endif
+}
+
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
   if (ESP32_has_spiflash) {
 #if CONFIG_TINYUSB_MSC_ENABLED
@@ -2076,12 +2097,13 @@ static byte ESP32_Display_setup()
     } else if (GPIO_21_22_are_busy) {
       if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8) {
         // Wire1 = Wire;
-        Wire1.begin(TTGO_V2_OLED_PIN_SDA , TTGO_V2_OLED_PIN_SCL);
+        Wire1.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);  // redundant?
         Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
         has_oled = (Wire1.endTransmission() == 0);
         if (has_oled) {
           u8x8 = &u8x8_ttgo;
           rval = DISPLAY_OLED_TTGO;
+          Serial.println(F("u8x8_ttgo OLED found"));
         }
       } else {
         Wire1.begin(HELTEC_OLED_PIN_SDA , HELTEC_OLED_PIN_SCL);
@@ -2694,17 +2716,22 @@ static bool ESP32_Baro_setup()
 
     Wire.setPins(SOC_GPIO_PIN_SDA, SOC_GPIO_PIN_SCL);
 
-  } else {
+  } else {   // is SOFTRF_MODEL_PRIME_MK2
 
     if (hw_info.revision == 2 && RF_SX12XX_RST_is_connected) {
       hw_info.revision = 5;
     }
 
-    /* Start from 1st I2C bus */
+    /* Start from 1st I2C bus (pins 2, 13) */
     Wire.setPins(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);
-    if (Baro_probe())
-      return true;
-
+    if (Baro_probe()) {                        // found baro sensor
+#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_SCL)
+        settings->baudrate2 == BAUD_DEFAULT;   // disable Serial2 if it uses pins 2,13
+#endif
+        Serial.println(F("BMP found on pins 2,13"));
+        return true;
+    }
+    // not found
     WIRE_FINI(Wire);
 
     if (hw_info.revision == 2)
@@ -2713,17 +2740,18 @@ static bool ESP32_Baro_setup()
 #if !defined(ENABLE_AHRS)
     /* Try out OLED I2C bus */
     Wire.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);
-    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8) {
-      Wire1 = Wire;
+    if (/* hw_info.model == SOFTRF_MODEL_PRIME_MK2 && */ hw_info.revision >= 8) {
+      Wire1 = Wire;      // WIRE_FINI does not work with old libraries
     }
     if (!Baro_probe()) {
-      if (!(hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8)) {
+      if (!(/*hw_info.model == SOFTRF_MODEL_PRIME_MK2 && */ hw_info.revision >= 8)) {
         WIRE_FINI(Wire);
       }
       return false;
     }
 
-    GPIO_21_22_are_busy = true;
+    GPIO_21_22_are_busy = true;   // will use already-started Wire1 for OLED
+    Serial.println(F("BMP found on pins 21,22"));
 #else
     return false;
 #endif
@@ -2778,21 +2806,20 @@ AceButton button_2(SOC_GPIO_PIN_TBEAM_V08_BUTTON);
 void handleEvent(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
+  if (button != &button_1)
+      return;
+
   switch (eventType) {
     case AceButton::kEventClicked:
     case AceButton::kEventReleased:
 #if defined(USE_OLED)
-      if (button == &button_1) {
-        OLED_Next_Page();
-      }
+      OLED_Next_Page();
 #endif
       break;
     case AceButton::kEventDoubleClicked:
       break;
     case AceButton::kEventLongPressed:
-      if (button == &button_1) {
-        shutdown(SOFTRF_SHUTDOWN_BUTTON);
-      }
+      shutdown(SOFTRF_SHUTDOWN_BUTTON);
       break;
   }
 }
@@ -2800,11 +2827,13 @@ void handleEvent(AceButton* button, uint8_t eventType,
 void handleEvent2(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
+  if (button != &button_2)
+      return;
+
   /* Use middle button on T-Beam to turn off Bluetooth */
   /* this can help one reach the web interface */
   /* But in winch mode use the button to turn transmissions on/off */
-
-  static bool done = false;
+  /* Note that now any web access turns BT off, without the button */
 
   switch (eventType) {
     case AceButton::kEventClicked:
@@ -2815,11 +2844,10 @@ void handleEvent2(AceButton* button, uint8_t eventType,
           } else {
               settings->txpower = RF_TX_POWER_OFF;
           }
-      } else if (settings->bluetooth != BLUETOOTH_OFF && done == false && millis() > 15000) {
+      } else if (settings->bluetooth != BLUETOOTH_OFF && millis() > 15000) {
           if (SoC->Bluetooth_ops) {
               Serial.println(F("Turning off Bluetooth due to button press"));
               SoC->Bluetooth_ops->fini();
-              done = true;   // only do this once, until next reboot
           }
       }
       break;

@@ -36,11 +36,14 @@
 #define DEFAULT_SOFTRF_MODEL    SOFTRF_MODEL_STANDALONE
 
 #define SerialOutput            Serial
+#define SerialInput             SerialOutput
 #define SoftwareSerial          HardwareSerial
 #define Serial_GNSS_In          Serial1
 #define Serial_GNSS_Out         Serial_GNSS_In
 
-#define swSer                   Serial1
+#define swSer                 Serial1
+
+#define SerialBufSize         480
 
 #if defined(CONFIG_IDF_TARGET_ESP32)
 #define UATSerial               Serial2
@@ -156,8 +159,15 @@ extern Adafruit_NeoPixel strip;
 /* instead of 25 which is now used for voice: */
 #define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 33 : SOC_UNUSED_PIN)
 
-/* use DAC channel 1 for voice (internal I2S) */
+/* use DAC channel 1 for voice output (internal I2S) */
 #define SOC_GPIO_PIN_VOICE    (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 25 : SOC_UNUSED_PIN)
+
+// GPIO pins for Serial2 on T-Beam:
+// - not clear yet whether these pins can work
+//#define Serial2RxPin          13
+//#define Serial2TxPin           2
+#define Serial2RxPin             0
+#define Serial2TxPin             4
 
 /* SPI (does match Heltec & TTGO LoRa32 pins mapping) */
 #define SOC_GPIO_PIN_MOSI       27
@@ -455,11 +465,14 @@ struct rst_info {
 #define EXCLUDE_GNSS_MTK
 
 #define EXCLUDE_CC13XX
-#define EXCLUDE_SOFTRF_HEARTBEAT
+//#define EXCLUDE_SOFTRF_HEARTBEAT
 #define EXCLUDE_LK8EX1
 //#define EXCLUDE_IMU
 
-#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#if !defined(CONFIG_IDF_TARGET_ESP32S2) && !defined(CONFIG_IDF_TARGET_ESP32S3)
+#define EXCLUDE_UATM
+#else
+//#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
 #define EXCLUDE_NRF905
 #define EXCLUDE_UATM
 #define EXCLUDE_LED_RING

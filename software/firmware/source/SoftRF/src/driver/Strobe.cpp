@@ -92,7 +92,7 @@ void Strobe_Start()
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRSF,%d*"), NMEAlevel);
         NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-        NMEA_Outs(settings->nmea_l, settings->nmea2_l, (byte *) NMEABuffer, strlen(NMEABuffer), false);
+        NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
     }
 }
 
@@ -143,6 +143,8 @@ void Strobe_loop(void)
 //          alarm_level = ((millis() & 0x6000) == 0x6000) ? ALARM_LEVEL_LOW : ALARM_LEVEL_NONE;
 //      else
             alarm_level = max_alarm_level;
+      if (! alarm_ahead)                    // not within +-45 degrees of our track
+          alarm_level = ALARM_LEVEL_NONE;   // strobe is facing forward, no use
       uint32_t pause_ms = 0;
       if (self_test) {
             pause_ms = alarm_level > ALARM_LEVEL_CLOSE ? STROBE_MS_PAUSE_ALARM : STROBE_MS_PAUSE_NOALARM;

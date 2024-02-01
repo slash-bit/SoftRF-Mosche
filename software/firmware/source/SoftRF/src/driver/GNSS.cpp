@@ -48,6 +48,8 @@
 #define GNSS_FLUSH()        Serial_GNSS_Out.flush()
 #endif
 
+bool is_prime_mk2 = false;
+
 unsigned long GNSSTimeSyncMarker = 0;
 volatile unsigned long PPS_TimeMarker = 0;
 
@@ -1026,6 +1028,9 @@ bool isValidGNSSFix()
 
 byte GNSS_setup() {
 
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */)
+      is_prime_mk2 = true;
+
   gnss_id_t gnss_id = GNSS_MODULE_NONE;
 
   SoC->swSer_begin(SERIAL_IN_BR);
@@ -1116,7 +1121,7 @@ byte GNSS_setup() {
   }
 
 #if defined(USE_NMEA_CFG)
-  NMEA_Source = settings->nmea_out;
+  NMEA_Source = NMEA_OFF;
 #endif /* USE_NMEA_CFG */
 
   return (byte) gnss_id;
@@ -1188,16 +1193,97 @@ void GNSSTimeSync()
   }
 }
 
+bool Try_GNSS_sentence() {
+    int ndx;
+    bool isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
+    if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
+      NMEA_Source = NMEA_OFF;
+      if (settings->nmea_g || settings->nmea2_g) {
+        for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // jump over CS and *
+          if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
+            size_t write_size = GNSS_cnt - ndx + 1;   // includes * and CS
+#if 0
+          if (!strncmp((char *) &GNSSbuf[ndx+3], "GGA,", strlen("GGA,"))) {
+            GGA_Stop_Time_Marker = millis();
+
+            Serial.print("GGA Start: ");
+            Serial.print(GGA_Start_Time_Marker);
+            Serial.print(" Stop: ");
+            Serial.print(GGA_Stop_Time_Marker);
+            Serial.print(" gnss.time.age: ");
+            Serial.println(gnss.time.age());
+
+          }
+#endif
+            /*
+             * Work around issue with "always 0.0,M" GGA geoid separation value
+             * given by some Chinese GNSS chipsets
+             */
+#if defined(USE_NMEALIB)
+            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
+                !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
+                gnss.separation.meters() == 0.0) {
+              NMEA_GGA();
+            }
+            else
+#endif
+            {
+              if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
+                strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
+              }
+              NMEA_Outs(settings->nmea_g, settings->nmea2_g, (char *) &GNSSbuf[ndx], write_size, true);
+            }
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+}
+
 void PickGNSSFix()
 {
-  bool isValidSentence = false;
-  int ndx;
   int c = -1;
+
+  if (is_prime_mk2) {
+
+    // only use the internal GNSS, leave other ports alone for data bridging
+    while (true) {
+      if (Serial_GNSS_In.available() > 0) {
+       c = Serial_GNSS_In.read();
+      } else {
+        /* return back if no input data */
+        return;
+      }
+      if (c == -1) {
+        /* retry */
+        continue;
+      }
+      if (isPrintable(c) || c == '\r' || c == '\n') {
+        GNSSbuf[GNSS_cnt] = c;
+      } else {
+        /* ignore */
+        continue;
+      }
+      (void) Try_GNSS_sentence();
+      if (GNSSbuf[GNSS_cnt] == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+        GNSS_cnt = 0;
+      } else {
+        GNSS_cnt++;
+        yield();
+      }
+    }        // infinite loop unless !Serial_GNSS_In.available() above
+
+    return;
+  }
+
+  // other models:
 
   /*
    * Check SW/HW UARTs, USB and BT for data
    * WARNING! Make use only one input source at a time.
    */
+   // - note there is nothing here to stop interleaving sentences from different sources!
   while (true) {
 #if !defined(USE_NMEA_CFG)
     if (Serial_GNSS_In.available() > 0) {
@@ -1206,7 +1292,10 @@ void PickGNSSFix()
       c = Serial.read();
     } else if (SoC->Bluetooth_ops && SoC->Bluetooth_ops->available() > 0) {
       c = SoC->Bluetooth_ops->read();
-
+    } else {
+      /* return back if no input data */
+      break;
+    }
       /*
        * Don't forget to disable echo:
        *
@@ -1259,11 +1348,12 @@ void PickGNSSFix()
     /* Built-in GNSS input */
     } else if (Serial_GNSS_In.available() > 0) {
       c = Serial_GNSS_In.read();
-#endif /* USE_NMEA_CFG */
+      NMEA_Source = NMEA_OFF;
     } else {
       /* return back if no input data */
       break;
     }
+#endif /* USE_NMEA_CFG */
 
     if (c == -1) {
       /* retry */
@@ -1296,52 +1386,7 @@ void PickGNSSFix()
     }
 #endif /* ENABLE_GNSS_STATS */
 
-    isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
-    if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
-      if (settings->nmea_g || settings->nmea2_g) {
-        for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // skip CS and *
-          if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
-
-            size_t write_size = GNSS_cnt - ndx + 1;
-
-#if 0
-          if (!strncmp((char *) &GNSSbuf[ndx+3], "GGA,", strlen("GGA,"))) {
-            GGA_Stop_Time_Marker = millis();
-
-            Serial.print("GGA Start: ");
-            Serial.print(GGA_Start_Time_Marker);
-            Serial.print(" Stop: ");
-            Serial.print(GGA_Stop_Time_Marker);
-            Serial.print(" gnss.time.age: ");
-            Serial.println(gnss.time.age());
-
-          }
-#endif
-
-            /*
-             * Work around issue with "always 0.0,M" GGA geoid separation value
-             * given by some Chinese GNSS chipsets
-             */
-#if defined(USE_NMEALIB)
-            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
-                !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
-                gnss.separation.meters() == 0.0) {
-              NMEA_GGA();
-            }
-            else
-#endif
-            {
-              if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
-                strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
-              }
-              NMEA_Outs(settings->nmea_g, settings->nmea2_g, &GNSSbuf[ndx], write_size, true);
-            }
-
-            break;
-          }
-        }
-      }
-
+    if (Try_GNSS_sentence()) {
 #if defined(USE_NMEA_CFG)
       NMEA_Process_SRF_SKV_Sentences();
 #endif /* USE_NMEA_CFG */
@@ -1381,7 +1426,8 @@ void PickGNSSFix()
       GNSS_cnt++;
       yield();
     }
-  }
+  }    // end of while()
+
 }
 
 #if !defined(EXCLUDE_EGM96)

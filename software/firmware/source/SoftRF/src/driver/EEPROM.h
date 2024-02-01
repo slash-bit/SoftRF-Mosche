@@ -128,8 +128,13 @@ typedef struct Settings {
     int8_t   freq_corr; /* +/-, kHz */
     uint8_t  resvd2;
     uint8_t  relay:2;
-    uint8_t  resvd3:6;
-    uint8_t  baud_rate;   /* for serial UART output */
+    uint8_t  resvd3:4;
+    bool     nmea_e:1;
+    bool     nmea2_e:1;     // whether to send bridged data
+    uint8_t  baud_rate:3;   /* for serial UART0 */
+    uint8_t  baudrate2:3;   /* for aux UART2 */
+    bool     invert2:1;     // whether to invert the logic levels on UART2
+    bool     resvd4:1;
 
     /* Use a key provided by (local) gliding contest organizer */
     uint32_t igc_key[4];
