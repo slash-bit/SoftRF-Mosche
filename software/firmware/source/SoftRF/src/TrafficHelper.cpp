@@ -882,12 +882,16 @@ void Traffic_loop()
           /* else Traffic_Update(fop) was called last time a radio packet came in */
 
           /* determine the highest alarm level seen at the moment */
-          if (fop->alarm_level > max_alarm_level) {
+          if (fop->alarm_level > max_alarm_level)
               max_alarm_level = fop->alarm_level;
+
+          /* determine if any traffic with alarm level low+ is "ahead" */
+          /* - this is for the strobe, increase flashing if "ahead" */
+          if (fop->alarm_level >= ALARM_LEVEL_LOW) {
               int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
               rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
               if (abs(rel_bearing) < 45)
-                  alarm_ahead = true;    // at least > ALARM_LEVEL_NONE
+                  alarm_ahead = true;
           }
 
           /* figure out what is the highest alarm level needing a sound alert */

@@ -1327,20 +1327,6 @@ static void ESP32_loop()
 
 static void ESP32_fini(int reason)
 {
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
-#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_LED_V11)
-    // if Serial2 used this pin, turn red LED back on to show when ESP32 turns off
-    if (has_serial2) {
-        has_serial2 = false;    // in NMEA.cpp
-        delay(300);
-        Serial2.end();
-        pinMode(SOC_GPIO_PIN_TBEAM_LED_V11, OUTPUT);
-        digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V11, LOW);
-        delay(1000);
-    }
-#endif
-}
-
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
   if (ESP32_has_spiflash) {
 #if CONFIG_TINYUSB_MSC_ENABLED
@@ -2463,6 +2449,19 @@ static void ESP32_Display_loop()
 
 static void ESP32_Display_fini(int reason)
 {
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_LED_V11)
+    // if Serial2 used this pin, turn red LED back on to show shutdown in progress
+    if (has_serial2) {
+        has_serial2 = false;    // in NMEA.cpp
+        delay(300);
+        Serial2.end();
+        pinMode(SOC_GPIO_PIN_TBEAM_LED_V11, OUTPUT);
+        digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V11, LOW);
+    }
+#endif
+  }
+
   switch (hw_info.display)
   {
 #if defined(USE_OLED)
@@ -2535,6 +2534,7 @@ static void ESP32_Display_fini(int reason)
 
   case DISPLAY_NONE:
   default:
+    delay(2000);   // chance to observe the red LED
     break;
   }
 }

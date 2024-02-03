@@ -418,6 +418,7 @@ void NMEA_setup()
 
 #if defined(NMEA_TCP_SERVICE)
   if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+    // note: no TCP input possible unless TCP output destination is active
     if (settings->tcpmode == TCP_MODE_SERVER) {
         NmeaTCPServer.begin();
         Serial.print(F("NMEA TCP server has started at port: "));
@@ -570,16 +571,17 @@ void NMEA_bridge_send(char *buf, int len)
     // Also trap PSRF config sentences, process internally instead
     // Not sure whether to process SKV sentences here or pass them on?
     if (buf[1]=='P' && buf[2]=='S' && buf[3]=='R' && buf[4]=='F') {
+        NMEA_bridge_sent = true;
         for (int i=0; i<len; i++) {
             if (gnss.encode(buf[i])) {   // valid sentence
                 NMEA_Process_SRF_SKV_Sentences();
-                NMEA_bridge_sent = true;
+                return;
             }
         }
         // if $PSRF but not a valid sentence, send it back to the source:
         NMEA_Out(NMEA_Source, buf, len, false);
         NMEA_Out(NMEA_Source, "-- invalid", 10, true);
-        NMEA_bridge_sent = true;
+        return;
     }
 #endif
 
@@ -598,16 +600,19 @@ void NMEA_bridge_send(char *buf, int len)
 // common code for all these buffers:
 void NMEA_bridge_buf(char c, char* buf, int& n)
 {
-    if (c == '$') {        // start new sentence, drop any preceding data
+    if (c == '$') {
         n = 0;
+        // start new sentence, drop any preceding data
         // fall through to buf[n++] = c;
-    } else if (n == 0) {   // wait for a '$'
-        if (c != '!')      // start new sentence of some related protocols
+    } else if (n == 0) {      // wait for a '$' (or '!')
+        if (c != '!')
             return;
-        // else fall through to buf[n++] = c;
+        // if '!', start new sentence of some related protocols
+        // fall through to buf[n++] = c;
     } else if (c=='\r' || c=='\n') {
-        if (n > 5) {                  // ensures reading buf[n-3] below is safe
+        if (n > 5 && n <= 128) {
             // sentences missing "*xx" ending are ignored unless started with '!'
+            // >>> or could forward all sentences even without checksum?
             if (buf[0] == '!' || buf[n-3] == '*') {
                 buf[n++] = '\r';
                 buf[n++] = '\n';      // add a proper line-ending
@@ -681,33 +686,38 @@ void NMEA_loop()
 
 #if defined(NMEA_TCP_SERVICE)
     static char tcpinbuf[128];
-    static char tcpoutbuf[128+3];
-    static int tcp_n = 0;
+    static char tcpoutbuf[MAX_NMEATCP_CLIENTS][128+3];
+    static int tcp_n[MAX_NMEATCP_CLIENTS] = {0};
+//  static bool tcp_n_init = false;
     if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-     // note TCP input will not be polled unless TCP output is active
-    NMEA_Source = NMEA_TCP;
-    if (settings->tcpmode == TCP_MODE_CLIENT) {
-      while (1) {
-        int n = WiFi_receive_TCP(tcpinbuf, 128);
-        if (n <= 0)
-            break;
-        for (int i=0; i<n; i++) {
-            NMEA_bridge_buf(tcpinbuf[i], tcpoutbuf, tcp_n);
-        }
-      }
-    }
-    else if (settings->tcpmode == TCP_MODE_SERVER) {
-      for (int i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
-        if (NmeaTCP[i].client && NmeaTCP[i].client.connected()) {
-          while (NmeaTCP[i].client.available()) {
-            c = NmeaTCP[i].client.read();
-            NMEA_bridge_buf(c, tcpoutbuf, tcp_n);
+      // note TCP input will not be polled unless TCP output is active
+      NMEA_Source = NMEA_TCP;
+      if (settings->tcpmode == TCP_MODE_CLIENT) {
+        while (1) {
+          int n = WiFi_receive_TCP(tcpinbuf, 128);
+          if (n <= 0)
+              break;
+          for (int i=0; i<n; i++) {
+              NMEA_bridge_buf(tcpinbuf[i], tcpoutbuf[0], tcp_n[0]);
           }
         }
       }
-      // note this may collect input from more than one client and their sentences may
-      //   get mixed - to avoid that would need MAX_NMEATCP_CLIENTS separate buffers
-    }
+      else if (settings->tcpmode == TCP_MODE_SERVER) {
+        // Note: this may collect input from more than one client.  To keep their sentences
+        // from getting mixed need MAX_NMEATCP_CLIENTS (which is just 2) separate buffers.
+        // note same NMEA_Source for all clients, won't forward from one to another
+        for (int i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
+          if (NmeaTCP[i].client && NmeaTCP[i].client.connected()) {
+//            if (! tcp_n_init)
+//              tcp_n[i] = 0;
+            while (NmeaTCP[i].client.available()) {
+              c = NmeaTCP[i].client.read();
+              NMEA_bridge_buf(c, tcpoutbuf[i], tcp_n[i]);
+            }
+          }
+        }
+//        tcp_n_init = true; 
+      }
     }
 #endif
 
@@ -797,11 +807,14 @@ void NMEA_loop()
          !NmeaTCP[i].ack && NmeaTCP[i].connect_ts > 0 &&
          (now() - NmeaTCP[i].connect_ts) >= NMEATCP_ACK_TIMEOUT) {
 
-          /* Clean TCP input buffer from any pass codes sent by client */
-          //while (NmeaTCP[i].client.available()) {
-          //  char c = NmeaTCP[i].client.read();
-          //  yield();
-          //}
+          if (! is_a_prime_mk2) {
+              /* Clean TCP input buffer from any pass codes sent by client */
+              while (NmeaTCP[i].client.available()) {
+                char c = NmeaTCP[i].client.read();
+                yield();
+              }
+          }
+
           /* send acknowledge */
           NmeaTCP[i].client.print(F("AOK"));
           NmeaTCP[i].ack = true;
@@ -1100,7 +1113,7 @@ void NMEA_Export()
 
 #if defined(USE_NMEALIB)
 
-void NMEA_Position()
+void NMEA_Position()    // only called in txrx_test() mode (and maybe from RPi)
 {
   NmeaInfo info;
   size_t i;
@@ -1175,7 +1188,6 @@ void NMEA_Position()
       (NMEALIB_SENTENCE_GPGGA | NMEALIB_SENTENCE_GPGSA | NMEALIB_SENTENCE_GPRMC));
 
     if (gen_sz) {
-      strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
       NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
     }
   }
@@ -1251,10 +1263,10 @@ void NMEA_GGA()
 void nmea_cfg_send()
 {
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-#if !defined(USE_NMEA_CFG)
-    uint8_t dest = settings->nmea_out;
+#if defined(USE_NMEA_CFG)
+    uint8_t dest = NMEA_Source;           // answer the config source
 #else
-    uint8_t dest = NMEA_Source;
+    uint8_t dest = settings->nmea_out;    // is nmea_cfg_send() called?
 #endif /* USE_NMEA_CFG */
     NMEA_Out(dest, NMEABuffer, strlen(NMEABuffer), false);
 }

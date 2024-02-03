@@ -166,7 +166,9 @@ extern Adafruit_NeoPixel strip;
 // - not clear yet whether these pins can work
 //#define Serial2RxPin          13
 //#define Serial2TxPin           2
-#define Serial2RxPin             0
+//#define Serial2RxPin           0
+//#define Serial2RxPin          36  // VP
+#define Serial2RxPin            39  // VN
 #define Serial2TxPin             4
 
 /* SPI (does match Heltec & TTGO LoRa32 pins mapping) */

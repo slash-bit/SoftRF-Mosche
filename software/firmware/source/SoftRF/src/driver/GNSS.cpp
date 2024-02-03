@@ -1120,9 +1120,15 @@ byte GNSS_setup() {
 #endif
   }
 
-#if defined(USE_NMEA_CFG)
+#if defined(USE_NMEALIB)
+//Serial.println("GNSS_setup: using NMEALIB");
+#else
+//Serial.println("GNSS_setup: not using NMEALIB");
+#endif
+
+//#if defined(USE_NMEA_CFG)
   NMEA_Source = NMEA_OFF;
-#endif /* USE_NMEA_CFG */
+//#endif /* USE_NMEA_CFG */
 
   return (byte) gnss_id;
 }
@@ -1219,16 +1225,18 @@ bool Try_GNSS_sentence() {
              * Work around issue with "always 0.0,M" GGA geoid separation value
              * given by some Chinese GNSS chipsets
              */
+            bool is_gga = (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4));
 #if defined(USE_NMEALIB)
-            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
-                !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4) &&
-                gnss.separation.meters() == 0.0) {
+            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && is_gga
+                  && gnss.separation.meters() == 0.0) {
               NMEA_GGA();
+              // GGA is output either directly (below) or indirectly (via NMEA_GGA()) but not both.
+              // Observed on a T-Beam: NMEA_GGA() while no fix, then direct.
             }
             else
 #endif
             {
-              if (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4)) {
+              if (is_gga) {
                 strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
               }
               NMEA_Outs(settings->nmea_g, settings->nmea2_g, (char *) &GNSSbuf[ndx], write_size, true);
