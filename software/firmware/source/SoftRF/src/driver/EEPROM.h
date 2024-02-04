@@ -61,26 +61,26 @@ enum
 	STROBE_ALWAYS
 };
 
-#if !defined(EXCLUDE_VOICE)
-#if defined(ESP32)
+//#if !defined(EXCLUDE_VOICE)
+//#if defined(ESP32)
 enum
 {
 	VOICE_OFF = 0,
 	VOICE_INT,
 	VOICE_EXT
 };
-#endif
-#endif
+//#endif
+//#endif
 
 enum
 {
-	BAUD_DEFAULT,
-	BAUD_4800,
-	BAUD_9600,
-	BAUD_19200,
-	BAUD_38400,
-	BAUD_57600,
-	BAUD_115200
+	BAUD_DEFAULT = 0,
+	BAUD_4800 = 1,
+	BAUD_9600 = 2,
+	BAUD_19200 = 3,
+	BAUD_38400 = 4,
+	BAUD_57600 = 5,
+	BAUD_115200 = 6
 };
 
 enum
@@ -134,7 +134,7 @@ typedef struct Settings {
     uint8_t  baud_rate:3;   /* for serial UART0 */
     uint8_t  baudrate2:3;   /* for aux UART2 */
     bool     invert2:1;     // whether to invert the logic levels on UART2
-    bool     resvd4:1;
+    bool     altpin0:1;     // whether to use a different pin for UART0 RX
 
     /* Use a key provided by (local) gliding contest organizer */
     uint32_t igc_key[4];
@@ -187,5 +187,6 @@ void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 extern settings_t *settings;
+extern uint32_t baudrates[];
 
 #endif /* EEPROMHELPER_H */

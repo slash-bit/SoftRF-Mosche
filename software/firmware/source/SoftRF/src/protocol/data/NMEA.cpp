@@ -208,6 +208,7 @@ TinyGPSCustom D_baudrate2;
 TinyGPSCustom D_invert2;
 TinyGPSCustom D_extern1;
 TinyGPSCustom D_extern2;  /* 21 */
+TinyGPSCustom D_altpin0;
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -294,41 +295,16 @@ void NMEA_setup()
     is_a_prime_mk2 = true;
 
     // use Serial2 as an auxillary port for data bridging
-    uint32_t Serial2Baud = 0;
-    switch (settings->baudrate2)
-    {
-    case BAUD_4800:
-      Serial2Baud = 4800;
-      break;
-    case BAUD_9600:
-      Serial2Baud = 9600;
-      break;
-    case BAUD_19200:
-      Serial2Baud = 19200;
-      break;
-    case BAUD_38400:
-      Serial2Baud = 38400;
-      break;
-    case BAUD_57600:
-      Serial2Baud = 57600;
-      break;
-    case BAUD_115200:
-      Serial2Baud = 115200;
-      break;
-    case BAUD_DEFAULT:
-    default:
-      // note BAUD_DEFAULT here means Serial2 disabled, not 38400
-      Serial2Baud = 0;
-      break;
-    }
+    uint32_t Serial2Baud = baudrates[settings->baudrate2];
     if (Serial2Baud != 0) {
         Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
         Serial2.setRxBufferSize(SerialBufSize);
         has_serial2 = true;
-        Serial.printf("Serial2 started, at baud rate %d, logic:%d\r\n",
+        Serial.printf("Serial2 started at baud rate %d, logic:%d\r\n",
                Serial2Baud, settings->invert2);
     } else {
-        Serial.print(F("Serial2 NOT started"));
+        // note BAUD_DEFAULT here means Serial2 disabled, not 38400
+        Serial.println(F("Serial2 NOT started"));
     }
   }
 
@@ -380,6 +356,7 @@ void NMEA_setup()
   D_invert2.begin       (gnss, psrf_d, term_num++);
   D_extern1.begin       (gnss, psrf_d, term_num++);
   D_extern2.begin       (gnss, psrf_d, term_num++); /* 21 */
+  D_altpin0.begin       (gnss, psrf_d, term_num++);
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -640,21 +617,24 @@ void NMEA_loop()
      */
     int c;
 
-    NMEA_Source = NMEA_UART;
+#if 0
+    static char usb_buf[128+3];
+    static int usb_n = 0;
+    if (SoC->USB_ops) {
+      NMEA_Source = NMEA_USB;
+      while (SoC->USB_ops->available() > 0) {
+        c = SoC->USB_ops->read();
+        NMEA_bridge_buf(c, usb_buf, usb_n);
+      }
+    }
+#endif
+
     static char uart_buf[128+3];
     static int uart_n = 0;
-    if (SoC->USB_ops) {
-      while (SoC->USB_ops && SoC->USB_ops->available() > 0) {
-        c = SoC->USB_ops->read();
-        NMEA_bridge_buf(c, uart_buf, uart_n);
-      }
-    } else {
-      while (Serial.available() > 0) {
-        c = Serial.read();
-//if (c == '$')
-//Serial.println("Serial received $");
-        NMEA_bridge_buf(c, uart_buf, uart_n);
-      }
+    NMEA_Source = NMEA_UART;
+    while (Serial.available() > 0) {
+      c = Serial.read();
+      NMEA_bridge_buf(c, uart_buf, uart_n);
     }
 
     static char uart2_buf[128+3];
@@ -678,8 +658,6 @@ void NMEA_loop()
       NMEA_Source = NMEA_BLUETOOTH;
       while (BTactive && SoC->Bluetooth_ops->available() > 0) {
         c = SoC->Bluetooth_ops->read();
-//if (c == '$')
-//Serial.println("BT received $");
         NMEA_bridge_buf(c, bt_buf, bt_n);
       }
     }
@@ -705,7 +683,7 @@ void NMEA_loop()
       else if (settings->tcpmode == TCP_MODE_SERVER) {
         // Note: this may collect input from more than one client.  To keep their sentences
         // from getting mixed need MAX_NMEATCP_CLIENTS (which is just 2) separate buffers.
-        // note same NMEA_Source for all clients, won't forward from one to another
+        // Note: same NMEA_Source for all clients, won't forward from one to another
         for (int i = 0; i < MAX_NMEATCP_CLIENTS; i++) {
           if (NmeaTCP[i].client && NmeaTCP[i].client.connected()) {
 //            if (! tcp_n_init)
@@ -1535,6 +1513,11 @@ void NMEA_Process_SRF_SKV_Sentences()
           if (D_bluetooth.isUpdated()) {
             settings->bluetooth = atoi(D_bluetooth.value());
             Serial.print(F("Bluetooth = ")); Serial.println(settings->bluetooth);
+            cfg_is_updated = true;
+          }
+          if (D_altpin0.isUpdated()) {
+            settings->altpin0 = atoi(D_altpin0.value());
+            Serial.print(F("Use alt RX pin = ")); Serial.println(settings->altpin0);
             cfg_is_updated = true;
           }
           if (D_baudrate2.isUpdated()) {

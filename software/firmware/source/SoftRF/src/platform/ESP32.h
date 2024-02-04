@@ -150,11 +150,8 @@ extern Adafruit_NeoPixel strip;
                                     SOC_UNUSED_PIN) :                     \
                                   SOC_UNUSED_PIN))
 
-#define SOC_GPIO_PIN_BUZZER   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
-                                  14 : SOC_UNUSED_PIN)
-
-#define SOC_GPIO_PIN_BUZZER2  (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?\
-                                  15 : SOC_UNUSED_PIN)
+#define SOC_GPIO_PIN_BUZZER   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 14 : SOC_UNUSED_PIN)
+#define SOC_GPIO_PIN_BUZZER2  (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 15 : SOC_UNUSED_PIN)
 
 /* instead of 25 which is now used for voice: */
 #define SOC_GPIO_PIN_STROBE   (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 33 : SOC_UNUSED_PIN)
@@ -162,12 +159,10 @@ extern Adafruit_NeoPixel strip;
 /* use DAC channel 1 for voice output (internal I2S) */
 #define SOC_GPIO_PIN_VOICE    (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ? 25 : SOC_UNUSED_PIN)
 
-// GPIO pins for Serial2 on T-Beam:
+// GPIO pins for Serial inputs on T-Beam:
 // - not clear yet whether these pins can work
-//#define Serial2RxPin          13
-//#define Serial2TxPin           2
-//#define Serial2RxPin           0
-//#define Serial2RxPin          36  // VP
+//#define Serial0AltRxPin       13  // precludes use of 13 for I2C
+#define Serial0AltRxPin         36  // VP
 #define Serial2RxPin            39  // VN
 #define Serial2TxPin             4
 

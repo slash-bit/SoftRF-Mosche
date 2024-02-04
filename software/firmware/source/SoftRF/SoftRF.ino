@@ -172,37 +172,25 @@ void setup()
 
   SoC->Button_setup();
 
-  uint32_t SerialBaud;
-  switch (settings->baud_rate)
-  {
-  case BAUD_4800:
-    SerialBaud = 4800;
-    break;
-  case BAUD_9600:
-    SerialBaud = 9600;
-    break;
-  case BAUD_19200:
-    SerialBaud = 19200;
-    break;
-  case BAUD_57600:
-    SerialBaud = 57600;
-    break;
-  case BAUD_115200:
-    SerialBaud = 115200;
-    break;
-  case BAUD_38400:
-  case BAUD_DEFAULT:
-  default:
-    SerialBaud = 38400;
-    break;
-  }
-  if (SerialBaud != SERIAL_OUT_BR) {
-    Serial.print("Switching baud rate to ");
-    Serial.println(SerialBaud);
+  uint32_t SerialBaud = baudrates[settings->baud_rate];
+  if (SerialBaud == 0)    // BAUD_DEFAULT
+    SerialBaud = SERIAL_OUT_BR;
+  if (SerialBaud != SERIAL_OUT_BR || settings->altpin0) {
+    if (settings->altpin0) {
+      Serial.print("Switching RX pin to ");
+      Serial.println(Serial0AltRxPin);
+    }
+    if (SerialBaud != SERIAL_OUT_BR) {
+      Serial.print("Switching baud rate to ");
+      Serial.println(SerialBaud);
+    }
     delay(500);
     Serial.end();
     delay(1500);
-    Serial.begin(SerialBaud, SERIAL_OUT_BITS);
+    if (settings->altpin0)
+      Serial.begin(SerialBaud, SERIAL_OUT_BITS, Serial0AltRxPin);
+    else
+      Serial.begin(SerialBaud, SERIAL_OUT_BITS);
   }
   Serial.setRxBufferSize(SerialBufSize);
 

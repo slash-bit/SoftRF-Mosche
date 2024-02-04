@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Feb. 2, 2024
-to fit software version MB110 based on v1.0 with some parts of v1.2
+This version last updated Feb. 4, 2024
+to fit software version MB112 based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -188,10 +188,12 @@ Version MB110 on the T-Beam (versions 1.0, 1.1 & 1.2) added use of a secondary s
 
 To achieve this functionality, the input/output structure of SoftRF had to be significantly revised.  Originally, the code in GNSS.cpp polled all input ports, and pulled GNSS data from wherever it arrived.  Since GNSS data may arrive from external devices, this may clash with data from the internal GNSS module.  Moreover, the data polling was character by character.  It looped within the same source as long as it had data waiting, but if the source paused sending before a sentence is complete then the next source would be polled.  Thus characters arriving from more than one source may get mixed together, garbling NMEA sentences.  "Serial", i.e., UART0, is the main serial port which is also (on the T-Beam) connected to the USB port.  "Serial1", i.e., UART1, is used to communicate with the GNSS module.  "Serial2", i.e., UART2, is dedicated to UAT receiver input.  In this version the UAT functionality is commented out (#define EXCLUDE_UATM in in ESP32.h) and UART2 is used for the auxillary general-purpose serial port.  And, GNSS data is taken *only* from the internal GNSS module.  NMEA sentences from external sources are polled in NMEA.cpp and handled separately.  Characters from each source are collected into separate buffers, and processed when a full NMEA sentence has accumulated.  $PSRF* sentences are still interpreted to allow configuration of SoftRF settings via that route.
 
-Which pins to use for UART2 is a problem, as there are few remaining pins still available.  It is now mapped (tentatively) to pins 39 ("VN") (rx) and 4 (tx).  (Note that pin 4 also drives the red LED on the T-Beam board.)  Tried using pin 0 for RX but there are issues with it while USB power is attached.  Other options would be 36 ("VP") or 13 (better reserved for I2C devices such as a baro sensor), or one of the pins used for strobe or buzzer.
+Which pins to use for UART2 is a problem, as there are few remaining pins still available.  It is now mapped (tentatively) to pins 39 ("VN") (rx) and 4 (tx).  (Note that pin 4 also drives the red LED on the T-Beam board.)  Tried using pin 0 for RX but there are issues with it while USB power is attached.  Another option would be 13 (better reserved for I2C devices such as a baro sensor), or one of the pins used for strobe or buzzer.  Similarly for the alternative RX pin for UART0: tentatively 36 ("VP").  The reason an alternative RX pin is needed is because when USB power is on the normal RX pin is pulled high.  And when serial data is arriving from USB it is in contention for the same RX pin as the non-USB serial input.  If usage of the alt pin is selected, serial input from USB is disabled.  Can allow both source (one at a time) by selecting the alt pin and adding a Schottky diode conducting from the "VP" pin to the "RX".  Note that on the T-Beam v0.7 it may be better to avoid using GPIO pins 36 and 39 for serial input, as there is a small capacitor between GPIO36 and GPIO37, and another between GPIO38 and GPIO39.  This may interfere with serial input, especially at high baud rates.  And serial input to GPIO 36 may interfere (through the capacitor) with the optional hardware mod connecting the GNSS PPS to GPIO37 (mimicking the later models of the T-Beam).  Can re-compile to use GPIO 13 instead of 36.
 
 
 KNOWN ISSUES
+
+I2S (for voice output) fails to initialized on T-Beam v1.2.
 
 Packets-transmitted count on OLED sometimes increments by dozens or hundreds at once.
 
@@ -202,4 +204,4 @@ Baro sensor support and turn-off issues (both related to I2C library?) seem most
 
 Compiling SoftRF
 
-At this time I compile it under Ubuntu 20.04 using the Arduino IDE verion 1.8.16.  For the T-Beam I use the ESP32 board support version 2.0.3.  If you use any other versions, especially of the ESP32 support, expect to spend some time fixing library incompatibilities.  For the T-Echo I use the Adafruit nRF52 board support version 1.2.0.
+At this time I compile it under Ubuntu 20.04 using the Arduino IDE verion 1.8.16.  For the T-Beam I use the ESP32 board support version 2.0.3.  (Later versions make binaries that are too large.)  If you use any other versions, especially of the ESP32 support, expect to spend some time fixing library incompatibilities.  For the T-Echo I use the Adafruit nRF52 board support version 1.2.0.

@@ -41,6 +41,18 @@ void EEPROM_store()    {}
 eeprom_t eeprom_block;
 settings_t *settings;
 
+uint32_t baudrates[8] = 
+{
+    0,
+    4800,
+    9600,
+    19200,
+    38400,
+    57600,
+    115200,
+    0
+};
+
 void EEPROM_setup()
 {
   int cmd = EEPROM_EXT_LOAD;
@@ -123,11 +135,11 @@ void EEPROM_defaults()
     settings->pointer = LED_OFF;
   }
 
-#if !defined(EXCLUDE_VOICE)
-#if defined(ESP32)
+//#if !defined(EXCLUDE_VOICE)
+//#if defined(ESP32)
   settings->voice   = VOICE_OFF;
-#endif
-#endif
+//#endif
+//#endif
 
   settings->relay = RELAY_LANDED;
 
@@ -177,6 +189,7 @@ void EEPROM_defaults()
   settings->power_external = 0;
   settings->freq_corr  = 0;
   settings->baud_rate  = BAUD_DEFAULT;      // Serial  - meaning 38400
+  settings->altpin0    = false;
   settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
   settings->invert2    = false;
   settings->igc_key[0] = 0;

@@ -84,11 +84,9 @@ static bool i2s_installed = false;
 #define dmabufsize 16*1024   // static int dmabufsize = 16*1024;
 
 i2s_config_t i2s_config = {
-  .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN),
   .sample_rate = 8000,                                  // assumed known
   .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
   .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,         // was ONLY_RIGHT
-  .communication_format = I2S_COMM_FORMAT_STAND_MSB,    // requires ESP32 2.0.5, says schreibfaul1
 //.intr_alloc_flags = 0, // default interrupt priority
   .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,   // high interrupt priority
   .dma_buf_count = dmabufcount,
@@ -101,18 +99,19 @@ i2s_config_t i2s_config = {
 static void setup_i2s()
 {
   //initialize i2s with configurations above
-  if (settings->voice == VOICE_EXT) {  // I2S output to external device
+  if (settings->voice == VOICE_EXT) {
+      // I2S output to external device - not tested yet
       i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
       i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_I2S; // Arduino v>2.0.0
-
       i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
       i2s_set_pin(i2s_num, &pin_config);
   } else {
-    //i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
-    //i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
+      i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
+      i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
+          // requires ESP32 2.0.5, says schreibfaul1, but not so!
       i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
 //    i2s_set_pin(i2s_num, NULL);
-      // Enable only I2S built-in DAC channel 1 on GPIO25:
+      // Enable only I2S built-in DAC channel 1 on (default) GPIO25:
 //    i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN);
       i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);         // no audio output yet
   }
@@ -316,6 +315,9 @@ static void Traffic_Voice_Msg(ufo_t *fop, bool multi_alarm)
 
 void Voice_setup(void)
 {
+  if (settings->voice == VOICE_OFF)
+      return;
+
   if (settings->voice == VOICE_EXT) {
       Buzzer_fini();
       settings->volume = BUZZER_OFF;   // free up pins 14 & 15
@@ -354,9 +356,11 @@ void Voice_loop(void)
 void Voice_fini(void)
 {
   VoiceTimeMarker = 0;
-  // stop & destroy i2s driver
-  i2s_driver_uninstall(i2s_num);
-  i2s_installed = false;
+  if (i2s_installed) {
+      // stop & destroy i2s driver
+      i2s_driver_uninstall(i2s_num);
+      i2s_installed = false;
+  }
 }
 
 #endif  /* ESP32 */

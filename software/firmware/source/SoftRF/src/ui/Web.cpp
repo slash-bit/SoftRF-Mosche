@@ -85,15 +85,21 @@ void Hex2Bin(String str, byte *buffer)
 //  Free memory: 19904
 //  Stopping Bluetooth for web access
 //  Free memory: 68892
+// But in v112 it is over 150000 - why?
+
+static bool BTpaused = false;
 
 void stop_bluetooth()
 {
-  Serial.print(F("Free memory: "));
-  Serial.println(ESP.getFreeHeap());
+  uint32_t freemem = ESP.getFreeHeap();
+  Serial.print(F("Free memory: "));  Serial.println(freemem);
+  if (!BTactive || BTpaused || freemem > 60000)
+      return;
   if (settings->bluetooth != BLUETOOTH_OFF) {
       if (SoC->Bluetooth_ops) {
           Serial.println(F("Stopping Bluetooth for web access"));
           SoC->Bluetooth_ops->fini();
+          BTpaused = true;
       }
   }
   yield();
@@ -253,7 +259,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8)
     is_prime_mk2 = true;
 
-  size_t size = 10900;
+  size_t size = 11800;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -785,7 +791,7 @@ void handleSettings() {
     size -= len;
   }
 
-Serial.println(F("Settings page part 4 done"));
+// Serial.println(F("Settings page part 4 done"));
 
     snprintf_P ( offset, size,
       PSTR("\
@@ -833,20 +839,7 @@ Serial.println(F("Settings page part 4 done"));
 <input type='radio' name='nmea2_e' value='0' %s>Off\
 <input type='radio' name='nmea2_e' value='1' %s>On\
 </td>\
-</tr>"),
-  (!settings->nmea2_g ? "checked" : "") , (settings->nmea2_g ? "checked" : ""),
-  (!settings->nmea2_p ? "checked" : "") , (settings->nmea2_p ? "checked" : ""),
-  (!settings->nmea2_l ? "checked" : "") , (settings->nmea2_l ? "checked" : ""),
-  (!settings->nmea2_s ? "checked" : "") , (settings->nmea2_s ? "checked" : ""),
-  (!settings->nmea2_d ? "checked" : "") , (settings->nmea2_d ? "checked" : ""),
-  (!settings->nmea2_e ? "checked" : "") , (settings->nmea2_e ? "checked" : ""));
-
-    len = strlen(offset);
-    offset += len;
-    size -= len;
-
-  snprintf_P ( offset, size,
-    PSTR("\
+</tr>\
 <tr>\
 <th align=left>Serial Output Baud Rate:</th>\
 <td align=right>\
@@ -858,6 +851,37 @@ Serial.println(F("Settings page part 4 done"));
 <option %s value='%d'>38400</option>\
 <option %s value='%d'>57600</option>\
 <option %s value='%d'>115200</option>\
+</select>\
+</td>\
+</tr>"),
+  (!settings->nmea2_g ? "checked" : "") , (settings->nmea2_g ? "checked" : ""),
+  (!settings->nmea2_p ? "checked" : "") , (settings->nmea2_p ? "checked" : ""),
+  (!settings->nmea2_l ? "checked" : "") , (settings->nmea2_l ? "checked" : ""),
+  (!settings->nmea2_s ? "checked" : "") , (settings->nmea2_s ? "checked" : ""),
+  (!settings->nmea2_d ? "checked" : "") , (settings->nmea2_d ? "checked" : ""),
+  (!settings->nmea2_e ? "checked" : "") , (settings->nmea2_e ? "checked" : ""),
+  (settings->baud_rate == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
+  (settings->baud_rate == BAUD_4800    ? "selected" : ""), BAUD_4800,
+  (settings->baud_rate == BAUD_9600    ? "selected" : ""), BAUD_9600,
+  (settings->baud_rate == BAUD_19200   ? "selected" : ""), BAUD_19200,
+  (settings->baud_rate == BAUD_38400   ? "selected" : ""), BAUD_38400,
+  (settings->baud_rate == BAUD_57600   ? "selected" : ""), BAUD_57600,
+  (settings->baud_rate == BAUD_115200  ? "selected" : ""), BAUD_115200);
+
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+
+  if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+  snprintf_P ( offset, size,
+    PSTR("\
+<tr>\
+<th align=left>Serial Port RX pin:</th>\
+<td align=right>\
+<select name='altpin0'>\
+<option %s value='%d'>\"RX\"</option>\
+<option %s value='%d'>\"VP\"</option>\
 </select>\
 </td>\
 </tr>\
@@ -884,13 +908,8 @@ Serial.println(F("Settings page part 4 done"));
 </select>\
 </td>\
 </tr>"),
-    (settings->baud_rate == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
-    (settings->baud_rate == BAUD_4800    ? "selected" : ""), BAUD_4800,
-    (settings->baud_rate == BAUD_9600    ? "selected" : ""), BAUD_9600,
-    (settings->baud_rate == BAUD_19200   ? "selected" : ""), BAUD_19200,
-    (settings->baud_rate == BAUD_38400   ? "selected" : ""), BAUD_38400,
-    (settings->baud_rate == BAUD_57600   ? "selected" : ""), BAUD_57600,
-    (settings->baud_rate == BAUD_115200  ? "selected" : ""), BAUD_115200,
+    (!settings->altpin0 ? "selected" : ""), 0,
+    ( settings->altpin0 ? "selected" : ""), 1,
     (settings->baudrate2 == BAUD_DEFAULT ? "selected" : ""), BAUD_DEFAULT,
     (settings->baudrate2 == BAUD_4800    ? "selected" : ""), BAUD_4800,
     (settings->baudrate2 == BAUD_9600    ? "selected" : ""), BAUD_9600,
@@ -905,6 +924,9 @@ Serial.println(F("Settings page part 4 done"));
   len = strlen(offset);
   offset += len;
   size -= len;
+
+  }
+  }
 
   yield();
 
@@ -1143,6 +1165,8 @@ Serial.println(F("Settings page part 4 done"));
   server.sendHeader(String(F("Expires")), String(F("-1")));
   server.send ( 200, "text/html", Settings_temp );
   SoC->swSer_enableRx(true);
+  Serial.print(F("Free memory (settings page staging): "));
+  Serial.println(ESP.getFreeHeap());
   free(Settings_temp);
 }
 
@@ -1252,8 +1276,8 @@ void handleRoot() {
  </table>\
 </body>\
 </html>"),
-    (settings->bluetooth == BLUETOOTH_OFF ? "" :
-          "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>"),
+    (BTpaused ?
+       "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>" : ""),
     ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     GNSS_name[hw_info.gnss],
@@ -1372,6 +1396,8 @@ void handleInput() {
       settings->nmea2_e = server.arg(i).toInt();
     } else if (server.argName(i).equals("baud_rate")) {
       settings->baud_rate = server.arg(i).toInt();
+    } else if (server.argName(i).equals("altpin0")) {
+      settings->altpin0 = server.arg(i).toInt();
     } else if (server.argName(i).equals("baudrate2")) {
       settings->baudrate2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("invert2")) {
@@ -1514,6 +1540,7 @@ PSTR("<html>\
 <tr><th align=left>LED pointer</th><td align=right>%d</td></tr>\
 <tr><th align=left>Voice</th><td align=right>%d</td></tr>\
 <tr><th align=left>Baud 1</th><td align=right>%d</td></tr>\
+<tr><th align=left>Alt RX pin</th><td align=right>%d</td></tr>\
 <tr><th align=left>Baud 2</th><td align=right>%d</td></tr>\
 <tr><th align=left>Invert 2</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
@@ -1557,7 +1584,7 @@ PSTR("<html>\
     settings->rf_protocol, settings->band,
     settings->aircraft_type, settings->alarm, settings->txpower,
     settings->volume, settings->strobe, settings->pointer, settings->voice,
-    settings->baud_rate, settings->baudrate2, settings->invert2,
+    settings->baud_rate, settings->altpin0, settings->baudrate2, settings->invert2,
     settings->bluetooth, settings->tcpmode, settings->tcpport,
     settings->ssid, settings->host_ip,
     settings->nmea_out,
@@ -1598,6 +1625,7 @@ Serial.print(F(" Strobe "));Serial.println(settings->strobe);
 Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
 Serial.print(F(" Voice "));Serial.println(settings->voice);
 Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
+Serial.print(F(" Alt RX pin "));Serial.println(settings->altpin0);
 Serial.print(F(" Baud 2 "));Serial.println(settings->baudrate2);
 Serial.print(F(" Invert 2 "));Serial.println(settings->invert2);
 Serial.print(F(" Bluetooth "));Serial.println(settings->bluetooth);

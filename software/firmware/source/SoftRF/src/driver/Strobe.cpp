@@ -47,6 +47,8 @@ static int alarm_level = ALARM_LEVEL_NONE;
 
 void Strobe_setup(void)
 {
+  if (settings->strobe == STROBE_OFF)
+      return;
   StrobePauseMarker = StrobeSetupMarker = millis();
   StrobePin = STROBEPIN;
   if (StrobePin == SOC_UNUSED_PIN)

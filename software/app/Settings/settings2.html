@@ -37,12 +37,13 @@ function UpdateChecksum()
       + document.getElementById("legacy2").value + ","
       + document.getElementById("sens2").value + ","
       + document.getElementById("debug2").value + ","
-      + document.getElementById("relay").value + ","
+      + document.getElementById("relay1").value + ","
       + document.getElementById("bluetooth").value + ","
       + document.getElementById("baudrate2").value + ","
       + document.getElementById("invert2").value + ","
       + document.getElementById("extern1").value + ","
-      + document.getElementById("extern2").value;
+      + document.getElementById("extern2").value + ","
+      + document.getElementById("altpin0").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -103,6 +104,13 @@ function SelBaud()
 {
   var baud = document.getElementById("Bauds");
   document.getElementById("baud_rate").value = baud.options[baud.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelPin0()
+{
+  var pin0 = document.getElementById("Pin0");
+  document.getElementById("altpin0").value = pin0.options[pin0.selectedIndex].value;
   UpdateChecksum();
 }
 
@@ -240,12 +248,8 @@ function SelExtern2()
 
 function SelRelay()
 {
-  var relay = document.getElementsByName('relay');
-  for (var i = 0; i < relay.length; i++) {
-      if (relay[i].type == "radio" && relay[i].checked) {
-        document.getElementById("relay").value = i;
-      }
-  }
+  var relay = document.getElementById("Relays");
+  document.getElementById("relay1").value = relay.options[relay.selectedIndex].value;
   UpdateChecksum();
 }
 
@@ -257,6 +261,7 @@ function InitSettings()
   document.getElementById("ignore_id").value   = "000000";
   document.getElementById("follow_id").value   = "000000";
   document.getElementById("baud_rate").value   = 0;
+  document.getElementById("altpin0").value     = 0;
   document.getElementById("baudrate2").value   = 0;
   document.getElementById("invert2").value     = 0;
   document.getElementById("bluetooth").value   = 0;
@@ -271,7 +276,7 @@ function InitSettings()
   document.getElementById("debug2").value      = 0;
   document.getElementById("extern1").value     = 0;
   document.getElementById("extern2").value     = 0;
-  document.getElementById("relay").value       = 1;
+  document.getElementById("relay1").value      = 1;
 
   UpdateChecksum();
 }
@@ -337,6 +342,16 @@ If you are affected - please, consider to update
 <option value=4>38400</option>
 <option value=5>57600</option>
 <option value=6>115200</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>Use alt RX pin - main</th>
+<td align=right>
+<select id="Pin0" onchange="SelPin0()">
+<option selected value=0>RX</option>
+<option value=1>VP</option>
 </select>
 </td>
 </tr>
@@ -423,8 +438,11 @@ If you are affected - please, consider to update
 <select id="NMEAs2" onchange="SelNMEA2()">
 <option selected value='0'>None</option>
 <option value='1'>Serial</option>
+<option value='2'>UDP</option>
+<option value='3'>TCP</option>
 <option value='4'>USB</option>
 <option value='5'>Bluetooth</option>
+<option value='6'>Serial 2</option>
 </select>
 </td>
 </tr>
@@ -478,9 +496,11 @@ If you are affected - please, consider to update
 <tr>
 <th align=left>Air Relay</th>
 <td align=right>
-<input type='radio' name='relay' value='0' onchange="SelRelay()">Off
-<input type='radio' name='relay' value='1' onchange="SelRelay()" checked>Landed
-<input type='radio' name='relay' value='2' onchange="SelRelay()">All
+<select id="Relays" onchange="SelRelay()">
+<option value='0'>Off</option>
+<option selected value='1'>Landed</option>
+<option value='2'>All</option>
+</select>
 </td>
 </tr>
 
@@ -491,6 +511,7 @@ If you are affected - please, consider to update
 <!-- Ignore:    --><input type="hidden" id="ignore_id" size="6">
 <!-- Follow:    --><input type="hidden" id="follow_id" size="6">
 <!-- Baud rate: --><input type="hidden" id="baud_rate" size="1">
+<!-- Altpin0:   --><input type="hidden" id="altpin0" size="1">
 <!-- Baudrate2: --><input type="hidden" id="baudrate2" size="1">
 <!-- Invert2:   --><input type="hidden" id="invert2" size="1">
 <!-- Bluetooth: --><input type="hidden" id="bluetooth" size="1">
@@ -503,7 +524,7 @@ If you are affected - please, consider to update
 <!-- Legacy2:   --><input type="hidden" id="legacy2" size="1">
 <!-- Sensors2:  --><input type="hidden" id="sens2" size="1">
 <!-- Debug2:    --><input type="hidden" id="debug2" size="1">
-<!-- Relay:     --><input type="hidden" id="relay" size="1">
+<!-- Relay:     --><input type="hidden" id="relay1" size="1">
 <!-- Extern1:   --><input type="hidden" id="extern1" size="1">
 <!-- Extern2:   --><input type="hidden" id="extern2" size="1">
 
