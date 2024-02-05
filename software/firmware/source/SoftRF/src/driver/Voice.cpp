@@ -88,7 +88,9 @@ i2s_config_t i2s_config = {
   .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
   .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,         // was ONLY_RIGHT
 //.intr_alloc_flags = 0, // default interrupt priority
-  .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,   // high interrupt priority
+//  .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,   // high interrupt priority
+  // see https://github.com/espressif/esp-idf/issues/10994
+  .intr_alloc_flags = (ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_SHARED | ESP_INTR_FLAG_INTRDISABLED),
   .dma_buf_count = dmabufcount,
   .dma_buf_len = dmabuflen,
   .use_apll = true,
@@ -96,25 +98,29 @@ i2s_config_t i2s_config = {
   .fixed_mclk = 0   // was I2S_PIN_NO_CHANGE
 };
 
-static void setup_i2s()
+static bool setup_i2s()
 {
   //initialize i2s with configurations above
   if (settings->voice == VOICE_EXT) {
       // I2S output to external device - not tested yet
       i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
       i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_I2S; // Arduino v>2.0.0
-      i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
-      i2s_set_pin(i2s_num, &pin_config);
+      if (i2s_driver_install(i2s_num, &i2s_config, 0, NULL))
+          return false;
+      if (i2s_set_pin(i2s_num, &pin_config))
+          return false;
   } else {
       i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN);
       i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
           // requires ESP32 2.0.5, says schreibfaul1, but not so!
-      i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
+      if (i2s_driver_install(i2s_num, &i2s_config, 0, NULL))
+          return false;
 //    i2s_set_pin(i2s_num, NULL);
       // Enable only I2S built-in DAC channel 1 on (default) GPIO25:
 //    i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN);
       i2s_set_dac_mode(I2S_DAC_CHANNEL_DISABLE);         // no audio output yet
   }
+  return true;
 }
 
 static uint8_t sample[4] = {0,0,0,0};
@@ -323,8 +329,12 @@ void Voice_setup(void)
       settings->volume = BUZZER_OFF;   // free up pins 14 & 15
   }
 
-  setup_i2s();
-  i2s_installed = true;
+  i2s_installed = setup_i2s();
+  if (i2s_installed == false) {
+     Serial.println(F("I2S install failed, no voice"));
+     //settings->voice = VOICE_OFF;
+     return;
+  }
 
   if (num_wav_files < 17)      // have not successfully read WAV data from SPIFFS yet
     parse_wav_tar();           // then try and do that

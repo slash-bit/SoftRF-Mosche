@@ -4,7 +4,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 By Moshe Braner
 
 This version last updated Feb. 4, 2024
-to fit software version MB112 based on v1.0 with some parts of v1.2
+to fit software version MB113 based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 

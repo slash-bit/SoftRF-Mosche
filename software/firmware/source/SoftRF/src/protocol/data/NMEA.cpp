@@ -62,13 +62,13 @@ static int WiFi_connect_TCP()
         if (!client.connect(settings->host_ip,
                             settings->tcpport? NMEA_ALT_PORT : NMEA_TCP_PORT,
                             5000)) {
-//Serial.println("Failed to connect as TCP client");
+            Serial.println(F("Failed to connect as TCP client"));
             return 0;
         }
 //Serial.println("Connected as TCP client");
         return 1;
     }
-Serial.println(F("TCP host not responding to ping"));
+//Serial.println(F("TCP host not responding to ping"));
     return 0;
 }
 
@@ -83,10 +83,10 @@ static int WiFi_transmit_TCP(const char *buf, size_t size)
     if (client.connected())
     {
         client.write((byte *) buf, size);
-if (size > 1 && (settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2)) {
-Serial.print("TCP<");
-Serial.print(buf);
-}
+//if (size > 1 && (settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2)) {
+//Serial.print("TCP<");
+//Serial.print(buf);
+//}
         return 0;
     }
     return 0;
@@ -103,10 +103,10 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
             i++;
         }
         RXbuffer[i] = '\0';
-if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_RESVD2)) {
-Serial.print("TCP>");
-Serial.print(RXbuffer);
-}
+//if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_RESVD2)) {
+//Serial.print("TCP>");
+//Serial.print(RXbuffer);
+//}
         return i;
     }
     client.stop();
@@ -119,8 +119,8 @@ static bool db;
 db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2));
     if (client.connected())
     {
-if (db && client.available())
-Serial.println(F("TCP_input_flushed"));
+//if (db && client.available())
+//Serial.println(F("TCP_input_flushed"));
         while (client.available()) {
             char c = client.read();
             yield();
@@ -426,7 +426,7 @@ void NMEA_setup()
   sendPFLAV();
 }
 
-void NMEA_Out(uint8_t dest, char *buf, size_t size, bool nl)
+void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
 {
 #if 0
   Serial.print("NMEA_Out(");
@@ -440,9 +440,9 @@ void NMEA_Out(uint8_t dest, char *buf, size_t size, bool nl)
   case NMEA_UART:
     {
       if (SoC->UART_ops) {
-        SoC->UART_ops->write((byte*) buf, size);
+        SoC->UART_ops->write((const byte*) buf, size);
         if (nl)
-          SoC->UART_ops->write((byte *) "\n", 1);
+          SoC->UART_ops->write((const byte *) "\n", 1);
       } else {
         Serial.write(buf, size);
         if (nl)
@@ -499,18 +499,18 @@ void NMEA_Out(uint8_t dest, char *buf, size_t size, bool nl)
   case NMEA_USB:
     {
       if (SoC->USB_ops) {
-        SoC->USB_ops->write((byte *) buf, size);
+        SoC->USB_ops->write((const byte *) buf, size);
         if (nl)
-          SoC->USB_ops->write((byte *) "\n", 1);
+          SoC->USB_ops->write((const byte *) "\n", 1);
       }
     }
     break;
   case NMEA_BLUETOOTH:
     {
       if (BTactive && SoC->Bluetooth_ops) {
-        SoC->Bluetooth_ops->write((byte *) buf, size);
+        SoC->Bluetooth_ops->write((const byte *) buf, size);
         if (nl)
-          SoC->Bluetooth_ops->write((byte *) "\n", 1);
+          SoC->Bluetooth_ops->write((const byte *) "\n", 1);
       }
     }
     break;
@@ -521,7 +521,7 @@ void NMEA_Out(uint8_t dest, char *buf, size_t size, bool nl)
   yield();
 }
 
-void NMEA_Outs(bool out1, bool out2, char *buf, size_t size, bool nl) {
+void NMEA_Outs(bool out1, bool out2, const char *buf, size_t size, bool nl) {
     if (out1)
         NMEA_Out(settings->nmea_out,  buf, size, nl);
     if (out2)

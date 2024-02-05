@@ -4,7 +4,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 By Moshe Braner
 
 This version last updated Feb. 4, 2024
-to fit software version MB112 based on v1.0 with some parts of v1.2
+to fit software version MB113 based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -193,13 +193,11 @@ Which pins to use for UART2 is a problem, as there are few remaining pins still 
 
 KNOWN ISSUES
 
-I2S (for voice output) fails to initialized on T-Beam v1.2.
-
 Packets-transmitted count on OLED sometimes increments by dozens or hundreds at once.
 
 Reception of FLARM signals can be further improved by shifting our clock (for frequency hopping) by about 50 ms.  Not clear why.
 
-Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.
+Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.  For now only BMP280 is probed for.
 
 
 Compiling SoftRF
