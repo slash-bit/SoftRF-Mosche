@@ -22,7 +22,8 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
-* vMB110: experimental: added second serial port and data bridging (only on T-Beam)
+* vMB114: experimental: import traffic data in GDL90 format (from ADS-B receiver)
+* vMB110: added second serial port and data bridging (only on T-Beam)
 * vMB10h: added winch mode ("aircraft type") with variable reported altitude
 * vMB10f: auto turn-off Bluetooth upon web access to resolve memory limitation
 * vMB10d: now works on the new v1.2 model of the T-Beam with AXP2101
