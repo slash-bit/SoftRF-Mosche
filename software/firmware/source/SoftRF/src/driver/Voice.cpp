@@ -258,9 +258,7 @@ void Voice_test(int reason)
 
 static void Traffic_Voice_Msg(ufo_t *fop, bool multi_alarm)
 {
-    int bearing = (int)(fop->bearing - ThisAircraft.course);   // relative bearing
-
-    int oclock = bearing + 15;
+    int oclock = fop->RelativeBearing + 15;
     if (oclock < 0)    oclock += 360;
     if (oclock > 360)  oclock -= 360;
     oclock /= 30;

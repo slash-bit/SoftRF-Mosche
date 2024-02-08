@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB113"
+#define SOFTRF_FIRMWARE_VERSION "MB114"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -172,15 +172,15 @@ typedef struct UFO {
     int8_t    circling;   // 1=right, -1=left
 
     uint8_t   next;       // for linking into a list
+    uint8_t   alert;      /* bitmap of issued voice/tone/ble/... alerts */
+
+    int16_t   RelativeBearing;    // for voice and strobe
 
     int8_t    rssi; /* SX1276 only */
     uint16_t  hdop; /* cm */
 
     /* ADS-B (ES, UAT, GDL90) specific data */
     uint8_t   callsign[10];    /* size of mdb.callsign + 1 */
-
-    /* bitmap of issued voice/tone/ble/... alerts */
-    uint8_t   alert;
 
 } ufo_t;
 

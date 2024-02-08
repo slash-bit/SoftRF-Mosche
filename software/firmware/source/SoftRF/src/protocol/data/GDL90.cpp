@@ -163,7 +163,7 @@ uint16_t GDL90_calcFCS(uint8_t msg_id, uint8_t *msg, int size)
 {
   uint16_t crc16 = 0x0000;  /* seed value */
 
-  crc16 = update_crc_gdl90(crc16, msg_id);
+  crc16 = update_crc_gdl90(crc16, msg_id);   // in firmware\source\libraries\CRC\
 
   for (int i=0; i < size; i++)
   {
@@ -362,6 +362,10 @@ static size_t makeHeartbeat(uint8_t *buf)
 
 static size_t makeType10and20(uint8_t *buf, uint8_t id, ufo_t *aircraft)
 {
+// >>>  generate output for testing - report ownship as traffic
+  if (settings->debug_flags & DEBUG_FAKEFIX)
+      id = GDL90_TRAFFIC_MSG_ID;
+
   uint8_t *ptr = buf;
   uint8_t *msg = (uint8_t *) msgType10and20(aircraft);
   uint16_t fcs = GDL90_calcFCS(id, msg, sizeof(GDL90_Msg_Traffic_t));
@@ -432,34 +436,44 @@ static void GDL90_Out(byte *buf, size_t size)
   if (size > 0) {
     switch(settings->gdl90)
     {
-    case GDL90_UART:
+    case DEST_UART:
       if (SoC->UART_ops) {
         SoC->UART_ops->write(buf, size);
       } else {
-        SerialOutput.write(buf, size);
+        Serial.write(buf, size);
       }
       break;
-    case GDL90_UDP:
+    case DEST_UART2:
+#if defined(ESP32)
+      if (has_serial2)
+        Serial2.write(buf, size);
+#endif
+      break;
+    case DEST_UDP:
       {
         SoC->WiFi_transmit_UDP(GDL90_DST_PORT, buf, size);
       }
       break;
-    case GDL90_USB:
+    case DEST_USB:
       {
         if (SoC->USB_ops) {
           SoC->USB_ops->write(buf, size);
         }
       }
       break;
-    case GDL90_BLUETOOTH:
+    case DEST_BLUETOOTH:
       {
         if (SoC->Bluetooth_ops) {
           SoC->Bluetooth_ops->write(buf, size);
         }
       }
       break;
-    case GDL90_TCP:
-    case GDL90_OFF:
+    case DEST_TCP:
+#if defined(NMEA_TCP_SERVICE)
+      WiFi_transmit_TCP((char*)buf, size);
+#endif
+      break;
+    case DEST_OFF:
     default:
       break;
     }
@@ -474,7 +488,7 @@ void GDL90_Export()
   uint8_t *buf = (uint8_t *) (sizeof(UDPpacketBuffer) < UDP_PACKET_BUFSIZE ?
                               NMEABuffer : UDPpacketBuffer);
 
-  if (settings->gdl90 != GDL90_OFF) {
+  if (settings->gdl90 != DEST_OFF) {
     size = makeHeartbeat(buf);
     GDL90_Out(buf, size);
 
@@ -496,8 +510,11 @@ void GDL90_Export()
       GDL90_Out(buf, size);
 
       for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].addr &&
-           (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
+
+        // do not echo GDL90 traffic data back to its source
+        if (Container[i].addr
+         && (Container[i].protocol != RF_PROTOCOL_GDL90 || settings->gdl90 != settings->gdl90_in)
+         && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
 
           distance = Container[i].distance;
 
@@ -509,4 +526,114 @@ void GDL90_Export()
       }
     }
   }
+}
+
+// ********************************************************
+
+// Code for processing GDL90 input - by Moshe Braner, Feb 2024
+
+// decode the GDL90 traffic message and pass it to TrafficHelper.cpp
+void process_traffic_message(char* buf)
+{
+  static ufo_t fo;
+  GDL90_Msg_Traffic_t *tp = (GDL90_Msg_Traffic_t *) buf;
+
+  //memset(&fo, 0, sizeof(fo)-10);      // clear out old data in the static ufo_t buffer
+  fo.addr_type = ((tp->addr_type==0 || tp->addr_type==2)? ADDR_TYPE_ICAO : ADDR_TYPE_FLARM);
+  uint32_t addr = pack24bit(tp->addr);
+  if (addr == ThisAircraft.addr)        // somehow echoed back
+      return;
+  if (addr == settings->ignore_id)      // ID told in settings to ignore
+      return;
+  fo.addr = addr;
+  uint32_t ulatlon = pack24bit(tp->latitude);
+  if (ulatlon & 0x800000)  ulatlon |= 0xFF000000;
+  int32_t ilatlon = (int32_t) ulatlon;
+  fo.latitude = ((float) ilatlon) * (180.0 / 0x800000);
+  ulatlon = pack24bit(tp->longitude);
+  if (ulatlon & 0x800000)  ulatlon |= 0xFF000000;
+  ilatlon = (int32_t) ulatlon;
+  fo.longitude = ((float) ilatlon) * (180.0 / 0x800000);
+  // tp->misc is really the LSNibble of alt
+  // the real misc is in bits 8-11 of tp->altitude
+  //uint32_t ialt = (((tp->altitude & 0xFF) << 4) | tp->misc);
+  //uint8_t misc = ((tp->altitude & 0xF00) >> 8);
+  // another way to handle this mess is to reference byte positions in the buf
+  uint32_t ialt = (((uint8_t)buf[10]) << 4) | ((((uint8_t)buf[11]) & 0xF0) >> 4);
+  uint8_t misc = (((uint8_t)buf[11]) & 0x0F);
+  fo.altitude = ((float) (25*ialt - 1000)) * (1.0 / _GPS_FEET_PER_METER);
+  // this is pressure altitude, try and correct
+  if (ThisAircraft.pressure_altitude != 0.0)
+    fo.altitude += ThisAircraft.altitude - ThisAircraft.pressure_altitude;
+  fo.airborne = ((misc & 0x08) != 0);
+  // similar mess:
+  uint16_t horiz_vel = (((uint8_t)buf[13]) << 4) | ((((uint8_t)buf[14]) & 0xF0) >> 4);
+  fo.speed = (float) horiz_vel;       // knots
+  //uint16_t vert_vel  = ((((uint8_t)buf[14]) & 0x0F) << 8) | ((uint8_t)buf[15]);
+  if ((((uint8_t)buf[14]) & 0x0F) != 0) {
+      fo.vs = 0;  // not available
+  } else {
+      fo.vs = (float) (((uint8_t)buf[15]) << 6);    // was in units of 64 fpm
+  }
+  //fo.course = ((float)tp->track) * (360.0 / 256.0);
+  if (misc & 0x03)
+      fo.course = (float) ((((uint32_t)tp->track) * 360) >> 8);
+  else
+      fo.course = 0;  // not available
+  fo.aircraft_type = GDL90_TO_AT(tp->emit_cat);
+  memcpy(fo.callsign, tp->callsign, 8);
+
+#if 0
+Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
+  fo.addr, fo.callsign, fo.latitude,  fo.longitude,  fo.altitude );
+  /* , fo.speed, fo.vs, fo.course */
+#endif
+
+  fo.protocol = RF_PROTOCOL_GDL90;  // not an RF protocol, but that is the data source
+  fo.timestamp = ThisAircraft.timestamp;
+  AddTraffic(&fo, false);
+}
+
+// Accummulate bytes in traffic data message - ignore all others
+#define WAIT_FOR_FLAG 128
+#define GOT_FLAG      129
+void GDL90_bridge_buf(char c, char* buf, int& n)
+{
+    if (n == WAIT_FOR_FLAG) {
+        if (c == 0x7E)           // wait for a start flag
+            n = GOT_FLAG;
+    } else if (n == GOT_FLAG) {
+        if (c == GDL90_TRAFFIC_MSG_ID)
+            n = 0;               // ready to receive message bytes
+        else if (c != 0x7E)
+            n = WAIT_FOR_FLAG;   // ignore non-traffic messages
+        // else two flags in a row, leave state = GOT_FLAG
+    } else if (n > 31) {
+        if (n > (30+32)) {
+            n = WAIT_FOR_FLAG;   // guard against buffer overrun
+        } else {
+            c ^= 0x20;           // finish escape sequence
+            n -= 32;
+            buf[n++] = c;
+        }
+    } else if (c == 0x7D) {
+        n += 32;                 // start escape sequence
+    } else if (c == 0x7E) {      // Start or stop flag
+        if (n == 29) {           // length of a valid traffic message + checksum
+            uint16_t fcs = GDL90_calcFCS(GDL90_TRAFFIC_MSG_ID, (uint8_t*)buf, 27);
+            uint8_t fcs_lsb = fcs        & 0xFF;
+            uint8_t fcs_msb = (fcs >> 8) & 0xFF;
+            if (buf[28]==fcs_msb && buf[27]==fcs_lsb) {  // valid checksum
+                process_traffic_message(buf);
+            } else {
+                Serial.println(F("GDL90 msg rcvd has invalid checksum"));
+            }
+            NMEA_bridge_sent = true;   // not really sent, but substantial processing
+        } else {
+            Serial.println(F("GDL90 msg rcvd has wrong length"));
+        }
+        n = WAIT_FOR_FLAG;
+    } else {
+       buf[n++] = c;
+    }
 }

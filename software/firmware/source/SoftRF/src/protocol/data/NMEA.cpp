@@ -22,6 +22,7 @@
 #include <TimeLib.h>
 
 #include "NMEA.h"
+#include "GDL90.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/RF.h"
 #include "../../system/SoC.h"
@@ -35,7 +36,7 @@
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
 
-uint8_t NMEA_Source = NMEA_OFF;   // identifies which port a sentence came from
+uint8_t NMEA_Source = DEST_OFF;   // identifies which port a sentence came from
 
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
 char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
@@ -46,6 +47,7 @@ static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
 
 WiFiServer NmeaTCPServer(NMEA_TCP_PORT);
 NmeaTCP_t NmeaTCP[MAX_NMEATCP_CLIENTS];
+bool TCP_active = false;
 
 // TCP-client code copied from OGNbase
 // see also https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFi/examples
@@ -78,18 +80,27 @@ static int WiFi_disconnect_TCP()
     return 0;
 }
 
-static int WiFi_transmit_TCP(const char *buf, size_t size)
+int WiFi_transmit_TCP(const char *buf, size_t size)
 {
-    if (client.connected())
-    {
-        client.write((byte *) buf, size);
-//if (size > 1 && (settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2)) {
-//Serial.print("TCP<");
-//Serial.print(buf);
-//}
-        return 0;
+  if (TCP_active) {
+    if (settings->tcpmode == TCP_MODE_SERVER) {
+      for (uint8_t acc_ndx = 0; acc_ndx < MAX_NMEATCP_CLIENTS; acc_ndx++) {
+
+        if (NmeaTCP[acc_ndx].client && NmeaTCP[acc_ndx].client.connected()){
+          if (NmeaTCP[acc_ndx].ack) {
+            NmeaTCP[acc_ndx].client.write(buf, size);
+          }
+        }
+      }
     }
-    return 0;
+    else if (settings->tcpmode == TCP_MODE_CLIENT) {
+      if (client.connected())
+      {
+        client.write((byte *) buf, size);
+      }
+    }
+  }
+  return 0;
 }
 
 static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
@@ -103,7 +114,7 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
             i++;
         }
         RXbuffer[i] = '\0';
-//if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_RESVD2)) {
+//if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_FAKEFIX)) {
 //Serial.print("TCP>");
 //Serial.print(RXbuffer);
 //}
@@ -116,7 +127,7 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
 static void WiFi_flush_TCP()
 {
 static bool db;
-db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_RESVD2));
+//db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_FAKEFIX));
     if (client.connected())
     {
 //if (db && client.available())
@@ -149,7 +160,8 @@ const char *NMEA_CallSign_Prefix[] = {
   [RF_PROTOCOL_P3I]       = "PAW",
   [RF_PROTOCOL_ADSB_1090] = "ADS",
   [RF_PROTOCOL_ADSB_UAT]  = "UAT",
-  [RF_PROTOCOL_FANET]     = "FAN"
+  [RF_PROTOCOL_FANET]     = "FAN",
+  [RF_PROTOCOL_GDL90]     = "GDL"    // data from external device
 };
 
 #define isTimeToPGRMZ() (millis() - PGRMZ_TimeMarker > 1000)
@@ -394,17 +406,22 @@ void NMEA_setup()
 #endif /* USE_NMEA_CFG */
 
 #if defined(NMEA_TCP_SERVICE)
-  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+  if (settings->nmea_out  == DEST_TCP
+   || settings->nmea_out2 == DEST_TCP
+   || settings->gdl90_in  == DEST_TCP
+   || settings->gdl90     == DEST_TCP) {
     // note: no TCP input possible unless TCP output destination is active
     if (settings->tcpmode == TCP_MODE_SERVER) {
         NmeaTCPServer.begin();
         Serial.print(F("NMEA TCP server has started at port: "));
         Serial.println(NMEA_TCP_PORT);
         NmeaTCPServer.setNoDelay(true);
+        TCP_active = true;
     } else if (settings->tcpmode == TCP_MODE_CLIENT) {
         if (WiFi_connect_TCP()) {
             Serial.print(F("Connected as TCP client to host: "));
             Serial.println(settings->host_ip);
+            TCP_active = true;
         } else {
             Serial.print(F("Failed to connect to host: "));
             Serial.println(settings->host_ip);
@@ -435,9 +452,13 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
   Serial.write(buf, size);
   if (nl) Serial.write('\n');
 #endif
+
+  if (dest == settings->gdl90_in)   // do not send NMEA to GDL90 source
+    return;
+
   switch (dest)
   {
-  case NMEA_UART:
+  case DEST_UART:
     {
       if (SoC->UART_ops) {
         SoC->UART_ops->write((const byte*) buf, size);
@@ -450,7 +471,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       }
     }
     break;
-  case NMEA_UART2:
+  case DEST_UART2:
     {
       if (has_serial2) {
         Serial2.write(buf, size);
@@ -459,7 +480,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       }
     }
     break;
-  case NMEA_UDP:
+  case DEST_UDP:
     {
       size_t udp_size = size;
 
@@ -474,29 +495,18 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
                               nl ? udp_size + 1 : udp_size);
     }
     break;
-  case NMEA_TCP:
+  case DEST_TCP:
     {
 #if defined(NMEA_TCP_SERVICE)
-    if (settings->tcpmode == TCP_MODE_SERVER) {
-      for (uint8_t acc_ndx = 0; acc_ndx < MAX_NMEATCP_CLIENTS; acc_ndx++) {
-        if (NmeaTCP[acc_ndx].client && NmeaTCP[acc_ndx].client.connected()){
-          if (NmeaTCP[acc_ndx].ack) {
-            NmeaTCP[acc_ndx].client.write(buf, size);
-            if (nl)
-              NmeaTCP[acc_ndx].client.write('\n');
-          }
-        }
-      }
-    }
-    else if (settings->tcpmode == TCP_MODE_CLIENT) {
+      if (TCP_active) {
         WiFi_transmit_TCP(buf, size);
         if (nl)
           WiFi_transmit_TCP("\n", 1);
-    }
+      }
 #endif
     }
     break;
-  case NMEA_USB:
+  case DEST_USB:
     {
       if (SoC->USB_ops) {
         SoC->USB_ops->write((const byte *) buf, size);
@@ -505,7 +515,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       }
     }
     break;
-  case NMEA_BLUETOOTH:
+  case DEST_BLUETOOTH:
     {
       if (BTactive && SoC->Bluetooth_ops) {
         SoC->Bluetooth_ops->write((const byte *) buf, size);
@@ -514,7 +524,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       }
     }
     break;
-  case NMEA_OFF:
+  case DEST_OFF:
   default:
     break;
   }
@@ -548,7 +558,7 @@ void NMEA_bridge_send(char *buf, int len)
     // Also trap PSRF config sentences, process internally instead
     // Not sure whether to process SKV sentences here or pass them on?
     if (buf[1]=='P' && buf[2]=='S' && buf[3]=='R' && buf[4]=='F') {
-        NMEA_bridge_sent = true;
+        NMEA_bridge_sent = true;   // not really sent, but substantial processing
         for (int i=0; i<len; i++) {
             if (gnss.encode(buf[i])) {   // valid sentence
                 NMEA_Process_SRF_SKV_Sentences();
@@ -615,35 +625,48 @@ void NMEA_loop()
     /*
      * Check SW/HW UARTs, USB, TCP and BT for data
      */
-    int c;
+
+    bool gdl90 = false;
 
 #if 0
     static char usb_buf[128+3];
     static int usb_n = 0;
     if (SoC->USB_ops) {
-      NMEA_Source = NMEA_USB;
+      NMEA_Source = DEST_USB;
+      gdl90 = (settings->gdl90_in == DEST_USB);
       while (SoC->USB_ops->available() > 0) {
-        c = SoC->USB_ops->read();
-        NMEA_bridge_buf(c, usb_buf, usb_n);
+          int c = SoC->USB_ops->read();
+          if (gdl90)
+              GDL90_bridge_buf(c, usb_buf, usb_n);
+          else
+              NMEA_bridge_buf(c, usb_buf, usb_n);
       }
     }
 #endif
 
     static char uart_buf[128+3];
     static int uart_n = 0;
-    NMEA_Source = NMEA_UART;
+    NMEA_Source = DEST_UART;
+    gdl90 = (settings->gdl90_in == DEST_UART);
     while (Serial.available() > 0) {
-      c = Serial.read();
-      NMEA_bridge_buf(c, uart_buf, uart_n);
+        int c = Serial.read();
+        if (gdl90)
+            GDL90_bridge_buf(c, uart_buf, uart_n);
+        else
+            NMEA_bridge_buf(c, uart_buf, uart_n);
     }
 
     static char uart2_buf[128+3];
     static int uart2_n = 0;
     if (has_serial2) {
-      NMEA_Source = NMEA_UART2;
-      while (Serial2.available() > 0) {
-        c = Serial2.read();
-        NMEA_bridge_buf(c, uart2_buf, uart2_n);
+      NMEA_Source = DEST_UART2;
+      gdl90 = (settings->gdl90_in == DEST_UART2);
+      while (Serial.available() > 0) {
+          int c = Serial.read();
+          if (gdl90)
+              GDL90_bridge_buf(c, uart2_buf, uart2_n);
+          else
+              NMEA_bridge_buf(c, uart2_buf, uart2_n);
       }
     }
 
@@ -655,10 +678,14 @@ void NMEA_loop()
     static char bt_buf[128+3];
     static int bt_n = 0;
     if (SoC->Bluetooth_ops) {
-      NMEA_Source = NMEA_BLUETOOTH;
+      NMEA_Source = DEST_BLUETOOTH;
+      gdl90 = (settings->gdl90_in == DEST_BLUETOOTH);
       while (BTactive && SoC->Bluetooth_ops->available() > 0) {
-        c = SoC->Bluetooth_ops->read();
-        NMEA_bridge_buf(c, bt_buf, bt_n);
+          int c = SoC->Bluetooth_ops->read();
+          if (gdl90)
+              GDL90_bridge_buf(c, bt_buf, bt_n);
+          else
+              NMEA_bridge_buf(c, bt_buf, bt_n);
       }
     }
 
@@ -667,16 +694,19 @@ void NMEA_loop()
     static char tcpoutbuf[MAX_NMEATCP_CLIENTS][128+3];
     static int tcp_n[MAX_NMEATCP_CLIENTS] = {0};
 //  static bool tcp_n_init = false;
-    if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-      // note TCP input will not be polled unless TCP output is active
-      NMEA_Source = NMEA_TCP;
+    if (TCP_active) {
+      NMEA_Source = DEST_TCP;
+      gdl90 = (settings->gdl90_in == DEST_TCP);
       if (settings->tcpmode == TCP_MODE_CLIENT) {
         while (1) {
           int n = WiFi_receive_TCP(tcpinbuf, 128);
           if (n <= 0)
               break;
           for (int i=0; i<n; i++) {
-              NMEA_bridge_buf(tcpinbuf[i], tcpoutbuf[0], tcp_n[0]);
+               if (gdl90)
+                   GDL90_bridge_buf(tcpinbuf[i], tcpoutbuf[0], tcp_n[0]);
+               else
+                   NMEA_bridge_buf(tcpinbuf[i], tcpoutbuf[0], tcp_n[0]);
           }
         }
       }
@@ -689,8 +719,11 @@ void NMEA_loop()
 //            if (! tcp_n_init)
 //              tcp_n[i] = 0;
             while (NmeaTCP[i].client.available()) {
-              c = NmeaTCP[i].client.read();
-              NMEA_bridge_buf(c, tcpoutbuf[i], tcp_n[i]);
+                int c = NmeaTCP[i].client.read();
+                if (gdl90)
+                    GDL90_bridge_buf(c, tcpoutbuf[i], tcp_n[i]);
+                else
+                    NMEA_bridge_buf(c, tcpoutbuf[i], tcp_n[i]);
             }
           }
         }
@@ -751,9 +784,7 @@ void NMEA_loop()
 
 #if defined(NMEA_TCP_SERVICE)
 
-  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
-
-   if (settings->tcpmode == TCP_MODE_SERVER) {
+    if (TCP_active && settings->tcpmode == TCP_MODE_SERVER) {
 
     // TCP clients housekeeping:
   
@@ -798,7 +829,6 @@ void NMEA_loop()
           NmeaTCP[i].ack = true;
       }
     }
-   }
   }
 #endif
 
@@ -807,7 +837,7 @@ void NMEA_loop()
 void NMEA_fini()
 {
 #if defined(NMEA_TCP_SERVICE)
-  if (settings->nmea_out == NMEA_TCP || settings->nmea_out2 == NMEA_TCP) {
+  if (TCP_active) {
     if (settings->tcpmode == TCP_MODE_SERVER)
         NmeaTCPServer.stop();
     else if (settings->tcpmode == TCP_MODE_CLIENT)
@@ -852,9 +882,11 @@ void NMEA_Export()
 
         ufo_t *cip = &Container[i];
 
-        if (cip->addr && (this_moment - cip->timestamp) <= EXPORT_EXPIRATION_TIME) {
+        if (cip->addr && (((this_moment - cip->timestamp) <= EXPORT_EXPIRATION_TIME)
+                 || (settings->debug_flags & DEBUG_FAKEFIX))) {
 #if 0
-          Serial.println(cip->addr);
+          Serial.println(i);
+          Serial.printf("%06X\r\n", cip->addr);
           Serial.println(cip->latitude, 4);
           Serial.println(cip->longitude, 4);
           Serial.println(cip->altitude);
@@ -950,7 +982,7 @@ void NMEA_Export()
            addr_type = ADDR_TYPE_ANONYMOUS;
          }
 
-         /* may want to skip the HP object */
+         /* may want to skip the HP object if there are many to report */
          /* since it will be in the PFLAU sentence */
          if (total_objects < MAX_NMEA_OBJECTS || fop->addr != HP_addr) {
 
@@ -1462,16 +1494,16 @@ void NMEA_Process_SRF_SKV_Sentences()
             int nmea2 = atoi(D_NMEA2.value());
             Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
             if (nmea2 == nmea1)
-                nmea2 = NMEA_OFF;
+                nmea2 = DEST_OFF;
             if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-              if ((nmea1==NMEA_UART || nmea1==NMEA_USB)
-               && (nmea2==NMEA_UART || nmea2==NMEA_USB))
-                  nmea2 = NMEA_OFF;      // USB & UART wired together
+              if ((nmea1==DEST_UART || nmea1==DEST_USB)
+               && (nmea2==DEST_UART || nmea2==DEST_USB))
+                  nmea2 = DEST_OFF;      // USB & UART wired together
             }
-            bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
-            bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
-            if (wireless1 && wireless2)
-                  nmea2 = NMEA_OFF;      // only one wireless output route possible
+//            bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
+//            bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
+//            if (wireless1 && wireless2)
+//                  nmea2 = DEST_OFF;      // only one wireless output route possible
             Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
             settings->nmea_out2 = nmea2;
             cfg_is_updated = true;

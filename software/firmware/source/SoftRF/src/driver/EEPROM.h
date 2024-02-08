@@ -74,6 +74,17 @@ enum
 
 enum
 {
+	DEST_OFF,
+	DEST_UART,
+	DEST_UDP,
+	DEST_TCP,
+	DEST_USB,
+	DEST_BLUETOOTH,
+	DEST_UART2
+};
+
+enum
+{
 	BAUD_DEFAULT = 0,
 	BAUD_4800 = 1,
 	BAUD_9600 = 2,
@@ -118,7 +129,7 @@ typedef struct Settings {
     bool     stealth:1;
     bool     no_track:1;
 
-    uint8_t  gdl90:3;
+    uint8_t  gdl90:3;    // output destination
     uint8_t  d1090:3;
     uint8_t  json:2;
 
@@ -128,7 +139,8 @@ typedef struct Settings {
     int8_t   freq_corr; /* +/-, kHz */
     uint8_t  resvd2;
     uint8_t  relay:2;
-    uint8_t  resvd3:4;
+    uint8_t  gdl90_in:3;    // data from this port will be interpreted as GDL90
+    uint8_t  resvd3:1;
     bool     nmea_e:1;
     bool     nmea2_e:1;     // whether to send bridged data
     uint8_t  baud_rate:3;   /* for serial UART0 */
@@ -181,7 +193,7 @@ typedef union EEPROM_U {
 #define DEBUG_ALARM 0x04
 #define DEBUG_LEGACY 0x08
 #define DEBUG_RESVD1 0x10
-#define DEBUG_RESVD2 0x20
+#define DEBUG_FAKEFIX 0x20
 
 void EEPROM_setup(void);
 void EEPROM_defaults(void);

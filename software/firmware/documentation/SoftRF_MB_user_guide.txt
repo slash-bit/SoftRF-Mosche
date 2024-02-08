@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Feb. 4, 2024
-to fit software version MB113 based on v1.0 with some parts of v1.2
+This version last updated Feb. 8, 2024
+to fit software version MB114 based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 
@@ -223,9 +223,11 @@ Serial Port input pin: the default is the "RX" pin on the T-Beam, which is conne
 
 Aux Serial Port Baud Rate: If you want to use the auxiliary (second) serial port, must select a baud rate here.
 
-Aux Serial Port Logic: "Normal" to connect to TTL serial devices (including a chip that converts to RS232). "Inverted" to connect to RS232 devices without a conversion chip (voltage may be not suffice - see section on connecting devices).
+Aux Serial Port Logic: "Normal" to connect to TTL serial devices or a chip that converts to RS232. "Inverted" to connect to RS232 devices without a conversion chip (voltage may be not suffice - see section on connecting devices).
 
-GDL90: this is for a different (non-NMEA) local data transfer protocol, usually leave Off.
+GDL90 input: this is for importing data from an ADS-B receiver, usually leave Off.
+
+GDL90 output: this is for a different (non-NMEA) local data transfer protocol, usually leave Off.
 
 Dump1090: yet another local data transfer protocol, usually leave Off.
 
@@ -339,7 +341,13 @@ This version also adds the possible use of a second serial port, using pins RX=3
 See pinout diagram here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-beam_wiring.jpg
 
-On the second serial port only, can invert the logic.  The voltage level is TTL, not RS232.  But with inverted logic, you can try and connect to other devices that claim to be "RS232" but will actually accept zero volts as "low" and 3V as "high" without needing a conversion chip such as MAX232.  If thus connected, need to protect the T-Beam pin from the high positive and negative voltages on a real RS232 line.  Suggest a 3.3V zener diode from the pin to ground in parallel with a schottky diode, and a 1.2K resistor between the pin and the external wire.  At least on the input wire, although the output wire may be accidentally connected to an RS232 output, so should be protected too.  The input wire also needs a pull-up resistor, 10 Kohms from the pin to +3.3V.  When the second serial port is "inverted", the red LED will be brightly lit most of the time, flickering off when sending data.
+On the second serial port only, can invert the logic.  The voltage level is TTL, not RS232.  But with inverted logic, you can try and connect to other devices that claim to be "RS232" but will actually accept zero volts as "low" and 3V as "high" without needing a conversion chip such as MAX232.  (When the second serial port is "inverted", the red LED will be brightly lit most of the time, flickering off when sending data.)  When using this connection method, need to protect the T-Beam pin from the high positive and negative voltages on a real RS232 line.  Suggest a 3.3V zener diode from the pin to ground in parallel with a schottky diode, and a 1.2K resistor between the pin and the external wire.  At least on the input wire, although the output wire may be accidentally connected to an RS232 output, so should be protected too.  The input wire also needs a pull-up resistor, 10 Kohms from the pin to +3.3V.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/rs232_wiring.jpg
+for an example protection circuit.
+
+
+Connecting an ADS-B receiver
+
+Version MB114 of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial or TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  NMEA messages are not sent to the GDL90-input port, but GDL-90 messages may.
 
 
 Connecting to XCvario

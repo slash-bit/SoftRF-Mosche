@@ -21,16 +21,6 @@
 #ifndef D1090HELPER_H
 #define D1090HELPER_H
 
-enum
-{
-	D1090_OFF,
-	D1090_UART,
-	D1090_UDP,
-	D1090_TCP,
-	D1090_USB,
-	D1090_BLUETOOTH
-};
-
 void D1090_Export(void);
 void D1090_Import(uint8_t *);
 

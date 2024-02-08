@@ -833,11 +833,11 @@ void parseSettings(JsonObject root)
     JsonVariant nmea_out = root[key]["output"];
     const char * nmea_out_s = nmea_out.as<char*>();
     if (!strcmp(nmea_out_s,"OFF")) {
-      eeprom_block.field.settings.nmea_out = NMEA_OFF;
+      eeprom_block.field.settings.nmea_out = DEST_OFF;
     } else if (!strcmp(nmea_out_s,"UART")) {
-      eeprom_block.field.settings.nmea_out = NMEA_UART;
+      eeprom_block.field.settings.nmea_out = DEST_UART;
     } else if (!strcmp(nmea_out_s,"UDP")) {
-      eeprom_block.field.settings.nmea_out = NMEA_UDP;
+      eeprom_block.field.settings.nmea_out = DEST_UDP;
     }
   }
 
@@ -846,11 +846,11 @@ void parseSettings(JsonObject root)
     JsonVariant gdl90 = root[key];
     const char * gdl90_s = gdl90.as<char*>();
     if (!strcmp(gdl90_s,"OFF")) {
-      eeprom_block.field.settings.gdl90 = GDL90_OFF;
+      eeprom_block.field.settings.gdl90 = DEST_OFF;
     } else if (!strcmp(gdl90_s,"UART")) {
-      eeprom_block.field.settings.gdl90 = GDL90_UART;
+      eeprom_block.field.settings.gdl90 = DEST_UART;
     } else if (!strcmp(gdl90_s,"UDP")) {
-      eeprom_block.field.settings.gdl90 = GDL90_UDP;
+      eeprom_block.field.settings.gdl90 = DEST_UDP;
     }
   }
 
@@ -859,9 +859,9 @@ void parseSettings(JsonObject root)
     JsonVariant d1090 = root[key];
     const char * d1090_s = d1090.as<char*>();
     if (!strcmp(d1090_s,"OFF")) {
-      eeprom_block.field.settings.d1090 = D1090_OFF;
+      eeprom_block.field.settings.d1090 = DEST_OFF;
     } else if (!strcmp(d1090_s,"UART")) {
-      eeprom_block.field.settings.d1090 = D1090_UART;
+      eeprom_block.field.settings.d1090 = DEST_UART;
     }
   }
 

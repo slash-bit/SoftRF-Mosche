@@ -158,28 +158,29 @@ void EEPROM_defaults()
   settings->nmea2_e = false;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
-  settings->nmea_out   = NMEA_USB;
-  settings->nmea_out2  = NMEA_OFF;
+  settings->nmea_out   = DEST_USB;
+  settings->nmea_out2  = DEST_OFF;
 #else
   settings->nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
-                                             NMEA_BLUETOOTH :
+                                             DEST_BLUETOOTH :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
-                                             NMEA_UDP :
+                                             DEST_UDP :
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
-                                             NMEA_UDP :
-                                           NMEA_UART));
+                                             DEST_UDP :
+                                           DEST_UART));
   settings->nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
-                                             NMEA_USB :
+                                             DEST_USB :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
-                                             NMEA_UART :
+                                             DEST_UART :
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
-                                             NMEA_UART :
-                                           NMEA_OFF));
+                                             DEST_UART :
+                                           DEST_OFF));
 #endif
 
-  settings->gdl90      = GDL90_OFF;
+  settings->gdl90_in   = DEST_OFF;
+  settings->gdl90      = DEST_OFF;
 #if !defined(EXCLUDE_D1090)
-  settings->d1090      = D1090_OFF;
+  settings->d1090      = DEST_OFF;
 #endif
   settings->json       = JSON_OFF;
   settings->stealth    = false;
@@ -203,9 +204,7 @@ void EEPROM_defaults()
   settings->follow_id = 0;
   settings->id_method = ADDR_TYPE_FLARM;
   settings->logalarms = false;
-  settings->debug_flags = 0x3F;
-      // if and when debug output will be turned on,
-      // allow all debug message types by default
+  settings->debug_flags = 0;      // if and when debug output will be turned on - 0x3F for all
 
   strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
   settings->ssid[sizeof(settings->ssid)-1] = '\0';

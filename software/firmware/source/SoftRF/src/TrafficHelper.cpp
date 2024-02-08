@@ -526,6 +526,10 @@ void Traffic_Update(ufo_t *fop)
   fop->dx = (int32_t) x;
   fop->dy = (int32_t) y;
 
+  int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
+  rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
+  fop->RelativeBearing = rel_bearing;
+
   fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
   /* take altitude (and vert speed) differences into account as adjusted distance */
@@ -558,15 +562,23 @@ void Traffic_Update(ufo_t *fop)
 }
 
 /* relay landed-traffic if we are airborne */
-void air_relay()
+bool air_relay()
 {
     static uint32_t lastrelay = 0;
 
+    if (fo.airborne && (millis() > SetupTimeMarker + 60000)) {
+      if (settings->relay != RELAY_ALL)
+        return false;
+      /* do not relay close-by traffic unless it is low (or landed) */
+      if (fo.distance < 10000.0 && fo.alt_diff > -1000.0)
+        return false;
+    }
+
     /* only relay once in a while (5 seconds for any, 15 for same aircraft) */
     if (millis() < lastrelay + 1000*ANY_RELAY_TIME)
-        return;
+        return true;
     if (fo.timerelayed + ENTRY_RELAY_TIME > fo.timestamp)
-        return;
+        return true;
 
     // Since (legacy) decryption happens in-place, fo_raw is now cooked,
     // so use the original (still encrypted) data in RxBuffer.
@@ -584,7 +596,7 @@ void air_relay()
     else if (addr_type == 3)   // ADDR_TYPE_ANONYMOUS
         pkt->addr_type = 6;     // ADDR_TYPE_6
     else
-        return;                // should not happen
+        return false;          // should not happen
 
     if (fo.airborne) {
         // also munge the packet to make it invisible to FLARMs,
@@ -619,6 +631,158 @@ void air_relay()
         }
 #endif
     }
+    return true;
+}
+
+void AddTraffic(ufo_t *fop, bool do_relay)
+{
+    ufo_t *cip;
+    time_t timenow = ThisAircraft.timestamp;
+
+    /* first check whether we are already tracking this object */
+    int i;
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+
+      cip = &Container[i];
+
+      if (cip->addr == fop->addr) {
+
+        // ignore external (GDL90) data about aircraft we also receive from directly
+        if (fop->protocol == RF_PROTOCOL_GDL90 && cip->protocol != RF_PROTOCOL_GDL90
+                      && timenow - cip->timestamp <= ENTRY_EXPIRATION_TIME)
+            return;
+
+        fop->distance = cip->distance;      // - data from previous packet or update
+        fop->alt_diff = cip->alt_diff;
+        fop->timerelayed = cip->timerelayed;
+        if (do_relay)  do_relay = air_relay();
+        // this updates fop->timerelayed, to be copied later into container[]
+
+        /* ignore "new" GPS fixes that are exactly the same as before */
+        if (fop->altitude == cip->altitude &&
+            fop->latitude == cip->latitude &&
+            fop->longitude == cip->longitude) {
+                cip->timerelayed = fop->timerelayed;
+                return;
+        }
+
+        /* overwrite old entry, but preserve fields that store history */
+        /*   - they are copied into fo and then back into Container[i] */
+
+        if ((fop->gnsstime_ms - cip->gnsstime_ms > 1200)
+          /* packets spaced far enough apart, store new history */
+        || (fop->gnsstime_ms - cip->prevtime_ms > 2600)) {
+          /* previous history getting too old, drop it */
+          /* this means using the past data from < 1200 ms ago */
+          /* to avoid that would need to store data from yet another time point */
+          fop->prevtime_ms  = cip->gnsstime_ms;
+          fop->prevcourse   = cip->course;
+          fop->prevheading  = cip->heading;
+          /* fop->prevspeed = Container[i].speed; */
+          fop->prevaltitude = cip->altitude;
+        } else {
+          /* retain the older history for now */
+          fop->prevtime_ms  = cip->prevtime_ms;
+          fop->prevcourse   = cip->prevcourse;
+          fop->prevheading  = cip->prevheading;
+          /* fop->prevspeed = cip->prevspeed; */
+          fop->prevaltitude = cip->prevaltitude;
+          /* >>> may want to also retain info needed to compute velocity vector at t=0 */
+        }
+        fop->turnrate    = cip->turnrate;   /* keep the old turn rate */
+        fop->alert       = cip->alert;
+        fop->alert_level = cip->alert_level;
+     /* fop->callsign    = cip->callsign; */
+
+        *cip = *fop;   /* copies the whole object/structure */
+
+        /* Now old alert_level is in same structure, can update alarm_level:  */
+        Traffic_Update(cip);    // also updates distance, alt_diff
+
+        return;
+      }
+    }
+
+    /* new object, try and find a slot for it */
+
+    /* get distance, alt_diff, and alarm_level, to be copied later into container[] */
+    Traffic_Update(fop);
+
+    // timerelayed started out as 0 (from empty_fo)
+    if (do_relay)  do_relay = air_relay();
+    // this updates fop->timerelayed, to be copied later into container[]
+
+    /* replace an empty or expired object if found */
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (Container[i].addr == 0) {
+        Container[i] = *fop;
+        return;
+      }
+    }
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (timenow - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+        Container[i] = *fop;
+        return;
+      }
+    }
+
+    /* may need to replace a non-expired object:   */
+    /* identify the least important current object */
+
+    uint32_t follow_id = settings->follow_id;
+
+    /* replace an object of lower alarm level if found */
+
+    if (fop->alarm_level > ALARM_LEVEL_NONE) {
+      int min_level_ndx = 0;
+      int min_level = fop->alarm_level;
+      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        if (Container[i].alarm_level < min_level) {
+          min_level_ndx = i;
+          min_level = Container[i].alarm_level;
+        } else if (Container[min_level_ndx].addr == follow_id
+                     && min_level < fop->alarm_level
+                     && Container[i].alarm_level == min_level) {
+          min_level_ndx = i;
+        }
+      }
+      if (min_level < fop->alarm_level) {
+          Container[min_level_ndx] = *fop;
+          return;
+      }
+    }
+
+    /* identify the farthest-away non-"followed" object */
+    /*    (distance adjusted for altitude difference)   */
+
+    int max_dist_ndx = MAX_TRACKING_OBJECTS;
+    float max_adj_dist = 0;
+    float adj_distance;
+    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
+      if (Container[i].alarm_level == ALARM_LEVEL_NONE
+          && Container[i].addr != follow_id) {
+        adj_distance = Container[i].distance;
+        if (Container[i].adj_distance > adj_distance)
+              adj_distance = Container[i].adj_distance;
+        if (adj_distance > max_adj_dist)  {
+          max_dist_ndx = i;
+          max_adj_dist = adj_distance;
+        }
+      }
+    }
+
+    /* replace the farthest currently-tracked object, */
+    /* but only if the new object is closer (or "followed", or relayed) */
+    adj_distance = fop->adj_distance;
+    if (max_dist_ndx < MAX_TRACKING_OBJECTS
+      && (adj_distance < max_adj_dist
+          || fop->addr == follow_id
+          || (do_relay && fop->timerelayed > 0))) {
+      Container[max_dist_ndx] = *fop;
+      return;
+    }
+
+    /* otherwise, no slot found, ignore the new object */
 }
 
 void ParseData(void)
@@ -651,7 +815,6 @@ void ParseData(void)
         return;
 
     bool do_relay = false;
-    bool first_minute = (millis() < SetupTimeMarker + 60000);
 
     if (rf_protocol == RF_PROTOCOL_LEGACY) {
 
@@ -661,10 +824,9 @@ void ParseData(void)
       if (rf_protocol == RF_PROTOCOL_LEGACY
           && settings->relay != RELAY_OFF
           && addr_type < 4                // not a packet already relayed one hop
-          && (ThisAircraft.airborne || first_minute))
+          && (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
       {
-            if ((! fo.airborne) || (settings->relay == RELAY_ALL))
-                do_relay = true;
+            do_relay = true;
       }
 
       /* restore addr_type of received relayed packets */
@@ -683,159 +845,7 @@ void ParseData(void)
 
     fo.rssi = RF_last_rssi;
 
-    int i;
-    ufo_t *cip;
-
-    /* first check whether we are already tracking this object */
-    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-
-      cip = &Container[i];
-
-      if (cip->addr == fo.addr) {
-
-        if (do_relay && fo.airborne && (! first_minute)) {
-          /* do not relay close-by traffic unless it is low */
-          /* - data from previous packet or update */
-          if (cip->distance < 10000.0 && cip->alt_diff > -1000.0)
-            do_relay = false;
-        }
-
-        fo.timerelayed = cip->timerelayed;
-        if (do_relay)  air_relay();
-        // this updates fo.timerelayed, to be copied later into container[]
-
-        /* ignore "new" GPS fixes that are exactly the same as before */
-        if (fo.altitude == cip->altitude &&
-            fo.latitude == cip->latitude &&
-            fo.longitude == cip->longitude) {
-                      cip->timerelayed = fo.timerelayed;
-                      return;
-        }
-
-        /* overwrite old entry, but preserve fields that store history */
-        /*   - they are copied into fo and then back into Container[i] */
-
-        if ((fo.gnsstime_ms - cip->gnsstime_ms > 1200)
-          /* packets spaced far enough apart, store new history */
-        || (fo.gnsstime_ms - cip->prevtime_ms > 2600)) {
-          /* previous history getting too old, drop it */
-          /* this means using the past data from < 1200 ms ago */
-          /* to avoid that would need to store data from yet another time point */
-          fo.prevtime_ms  = cip->gnsstime_ms;
-          fo.prevcourse   = cip->course;
-          fo.prevheading  = cip->heading;
-          /* fo.prevspeed = Container[i].speed; */
-          fo.prevaltitude = cip->altitude;
-        } else {
-          /* retain the older history for now */
-          fo.prevtime_ms  = cip->prevtime_ms;
-          fo.prevcourse   = cip->prevcourse;
-          fo.prevheading  = cip->prevheading;
-          /* fo.prevspeed = cip->prevspeed; */
-          fo.prevaltitude = cip->prevaltitude;
-          /* >>> may want to also retain info needed to compute velocity vector at t=0 */
-        }
-        fo.turnrate    = cip->turnrate;   /* keep the old turn rate */
-        fo.alert       = cip->alert;
-        fo.alert_level = cip->alert_level;
-     /* fo.callsign    = cip->callsign; */
-
-        *cip = fo;   /* copies the whole object/structure */
-
-        /* Now old alert_level is in same structure, can update alarm_level:  */
-        Traffic_Update(cip);    // also updates distance, alt_diff
-
-        return;
-      }
-    }
-
-    /* new object, try and find a slot for it */
-
-    /* get distance, alt_diff, and alarm_level, to be copied later into container[] */
-    Traffic_Update(&fo);
-
-    if (do_relay && fo.airborne && (! first_minute)) {
-      /* do not relay close-by traffic unless it is low */
-      if (fo.distance < 10000.0 && fo.alt_diff > -1000.0)
-          do_relay = false;
-    }
-
-    // timerelayed started out as 0 (from empty_fo)
-    if (do_relay)  air_relay();
-    // this updates fo.timerelayed, to be copied later into container[]
-
-    /* replace an empty or expired object if found */
-    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (Container[i].addr == 0) {
-        Container[i] = fo;
-        return;
-      }
-    }
-    time_t timenow = ThisAircraft.timestamp;
-    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (timenow - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
-        Container[i] = fo;
-        return;
-      }
-    }
-
-    /* may need to replace a non-expired object:   */
-    /* identify the least important current object */
-
-    uint32_t follow_id = settings->follow_id;
-
-    /* replace an object of lower alarm level if found */
-
-    if (fo.alarm_level > ALARM_LEVEL_NONE) {
-      int min_level_ndx = 0;
-      int min_level = fo.alarm_level;
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].alarm_level < min_level) {
-          min_level_ndx = i;
-          min_level = Container[i].alarm_level;
-        } else if (Container[min_level_ndx].addr == follow_id
-                     && min_level < fo.alarm_level
-                     && Container[i].alarm_level == min_level) {
-          min_level_ndx = i;
-        }
-      }
-      if (min_level < fo.alarm_level) {
-          Container[min_level_ndx] = fo;
-          return;
-      }
-    }
-
-    /* identify the farthest-away non-"followed" object */
-    /*    (distance adjusted for altitude difference)   */
-
-    int max_dist_ndx = MAX_TRACKING_OBJECTS;
-    float max_adj_dist = 0;
-    float adj_distance;
-    for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (Container[i].alarm_level == ALARM_LEVEL_NONE
-          && Container[i].addr != follow_id) {
-        adj_distance = Container[i].distance;
-        if (Container[i].adj_distance > adj_distance)
-              adj_distance = Container[i].adj_distance;
-        if (adj_distance > max_adj_dist)  {
-          max_dist_ndx = i;
-          max_adj_dist = adj_distance;
-        }
-      }
-    }
-
-    /* replace the farthest currently-tracked object, */
-    /* but only if the new object is closer (or "followed", or relayed) */
-    adj_distance = fo.adj_distance;
-    if (max_dist_ndx < MAX_TRACKING_OBJECTS
-      && (adj_distance < max_adj_dist
-          || fo.addr == follow_id
-          || (do_relay && fo.timerelayed > 0))) {
-      Container[max_dist_ndx] = fo;
-      return;
-    }
-
-    /* otherwise, no slot found, ignore the new object */
+    AddTraffic(&fo, do_relay);
 }
 
 void Traffic_setup()
@@ -888,9 +898,7 @@ void Traffic_loop()
           /* determine if any traffic with alarm level low+ is "ahead" */
           /* - this is for the strobe, increase flashing if "ahead" */
           if (fop->alarm_level >= ALARM_LEVEL_LOW) {
-              int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
-              rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
-              if (abs(rel_bearing) < 45)
+              if (abs(fop->RelativeBearing) < 45)
                   alarm_ahead = true;
           }
 

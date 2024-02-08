@@ -152,9 +152,9 @@ NMEA2: USB LD
         nmeas[i++] = '-';
       nmeas[i] = '\0';
       snprintf(info_line, sizeof(info_line), "NMEA1:%s %s",
-          (settings->nmea_out == NMEA_UART ? "SER" :
-          (settings->nmea_out == NMEA_USB  ? "USB" :
-          (settings->nmea_out == NMEA_BLUETOOTH ? "BLT" : "---"))),
+          (settings->nmea_out == DEST_UART ? "SER" :
+          (settings->nmea_out == DEST_USB  ? "USB" :
+          (settings->nmea_out == DEST_BLUETOOTH ? "BLT" : "---"))),
           nmeas);
       display->getTextBounds(info_line, 0, 0, &tbx, &tby, &tbw, &tbh);
       y += tbh;
@@ -179,9 +179,9 @@ NMEA2: USB LD
         nmeas[i++] = '-';
       nmeas[i] = '\0';
       snprintf(info_line, sizeof(info_line), "NMEA2:%s %s",
-          (settings->nmea_out2 == NMEA_UART ? "SER" :
-          (settings->nmea_out2 == NMEA_USB  ? "USB" :
-          (settings->nmea_out2 == NMEA_BLUETOOTH ? "BLT" : "---"))),
+          (settings->nmea_out2 == DEST_UART ? "SER" :
+          (settings->nmea_out2 == DEST_USB  ? "USB" :
+          (settings->nmea_out2 == DEST_BLUETOOTH ? "BLT" : "---"))),
           nmeas);
       display->getTextBounds(info_line, 0, 0, &tbx, &tby, &tbw, &tbh);
       y += tbh;

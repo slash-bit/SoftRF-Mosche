@@ -331,6 +331,21 @@ int Wire_Trans_rval;
 
 gpio_num_t middle_button_pin = (gpio_num_t) SOC_UNUSED_PIN;
 
+static void print_dest(int dest)
+{
+  switch (dest)
+  {
+    case DEST_UART       :  Serial.println(F("UART"));      break;
+    case DEST_UART2      :  Serial.println(F("UART2"));     break;
+    case DEST_USB        :  Serial.println(F("USB CDC"));   break;
+    case DEST_UDP        :  Serial.println(F("UDP"));       break;
+    case DEST_TCP        :  Serial.println(F("TCP"));       break;
+    case DEST_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
+    case DEST_OFF        :
+    default              :  Serial.println(F("NULL"));      break;
+  }
+}
+
 static void ESP32_setup()
 {
 #if !defined(SOFTRF_ADDRESS)
@@ -1041,55 +1056,18 @@ static void ESP32_post_init()
   Serial.println(F("Data output device(s):"));
 
   Serial.print(F("NMEA   - "));
-  switch (settings->nmea_out)
-  {
-    case NMEA_UART       :  Serial.println(F("UART"));      break;
-    case NMEA_UART2      :  Serial.println(F("UART2"));     break;
-    case NMEA_USB        :  Serial.println(F("USB CDC"));   break;
-    case NMEA_UDP        :  Serial.println(F("UDP"));       break;
-    case NMEA_TCP        :  Serial.println(F("TCP"));       break;
-    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
-    case NMEA_OFF        :
-    default              :  Serial.println(F("NULL"));      break;
-  }
+  print_dest(settings->nmea_out);
   Serial.print(F("NMEA2  - "));
-  switch (settings->nmea_out2)
-  {
-    case NMEA_UART       :  Serial.println(F("UART"));      break;
-    case NMEA_UART2      :  Serial.println(F("UART2"));     break;
-    case NMEA_UDP        :  Serial.println(F("UDP"));       break;
-    case NMEA_TCP        :  Serial.println(F("TCP"));       break;
-    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
-    case NMEA_OFF        :
-    default              :  Serial.println(F("NULL"));      break;
-  }
+  print_dest(settings->nmea_out2);
 
-  Serial.print(F("GDL90  - "));
-  switch (settings->gdl90)
-  {
-    case GDL90_UART      :  Serial.println(F("UART"));      break;
-//  case GDL90_UART2     :  Serial.println(F("UART2"));     break;
-    case GDL90_USB       :  Serial.println(F("USB CDC"));   break;
-    case GDL90_UDP       :  Serial.println(F("UDP"));       break;
-//  case GDL90_TCP       :  Serial.println(F("TCP"));       break;
-    case GDL90_BLUETOOTH :  Serial.println(F("Bluetooth")); break;
-    case GDL90_OFF       :
-    default              :  Serial.println(F("NULL"));      break;
-  }
+  Serial.print(F("GDL90 in -  "));
+  print_dest(settings->gdl90_in);
+  Serial.print(F("GDL90 out - "));
+  print_dest(settings->gdl90);
 
 #if !defined(EXCLUDE_D1090)
-  Serial.print(F("D1090  - "));
-  switch (settings->d1090)
-  {
-    case D1090_UART      :  Serial.println(F("UART"));      break;
-//  case D1090_UART2     :  Serial.println(F("UART2"));     break;
-    case D1090_USB       :  Serial.println(F("USB CDC"));   break;
-//  case D1090_UDP       :  Serial.println(F("UDP"));       break;
-//  case D1090_TCP       :  Serial.println(F("TCP"));       break;
-    case D1090_BLUETOOTH :  Serial.println(F("Bluetooth")); break;
-    case D1090_OFF       :
-    default              :  Serial.println(F("NULL"));      break;
-  }
+  Serial.print(F("D1090 out - "));
+  print_dest(settings->d1090);
 #endif
 
   Serial.println();
@@ -1941,15 +1919,18 @@ static void ESP32_EEPROM_extension(int cmd)
 {
   if (cmd == EEPROM_EXT_LOAD) {
 #if defined(CONFIG_IDF_TARGET_ESP32) || defined(USE_USB_HOST)
-    if (settings->nmea_out == NMEA_USB) {
-      settings->nmea_out = NMEA_UART;
+    if (settings->nmea_out == DEST_USB) {
+      settings->nmea_out = DEST_UART;
     }
-    if (settings->gdl90 == GDL90_USB) {
-      settings->gdl90 = GDL90_UART;
+    if (settings->gdl90 == DEST_USB) {
+      settings->gdl90 = DEST_UART;
+    }
+    if (settings->gdl90_in == DEST_USB) {
+      settings->gdl90_in = DEST_UART;
     }
 #if !defined(EXCLUDE_D1090)
-    if (settings->d1090 == D1090_USB) {
-      settings->d1090 = D1090_UART;
+    if (settings->d1090 == DEST_USB) {
+      settings->d1090 = DEST_UART;
     }
 #endif
 #endif /* CONFIG_IDF_TARGET_ESP32 */

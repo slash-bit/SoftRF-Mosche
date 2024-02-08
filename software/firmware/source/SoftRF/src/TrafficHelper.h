@@ -67,6 +67,8 @@ enum
 
 #define TRAFFIC_ALERT_SOUND   1
 
+bool air_relay();
+void AddTraffic(ufo_t *fop, bool do_relay);
 void ParseData(void);
 void Traffic_setup(void);
 void Traffic_loop(void);

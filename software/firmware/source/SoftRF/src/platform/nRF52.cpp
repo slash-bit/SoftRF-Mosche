@@ -568,6 +568,18 @@ static void nRF52_setup()
 #endif
 }
 
+static void print_dest(int dest)
+{
+  switch (dest)
+  {
+    case DEST_UART       :  Serial.println(F("UART"));          break;
+    case DEST_USB        :  Serial.println(F("USB CDC"));       break;
+    case DEST_BLUETOOTH  :  Serial.println(F("Bluetooth LE"));  break;
+    case DEST_OFF        :
+    default              :  Serial.println(F("NULL"));          break;
+  }
+}
+
 static void nRF52_post_init()
 {
   if (nRF52_board == NRF52_LILYGO_TECHO_REV_0 ||
@@ -652,44 +664,16 @@ static void nRF52_post_init()
   Serial.println(F("Data output device(s):"));
 
   Serial.print(F("NMEA   - "));
-  switch (settings->nmea_out)
-  {
-    case NMEA_UART       :  Serial.println(F("UART"));          break;
-    case NMEA_USB        :  Serial.println(F("USB CDC"));       break;
-    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth LE"));  break;
-    case NMEA_OFF        :
-    default              :  Serial.println(F("NULL"));          break;
-  }
+  print_dest(settings->nmea_out);
 
   Serial.print(F("NMEA2  - "));
-  switch (settings->nmea_out2)
-  {
-    case NMEA_UART       :  Serial.println(F("UART"));          break;
-    case NMEA_USB        :  Serial.println(F("USB CDC"));       break;
-    case NMEA_BLUETOOTH  :  Serial.println(F("Bluetooth LE"));  break;
-    case NMEA_OFF        :
-    default              :  Serial.println(F("NULL"));          break;
-  }
+  print_dest(settings->nmea_out2);
 
   Serial.print(F("GDL90  - "));
-  switch (settings->gdl90)
-  {
-    case GDL90_UART      :  Serial.println(F("UART"));          break;
-    case GDL90_USB       :  Serial.println(F("USB CDC"));       break;
-    case GDL90_BLUETOOTH :  Serial.println(F("Bluetooth LE"));  break;
-    case GDL90_OFF       :
-    default              :  Serial.println(F("NULL"));          break;
-  }
+  print_dest(settings->gdl90);
 
   Serial.print(F("D1090  - "));
-  switch (settings->d1090)
-  {
-    case D1090_UART      :  Serial.println(F("UART"));          break;
-    case D1090_USB       :  Serial.println(F("USB CDC"));       break;
-    case D1090_BLUETOOTH :  Serial.println(F("Bluetooth LE"));  break;
-    case D1090_OFF       :
-    default              :  Serial.println(F("NULL"));          break;
-  }
+  print_dest(settings->d1090);
 
   Serial.println();
   Serial.flush();
@@ -1252,15 +1236,15 @@ static void nRF52_EEPROM_extension(int cmd)
         settings->mode = SOFTRF_MODE_NORMAL;
       }
 
-      if (settings->nmea_out == NMEA_UDP  ||
-          settings->nmea_out == NMEA_TCP ) {
-        settings->nmea_out = NMEA_BLUETOOTH;
+      if (settings->nmea_out == DEST_UDP  ||
+          settings->nmea_out == DEST_TCP ) {
+        settings->nmea_out = DEST_BLUETOOTH;
       }
-      if (settings->gdl90 == GDL90_UDP) {
-        settings->gdl90 = GDL90_BLUETOOTH;
+      if (settings->gdl90 == DEST_UDP) {
+        settings->gdl90 = DEST_BLUETOOTH;
       }
-      if (settings->d1090 == D1090_UDP) {
-        settings->d1090 = D1090_BLUETOOTH;
+      if (settings->d1090 == DEST_UDP) {
+        settings->d1090 = DEST_BLUETOOTH;
       }
 
       break;

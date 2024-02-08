@@ -22,6 +22,7 @@
 #include <TimeLib.h>
 
 #include "../../system/SoC.h"
+#include "NMEA.h"
 #include "D1090.h"
 #include "../../driver/GNSS.h"
 #include "GDL90.h"
@@ -48,30 +49,36 @@ static void D1090_Out(byte *buf, size_t size)
 {
   switch(settings->d1090)
   {
-  case D1090_UART:
+  case DEST_UART:
     if (SoC->UART_ops) {
       SoC->UART_ops->write(buf, size);
     } else {
-      SerialOutput.write(buf, size);
+      Serial.write(buf, size);
     }
     break;
-  case D1090_USB:
-    {
-      if (SoC->USB_ops) {
-        SoC->USB_ops->write(buf, size);
-      }
-    }
+    case DEST_UART2:
+#if defined(ESP32)
+      if (has_serial2)
+        Serial2.write(buf, size);
+#endif
+      break;
+  case DEST_USB:
+    if (SoC->USB_ops)
+      SoC->USB_ops->write(buf, size);
     break;
-  case D1090_BLUETOOTH:
-    {
-      if (SoC->Bluetooth_ops) {
-        SoC->Bluetooth_ops->write(buf, size);
-      }
-    }
+  case DEST_BLUETOOTH:
+    if (SoC->Bluetooth_ops)
+      SoC->Bluetooth_ops->write(buf, size);
     break;
-  case D1090_UDP:
-  case D1090_TCP:
-  case D1090_OFF:
+  case DEST_UDP:
+//  SoC->WiFi_transmit_UDP(D1090_DST_PORT, buf, size);   // need a designated port number
+    break;
+  case DEST_TCP:
+#if defined(NMEA_TCP_SERVICE)
+      WiFi_transmit_TCP((char*)buf, size);
+#endif
+    break;
+  case DEST_OFF:
   default:
     break;
   }
@@ -102,7 +109,7 @@ void D1090_Export()
   interactiveRemoveStaleAircrafts(&state);
 #endif /* ENABLE_D1090_INPUT || ENABLE_RTLSDR || ENABLE_HACKRF || ENABLE_MIRISDR */
 
-  if (settings->d1090 != D1090_OFF && isValidFix()) {
+  if (settings->d1090 != DEST_OFF && isValidFix()) {
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
 

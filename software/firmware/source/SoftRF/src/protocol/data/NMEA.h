@@ -25,17 +25,6 @@
 #include "../../system/SoC.h"
 #endif /* __cplusplus */
 
-enum
-{
-	NMEA_OFF,
-	NMEA_UART,
-	NMEA_UDP,
-	NMEA_TCP,
-	NMEA_USB,
-	NMEA_BLUETOOTH,
-	NMEA_UART2
-};
-
 #define NMEA_BUFFER_SIZE    128
 #define NMEA_CALLSIGN_SIZE  (3 /* prefix */ + 1 /* _ */ + 6 /* ICAO */ + 1 /* EOL */)
 
@@ -61,12 +50,15 @@ void NMEA_Outs(bool, bool, const char *, size_t, bool);
 void NMEA_GGA(void);
 void NMEA_add_checksum(char *, size_t);
 
+int WiFi_transmit_TCP(const char *buf, size_t size);
+
 char *bytes2Hex(byte *, size_t);
 
 extern uint8_t NMEA_Source;
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
 extern char GPGGA_Copy[NMEA_BUFFER_SIZE];
 extern bool has_serial2;
+extern bool NMEA_bridge_sent;
 
 #if defined(USE_NMEA_CFG)
 void NMEA_Process_SRF_SKV_Sentences(void);

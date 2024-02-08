@@ -259,7 +259,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8)
     is_prime_mk2 = true;
 
-  size_t size = 11800;
+  size_t size = 12800;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -659,9 +659,9 @@ void handleSettings() {
 <option %s value='%d'>UDP</option>\
 <option %s value='%d'>Serial</option>"),
   settings->ssid, "hidepass",
-  (settings->nmea_out == NMEA_OFF   ? "selected" : ""), NMEA_OFF,
-  (settings->nmea_out == NMEA_UDP   ? "selected" : ""), NMEA_UDP,
-  (settings->nmea_out == NMEA_UART  ? "selected" : ""), NMEA_UART);
+  (settings->nmea_out == DEST_OFF   ? "selected" : ""), DEST_OFF,
+  (settings->nmea_out == DEST_UDP   ? "selected" : ""), DEST_UDP,
+  (settings->nmea_out == DEST_UART  ? "selected" : ""), DEST_UART);
 
   len = strlen(offset);
   offset += len;
@@ -675,16 +675,16 @@ void handleSettings() {
 <option %s value='%d'>Serial 2</option>\
 <option %s value='%d'>Bluetooth</option>\
 <option %s value='%d'>TCP</option>"),
-     (settings->nmea_out == NMEA_UART2 ? "selected" : ""), NMEA_UART2,
-     (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
-     (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+     (settings->nmea_out == DEST_UART2 ? "selected" : ""), DEST_UART2,
+     (settings->nmea_out == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+     (settings->nmea_out == DEST_TCP       ? "selected" : ""), DEST_TCP);
     } else {
      snprintf_P ( offset, size,
        PSTR("\
 <option %s value='%d'>Bluetooth</option>\
 <option %s value='%d'>TCP</option>"),
-     (settings->nmea_out == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
-     (settings->nmea_out == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+     (settings->nmea_out == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+     (settings->nmea_out == DEST_TCP       ? "selected" : ""), DEST_TCP);
     }
     len = strlen(offset);
     offset += len;
@@ -759,9 +759,9 @@ void handleSettings() {
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>UDP</option>\
 <option %s value='%d'>Serial</option>"),
-  (settings->nmea_out2 == NMEA_OFF   ? "selected" : ""), NMEA_OFF,
-  (settings->nmea_out2 == NMEA_UDP   ? "selected" : ""), NMEA_UDP,
-  (settings->nmea_out2 == NMEA_UART  ? "selected" : ""), NMEA_UART);
+  (settings->nmea_out2 == DEST_OFF   ? "selected" : ""), DEST_OFF,
+  (settings->nmea_out2 == DEST_UDP   ? "selected" : ""), DEST_UDP,
+  (settings->nmea_out2 == DEST_UART  ? "selected" : ""), DEST_UART);
 
   len = strlen(offset);
   offset += len;
@@ -775,16 +775,16 @@ void handleSettings() {
 <option %s value='%d'>Serial 2</option>\
 <option %s value='%d'>Bluetooth</option>\
 <option %s value='%d'>TCP</option>"),
-     (settings->nmea_out2 == NMEA_UART2 ? "selected" : ""), NMEA_UART2,
-     (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
-     (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+     (settings->nmea_out2 == DEST_UART2 ? "selected" : ""), DEST_UART2,
+     (settings->nmea_out2 == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+     (settings->nmea_out2 == DEST_TCP       ? "selected" : ""), DEST_TCP);
     } else {
      snprintf_P ( offset, size,
        PSTR("\
 <option %s value='%d'>Bluetooth</option>\
 <option %s value='%d'>TCP</option>"),
-     (settings->nmea_out2 == NMEA_BLUETOOTH ? "selected" : ""), NMEA_BLUETOOTH,
-     (settings->nmea_out2 == NMEA_TCP       ? "selected" : ""), NMEA_TCP);
+     (settings->nmea_out2 == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+     (settings->nmea_out2 == DEST_TCP       ? "selected" : ""), DEST_TCP);
     }
     len = strlen(offset);
     offset += len;
@@ -931,21 +931,65 @@ void handleSettings() {
   yield();
 
   /* Common part 4 */
+  // actually for now only on T-Beam
+  if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+
   snprintf_P ( offset, size,
     PSTR("\
 </select>\
 </td>\
 </tr>\
 <tr>\
-<th align=left>GDL90</th>\
+<th align=left>GDL90 Input</th>\
+<td align=right>\
+<select name='gdl90_in'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Serial</option>"),
+  (settings->gdl90_in == DEST_OFF   ? "selected" : ""), DEST_OFF,
+  (settings->gdl90_in == DEST_UART  ? "selected" : ""), DEST_UART);
+
+  len = strlen(offset);
+  offset += len;
+  size -= len;
+
+    }
+  }
+
+  /* SoC specific*/
+  if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+      snprintf_P ( offset, size,
+        PSTR("<option %s value='%d'>Serial 2</option>"),
+        (settings->gdl90_in == DEST_UART2 ? "selected" : ""), DEST_UART2);
+      len = strlen(offset);
+      offset += len;
+      size -= len;
+    }
+    snprintf_P ( offset, size,
+       PSTR("\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+     (settings->gdl90_in == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+     (settings->gdl90_in == DEST_TCP       ? "selected" : ""), DEST_TCP);
+    len = strlen(offset);
+    offset += len;
+    size -= len;
+  }
+
+  /* common */
+  snprintf_P ( offset, size,
+    PSTR("\
+<tr>\
+<th align=left>GDL90 output</th>\
 <td align=right>\
 <select name='gdl90'>\
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>\
 <option %s value='%d'>UDP</option>"),
-  (settings->gdl90 == GDL90_OFF  ? "selected" : ""), GDL90_OFF,
-  (settings->gdl90 == GDL90_UART ? "selected" : ""), GDL90_UART,
-  (settings->gdl90 == GDL90_UDP  ? "selected" : ""), GDL90_UDP);
+  (settings->gdl90 == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->gdl90 == DEST_UART ? "selected" : ""), DEST_UART,
+  (settings->gdl90 == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
   len = strlen(offset);
   offset += len;
@@ -953,11 +997,20 @@ void handleSettings() {
 
   /* SoC specific part 5 */
   if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+      snprintf_P ( offset, size,
+        PSTR("<option %s value='%d'>Serial 2</option>"),
+        (settings->gdl90 == DEST_UART2 ? "selected" : ""), DEST_UART2);
+      len = strlen(offset);
+      offset += len;
+      size -= len;
+    }
     snprintf_P ( offset, size,
       PSTR("\
-<option %s value='%d'>Bluetooth</option>"),
-    (settings->gdl90 == GDL90_BLUETOOTH ? "selected" : ""), GDL90_BLUETOOTH);
-
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+  (settings->gdl90 == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+  (settings->gdl90 == DEST_TCP ? "selected" : ""), DEST_TCP);
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -971,13 +1024,14 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
-<th align=left>Dump1090</th>\
+<th align=left>Dump1090 output</th>\
 <td align=right>\
 <select name='d1090'>\
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>"),
-  (settings->d1090 == D1090_OFF  ? "selected" : ""), D1090_OFF,
-  (settings->d1090 == D1090_UART ? "selected" : ""), D1090_UART);
+  (settings->d1090 == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->d1090 == DEST_UART ? "selected" : ""), DEST_UART,
+  (settings->d1090 == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
   len = strlen(offset);
   offset += len;
@@ -985,10 +1039,20 @@ void handleSettings() {
 
   /* SoC specific part 4 */
   if (SoC->id == SOC_ESP32) {
+    if (is_prime_mk2) {
+      snprintf_P ( offset, size,
+        PSTR("<option %s value='%d'>Serial 2</option>"),
+        (settings->d1090 == DEST_UART2 ? "selected" : ""), DEST_UART2);
+      len = strlen(offset);
+      offset += len;
+      size -= len;
+    }
     snprintf_P ( offset, size,
       PSTR("\
-<option %s value='%d'>Bluetooth</option>"),
-    (settings->d1090 == D1090_BLUETOOTH ? "selected" : ""), D1090_BLUETOOTH);
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'TCP</option>"),
+  (settings->d1090 == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+  (settings->d1090 == DEST_TCP ? "selected" : ""), DEST_TCP);
 
     len = strlen(offset);
     offset += len;
@@ -1402,6 +1466,8 @@ void handleInput() {
       settings->baudrate2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("invert2")) {
       settings->invert2 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("gdl90_in")) {
+      settings->gdl90_in = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
       settings->gdl90 = server.arg(i).toInt();
     } else if (server.argName(i).equals("d1090")) {
@@ -1465,35 +1531,35 @@ void handleInput() {
   Serial.print(F("NMEA_Output1 = ")); Serial.println(nmea1);
   Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
   if (nmea2 == nmea1)
-      nmea2 = NMEA_OFF;
+      nmea2 = DEST_OFF;
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    if ((nmea1==NMEA_UART || nmea1==NMEA_USB)
-     && (nmea2==NMEA_UART || nmea2==NMEA_USB))
-        nmea2 = NMEA_OFF;      // a duplicate, USB & UART are wired together
+    if ((nmea1==DEST_UART || nmea1==DEST_USB)
+     && (nmea2==DEST_UART || nmea2==DEST_USB))
+        nmea2 = DEST_OFF;      // a duplicate, USB & UART are wired together
   }
-//  bool wireless1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP || nmea1==NMEA_BLUETOOTH);
-//  bool wireless2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP || nmea2==NMEA_BLUETOOTH);
-  bool wifi1 = (nmea1==NMEA_UDP || nmea1==NMEA_TCP);
-  bool wifi2 = (nmea2==NMEA_UDP || nmea2==NMEA_TCP);
+//  bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
+//  bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
+  bool wifi1 = (nmea1==DEST_UDP || nmea1==DEST_TCP);
+  bool wifi2 = (nmea2==DEST_UDP || nmea2==DEST_TCP);
 // >>> try and allow Bluetooth along with WiFi:
-//  if (wifi1 && nmea2==NMEA_BLUETOOTH)
-//        nmea2 = NMEA_OFF;      // only one wireless output type possible
-//  if (wifi2 && nmea1==NMEA_BLUETOOTH)
-//        nmea2 = NMEA_OFF;
+//  if (wifi1 && nmea2==DEST_BLUETOOTH)
+//        nmea2 = DEST_OFF;      // only one wireless output type possible
+//  if (wifi2 && nmea1==DEST_BLUETOOTH)
+//        nmea2 = DEST_OFF;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
   settings->nmea_out2 = nmea2;
-  //if (nmea1==NMEA_BLUETOOTH || nmea2==NMEA_BLUETOOTH
-  //      || settings->d1090 == D1090_BLUETOOTH || settings->gdl90 == GDL90_BLUETOOTH) {
+  //if (nmea1==DEST_BLUETOOTH || nmea2==DEST_BLUETOOTH
+  //      || settings->d1090 == DEST_BLUETOOTH || settings->gdl90 == DEST_BLUETOOTH) {
   //    if (settings->bluetooth == BLUETOOTH_OFF)
   //        settings->bluetooth = BLUETOOTH_SPP;
   //}
 #if !defined(EXCLUDE_D1090)
-  if (nmea1 != NMEA_BLUETOOTH && nmea2 != NMEA_BLUETOOTH
-          && settings->d1090 != D1090_BLUETOOTH && settings->gdl90 != GDL90_BLUETOOTH) {
+  if (nmea1 != DEST_BLUETOOTH && nmea2 != DEST_BLUETOOTH
+          && settings->d1090 != DEST_BLUETOOTH && settings->gdl90 != DEST_BLUETOOTH) {
       settings->bluetooth = BLUETOOTH_OFF;
   }
 #else
-  if (nmea1 != NMEA_BLUETOOTH && nmea2 != NMEA_BLUETOOTH && settings->gdl90 != GDL90_BLUETOOTH) {
+  if (nmea1 != DEST_BLUETOOTH && nmea2 != DEST_BLUETOOTH && settings->gdl90 != DEST_BLUETOOTH) {
       settings->bluetooth = BLUETOOTH_OFF;
   }
 #endif
@@ -1562,7 +1628,8 @@ PSTR("<html>\
 <tr><th align=left>NMEA2 Sensors</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 External</th><td align=right>%s</td></tr>\
-<tr><th align=left>GDL90</th><td align=right>%d</td></tr>\
+<tr><th align=left>GDL90 in</th><td align=right>%d</td></tr>\
+<tr><th align=left>GDL90 out</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
 <tr><th align=left>Air-Relay</th><td align=right>%d</td></tr>\
 <tr><th align=left>Stealth</th><td align=right>%s</td></tr>\
@@ -1593,10 +1660,10 @@ PSTR("<html>\
     settings->nmea_out2,
     BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p), BOOL_STR(settings->nmea2_l),
     BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d), BOOL_STR(settings->nmea2_e),
-    settings->gdl90, settings->d1090,
+    settings->gdl90_in, settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
     settings->power_save, settings->power_external,
-    settings->freq_corr, settings->ppswire, settings->debug_flags, settings->logalarms,
+    settings->freq_corr, settings->logalarms, settings->ppswire, settings->debug_flags,
   //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
     (settings->igc_key[0]? 0x88888888 : 0),
     (settings->igc_key[1]? 0x88888888 : 0),
@@ -1648,7 +1715,8 @@ Serial.print(F(" NMEA2 Legacy "));Serial.println(settings->nmea2_l);
 Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
 Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
 Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
-Serial.print(F(" GDL90 "));Serial.println(settings->gdl90);
+Serial.print(F(" GDL90 in "));Serial.println(settings->gdl90_in);
+Serial.print(F(" GDL90 out "));Serial.println(settings->gdl90);
 Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);
 Serial.print(F(" Air-Relay "));Serial.println(settings->relay);
 Serial.print(F(" Stealth "));Serial.println(settings->stealth);

@@ -41,16 +41,6 @@ enum
 	GDL90_EMITTER_CATEGORY_SPACESHIP
 };
 
-enum
-{
-	GDL90_OFF,
-	GDL90_UART,
-	GDL90_UDP,
-	GDL90_TCP,
-	GDL90_USB,
-	GDL90_BLUETOOTH
-};
-
 typedef struct GDL90_Message {
   uint8_t   flag_start;
   uint8_t   message_id;
@@ -163,5 +153,7 @@ extern const char *GDL90_CallSign_Prefix[];
 void GDL90_Export(void);
 uint16_t GDL90_calcFCS(uint8_t, uint8_t *, int);
 uint8_t *GDL90_EscapeFilter(uint8_t *, uint8_t *, int);
+void process_traffic_message(char* buf);
+extern void GDL90_bridge_buf(char c, char* buf, int& n);
 
 #endif /* GDL90HELPER_H */
