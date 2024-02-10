@@ -738,7 +738,7 @@ void bridge()
 {
   bool success;
 
-  size_t tx_size = Raw_Receive_UDP(&TxBuffer[0]);
+  size_t tx_size = WiFi_Receive_UDP(&TxBuffer[0], MAX_PKT_SIZE);
 
   if (tx_size > 0) {
     RF_Transmit(tx_size, true);

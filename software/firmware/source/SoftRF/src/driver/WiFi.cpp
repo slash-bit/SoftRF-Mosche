@@ -19,6 +19,7 @@
 #include "../system/SoC.h"
 
 bool udp_is_ready = 0;
+bool input_udp_is_ready = 0;
 
 #if defined(EXCLUDE_WIFI)
 void WiFi_setup()   {}
@@ -33,6 +34,7 @@ void WiFi_fini()    {}
 #include "GNSS.h"
 #include "EEPROM.h"
 #include "WiFi.h"
+#include "tcpip_adapter.h"
 #include "../TrafficHelper.h"
 #include "RF.h"
 #include "../ui/Web.h"
@@ -63,11 +65,14 @@ bool dns_active = false;
 #endif
 
 // A UDP instance to let us send and receive packets over UDP
+//  - >>> is it OK to have two instances?
 WiFiUDP Uni_Udp;
+WiFiUDP Input_Udp;
 
 unsigned int RFlocalPort = RELAY_SRC_PORT;      // local port to listen for UDP packets
 
-char UDPpacketBuffer[256]; // buffer to hold incoming and outgoing packets
+char UDPpacketBuffer[UDP_PACKET_BUFSIZE];
+char UDPinputBuffer[UDP_PACKET_BUFSIZE];
 
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
 static unsigned long WiFi_No_Clients_Time_ms = 0;
@@ -170,6 +175,28 @@ bool saveConfig(String *ssid, String *pass)
 } // saveConfig
 #endif
 
+// general UDP receiving (code from SkyView):
+size_t WiFi_Receive_UDP(uint8_t *buf, size_t max_size)
+{
+  int noBytes = Input_Udp.parsePacket();
+  if ( noBytes ) {
+
+    if (noBytes > max_size) {
+      noBytes = max_size;
+    }
+
+    // We've received a packet, read the data from it
+    Input_Udp.read(buf,noBytes); // read the packet into the buffer
+
+    return (size_t) noBytes;
+  } else {
+    return 0;
+  }
+}
+
+#if 0
+// was used only in bridge mode, was called from SoftRF.ino,
+//   - replaced with WiFi_Receive_UDP(buf, MAX_PKT_SIZE)
 size_t Raw_Receive_UDP(uint8_t *buf)
 {
   int noBytes = Uni_Udp.parsePacket();
@@ -187,6 +214,7 @@ size_t Raw_Receive_UDP(uint8_t *buf)
     return 0;
   }
 }
+#endif
 
 void Raw_Transmit_UDP()
 {
@@ -199,6 +227,29 @@ void Raw_Transmit_UDP()
     UDPpacketBuffer[len] = '\n';
     SoC->WiFi_transmit_UDP(RELAY_DST_PORT, (byte *)UDPpacketBuffer, len + 1);
 }
+
+#if 1
+// Extend DHCP Lease time - check and set
+#if defined(ESP32)
+void printLeaseTime(){
+    uint32_t leaseTime = 0;
+    if(!tcpip_adapter_dhcps_option(TCPIP_ADAPTER_OP_GET,
+            TCPIP_ADAPTER_IP_ADDRESS_LEASE_TIME, (void*)&leaseTime, 4)){
+      Serial.printf("DHCPS Lease Time: %u\r\n", leaseTime);
+    }
+}
+void setLeaseTime(){
+    uint32_t lease_time = 24*60; // 24 hours
+    tcpip_adapter_dhcps_stop(TCPIP_ADAPTER_IF_AP);
+    tcpip_adapter_dhcps_option(
+      (tcpip_adapter_dhcp_option_mode_t)TCPIP_ADAPTER_OP_SET,
+      (tcpip_adapter_dhcp_option_id_t)TCPIP_ADAPTER_IP_ADDRESS_LEASE_TIME,
+      (void*)&lease_time, sizeof(uint32_t)
+    );
+    tcpip_adapter_dhcps_start(TCPIP_ADAPTER_IF_AP);
+}
+#endif
+#endif
 
 /**
  * @brief Arduino setup function.
@@ -312,13 +363,34 @@ void WiFi_setup()
 #endif
     Serial.print(F("IP address: "));
     Serial.println(WiFi.softAPIP());
+
+#if 1
+#if defined(ESP32)
+    // Extend DHCP lease time
+    printLeaseTime();
+    setLeaseTime();
+    printLeaseTime();
+#endif
+#endif
   }
 
-  Uni_Udp.begin(RFlocalPort);
-  Serial.print(F("UDP server has started at port: "));
-  Serial.println(RFlocalPort);
-
-  udp_is_ready = 1;
+  unsigned int UDP_Input_Port = 0;       // local port to listen for UDP packets
+  if (settings->gdl90_in == DEST_UDP)
+    UDP_Input_Port = GDL90_DST_PORT;
+  else if (settings->nmea_out!=DEST_UDP && settings->nmea_out2!=DEST_UDP)
+    UDP_Input_Port = NMEA_UDP_PORT;
+  if (UDP_Input_Port && Input_Udp.begin(UDP_Input_Port)) {
+    Serial.print(F("Input UDP server has started at port: "));
+    Serial.println(UDP_Input_Port);
+    input_udp_is_ready = 1;
+  }
+  if (settings->nmea_out==DEST_UDP || settings->nmea_out2==DEST_UDP) {
+    if (Uni_Udp.begin(RFlocalPort)) {
+      Serial.print(F("Output UDP server has started at port: "));
+      Serial.println(RFlocalPort);
+      udp_is_ready = 1;
+    }
+  }
 
 #if defined(POWER_SAVING_WIFI_TIMEOUT)
   WiFi_No_Clients_Time_ms = millis();

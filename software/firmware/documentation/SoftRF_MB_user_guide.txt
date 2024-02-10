@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Feb. 8, 2024
-to fit software version MB114 based on v1.0 with some parts of v1.2
+This version last updated Feb. 9, 2024
+to fit software version MB115 based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 
@@ -225,9 +225,9 @@ Aux Serial Port Baud Rate: If you want to use the auxiliary (second) serial port
 
 Aux Serial Port Logic: "Normal" to connect to TTL serial devices or a chip that converts to RS232. "Inverted" to connect to RS232 devices without a conversion chip (voltage may be not suffice - see section on connecting devices).
 
-GDL90 input: this is for importing data from an ADS-B receiver, usually leave Off.
+GDL90 input: this is for importing data from an ADS-B receiver, else leave Off.  It is not clear yet whether this can be UDP (port 4000) while NMEA output, too, is UDP (port 10110).
 
-GDL90 output: this is for a different (non-NMEA) local data transfer protocol, usually leave Off.
+GDL90 output: this is for a different local data transfer protocol, usually leave Off.  If used, probably should not choose UDP as an NMEA output destination.
 
 Dump1090: yet another local data transfer protocol, usually leave Off.
 
@@ -332,22 +332,22 @@ If desired, a barometric sensor of the BMP280 type can be connected to the T-Bea
 
 Data Bridging
 
-A new feature in this version of SoftRF, for now only on the T-Beam versions 0.7 - 1.2, is "data bridging".  NMEA sentences arriving from external devices are copied to other devices.  But they are not echoed back to the same port they came from.  GNSS (GPS) position sentences, and FLARM-format traffic messages, are not forwarded.  That is since they also originate from within SoftRF, thus any that arrive from external sources are redundant, and may be an echo of what was already sent from SoftRF.  For example: connect an S7 vario via a bi-directional serial cable.  (See above and below about how to get a bidirectional serial port on the T-Beam.)  Configure SoftRF to send it position and traffic sentences.  The S7 will echo them back on the same cable, along with its own added sentences carrying vario data (climb rate, airspeed, etc).  If XCsoar on a phone or tablet is receiving data from SoftRF via WiFi or Bluetooth or the other serial port, the S7 vario data can also be forwarded to XCsoar by SoftRF.  And S7 commands sent from XCsoar will be forwarded back to the S7.  This can eliminate the need for a Bluetooth dongle.  (Note: In this data bridging, UDP is output-only, and input from TCP is only active if TCP is set up as an NMEA destination.)
+A new feature in this version of SoftRF, for now only on the T-Beam versions 0.7 - 1.2, is "data bridging".  NMEA sentences arriving from external devices are copied to other devices.  But they are not echoed back to the same port they came from.  GNSS (GPS) position sentences, and FLARM-format traffic messages, are not forwarded.  That is since they also originate from within SoftRF, thus any that arrive from external sources are redundant, and may be an echo of what was already sent from SoftRF.  For example: connect an S7 vario via a bi-directional serial cable.  (See above and below about how to get a bidirectional serial port on the T-Beam.)  Configure SoftRF to send it position and traffic sentences.  The S7 will echo them back on the same cable, along with its own added sentences carrying vario data (climb rate, airspeed, etc).  If XCsoar on a phone or tablet is receiving data from SoftRF via WiFi or Bluetooth or the other serial port, the S7 vario data can also be forwarded to XCsoar by SoftRF.  And S7 commands sent from XCsoar will be forwarded back to the S7.  This can eliminate the need for a Bluetooth dongle.  (Note: for data bridging, input from TCP is only active if TCP is set up as an NMEA destination.  Conversely, UDP input is active only if UDP is *not* chosen for NMEA output.)
 
 This version also adds the ability to make the main serial port bidirectional.  The "RX" pin may work when the USB jack is not powered, but not when it is.  And certainly not when the USB port is receiving serial data.  You can't have two sources competing for control of the same input pin.  Instead, a new option in the settings allows using pin 36 ("VP") instead of "RX".  (This may not work well at high baud rates on the T-Beam v0.7, since it has a small capacitor between GPIO36 and GPIO37.)  If this option is selected, serial input from USB is disabled.  Serial output to USB (and to any serial device attached to "TX") is not affected.
 
-This version also adds the possible use of a second serial port, using pins RX=39 ("VN") and TX=4 (tentative choice).  (This may not work well at high baud rates on the T-Beam v0.7, since it has a small capacitor between GPIO39 and GPIO38.)  Note that pin 4 is shared with the red LED on the T-Beam board.  When the second serial port is used, this LED will turn off, and just flicker on when data is being sent.  With two serial ports, the data bridging can forward data from one to the other, or combine data from both and send to a wireless stream.  This can eliminate the need for an IOIO box.
+This version also adds the possible use of a second serial port, using pins RX=39 ("VN") and TX=4.  (This may not work well at high baud rates on the T-Beam v0.7, since it has a small capacitor between GPIO39 and GPIO38.)  Note that pin 4 is shared with the red LED on the T-Beam board.  When the second serial port is used, this LED will turn off, and just flicker on when data is being sent (which is actually useful).  With two serial ports, the data bridging can forward data from one to the other, or combine data from both and send to a wireless stream.  This can eliminate the need for an IOIO box.
 
 See pinout diagram here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-beam_wiring.jpg
 
-On the second serial port only, can invert the logic.  The voltage level is TTL, not RS232.  But with inverted logic, you can try and connect to other devices that claim to be "RS232" but will actually accept zero volts as "low" and 3V as "high" without needing a conversion chip such as MAX232.  (When the second serial port is "inverted", the red LED will be brightly lit most of the time, flickering off when sending data.)  When using this connection method, need to protect the T-Beam pin from the high positive and negative voltages on a real RS232 line.  Suggest a 3.3V zener diode from the pin to ground in parallel with a schottky diode, and a 1.2K resistor between the pin and the external wire.  At least on the input wire, although the output wire may be accidentally connected to an RS232 output, so should be protected too.  The input wire also needs a pull-up resistor, 10 Kohms from the pin to +3.3V.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/rs232_wiring.jpg
+On the second serial port only, can invert the logic.  The voltage level is TTL, not RS232.  But with inverted logic, you can try and connect to other devices that claim to be "RS232" but will actually accept zero volts as "low" and 3V as "high" without needing a conversion chip such as MAX232.  (When the second serial port is "inverted", the red LED will be brightly lit most of the time, flickering off while sending data.)  When using this connection method, need to protect the T-Beam pin from the high positive and negative voltages on a real RS232 line.  Suggest a 3.3V zener diode from the pin to ground in parallel with a schottky diode, and a 1.2K resistor between the pin and the external wire.  At least on the input wire, although the output wire may be accidentally connected to an RS232 output, so should be protected too.  The input wire also needs a pull-up resistor, 10 Kohms from the pin to +3.3V.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/rs232_wiring.jpg
 for an example protection circuit.
 
 
 Connecting an ADS-B receiver
 
-Version MB114 of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial or TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  NMEA messages are not sent to the GDL90-input port, but GDL-90 messages may.
+This version of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format, and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial, WiFi/UDP, or WiFi/TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  NMEA messages are not sent to the GDL90-input port, but GDL90 messages may.
 
 
 Connecting to XCvario

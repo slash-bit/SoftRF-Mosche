@@ -945,9 +945,11 @@ void handleSettings() {
 <td align=right>\
 <select name='gdl90_in'>\
 <option %s value='%d'>Off</option>\
-<option %s value='%d'>Serial</option>"),
-  (settings->gdl90_in == DEST_OFF   ? "selected" : ""), DEST_OFF,
-  (settings->gdl90_in == DEST_UART  ? "selected" : ""), DEST_UART);
+<option %s value='%d'>Serial</option>\
+<option %s value='%d'>UDP</option>"),
+  (settings->gdl90_in == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->gdl90_in == DEST_UART ? "selected" : ""), DEST_UART,
+  (settings->gdl90_in == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
   len = strlen(offset);
   offset += len;
@@ -1525,18 +1527,22 @@ void handleInput() {
     yield();
   }                // end for (server.args())
 
-  /* enforce some restrictions on second NMEA output route */
+  /* enforce some restrictions on input and output routes */
   int nmea1 = settings->nmea_out;
   int nmea2 = settings->nmea_out2;
-  Serial.print(F("NMEA_Output1 = ")); Serial.println(nmea1);
+  Serial.print(F("NMEA_Output1 (given) = ")); Serial.println(nmea1);
   Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
-  if (nmea2 == nmea1)
-      nmea2 = DEST_OFF;
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    if ((nmea1==DEST_UART || nmea1==DEST_USB)
-     && (nmea2==DEST_UART || nmea2==DEST_USB))
-        nmea2 = DEST_OFF;      // a duplicate, USB & UART are wired together
+    if (nmea1==DEST_USB)    nmea1==DEST_UART;
+    if (nmea2==DEST_USB)    nmea2==DEST_UART;   // same thing
   }
+  if (nmea2 == nmea1)    nmea2 = DEST_OFF;
+//  if (settings->gdl90_in == DEST_UDP) {
+//    if (nmea1 == DEST_UDP)
+//      nmea1 = DEST_OFF;
+//    if (nmea2 == DEST_UDP)
+//      nmea2 = DEST_OFF;
+//  }
 //  bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
 //  bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
   bool wifi1 = (nmea1==DEST_UDP || nmea1==DEST_TCP);
@@ -1546,6 +1552,8 @@ void handleInput() {
 //        nmea2 = DEST_OFF;      // only one wireless output type possible
 //  if (wifi2 && nmea1==DEST_BLUETOOTH)
 //        nmea2 = DEST_OFF;
+  Serial.print(F("NMEA_Output1 (adjusted) = ")); Serial.println(nmea1);
+  settings->nmea_out  = nmea1;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
   settings->nmea_out2 = nmea2;
   //if (nmea1==DEST_BLUETOOTH || nmea2==DEST_BLUETOOTH

@@ -84,32 +84,35 @@ typedef struct GDL90_Msg_HeartBeat {
 #define GDL90_TRAFFIC_MSG_ID  20
 
 typedef struct GDL90_Msg_Traffic {
-
+//byte 0:
   unsigned int addr_type:4;
   unsigned int alert_status:4;
-
+//bytes 1-3:
   unsigned int addr:24;        // MSB first
+//bytes 4-6:
   unsigned int latitude:24;    // MSB first
+//bytes 7-9:
   unsigned int longitude:24;   // MSB first
-
+//bytes 10-11:
   unsigned int altitude:12;
-  unsigned int misc:4;
-
+  unsigned int misc:4;         // LSB nibble within byte 11
+//byte 12:
   unsigned int nacp:4;
   unsigned int nic:4;
-
+//bytes 13-15:
   unsigned int horiz_vel:12; /* in knots */
   unsigned int vert_vel:12;  /* x 64 fpm */
-
+//byte 16:
   unsigned int track:8;
+//byte 17:
   unsigned int emit_cat:8;
-
+//bytes 18-25:
   uint8_t      callsign[8];
-
+//byte 26:
   unsigned int reserved:4;
   unsigned int emerg_code:4;
-
 } __attribute__((packed)) GDL90_Msg_Traffic_t;
+
 
 #define GDL90_OWNGEOMALT_MSG_ID  11
 

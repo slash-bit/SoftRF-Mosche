@@ -453,6 +453,9 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
   if (nl) Serial.write('\n');
 #endif
 
+  if (dest == NMEA_Source)          // do not echo NMEA back to its source
+    return;                         // NMEA_Source = DEST_OFF for internal NMEA
+
   if (dest == settings->gdl90_in)   // do not send NMEA to GDL90 source
     return;
 
@@ -689,6 +692,28 @@ void NMEA_loop()
       }
     }
 
+    if (NMEA_bridge_sent) {
+        yield();
+        return;     // probably not using other wireless, but in any case postpone
+    }
+
+    static char udp_buf[128+3];
+    static int udp_n = 0;
+    while (input_udp_is_ready) {
+      NMEA_Source = DEST_UDP;
+      gdl90 = (settings->gdl90_in == DEST_UDP);
+      size_t size = WiFi_Receive_UDP((uint8_t *) UDPinputBuffer, sizeof(UDPinputBuffer));
+      if (size <= 0)
+          break;
+      for (size_t i=0; i < size; i++) {
+          char c = UDPinputBuffer[i];
+          if (gdl90)
+              GDL90_bridge_buf(c, udp_buf, udp_n);
+          else
+              NMEA_bridge_buf(c, udp_buf, udp_n);
+      }
+    }
+
 #if defined(NMEA_TCP_SERVICE)
     static char tcpinbuf[128];
     static char tcpoutbuf[MAX_NMEATCP_CLIENTS][128+3];
@@ -851,6 +876,8 @@ void NMEA_Export()
     if (! settings->nmea_l && ! settings->nmea2_l)
          return;
 
+    NMEA_Source = DEST_OFF;
+
     int alt_diff;
     int abs_alt_diff;
     float distance;
@@ -882,8 +909,7 @@ void NMEA_Export()
 
         ufo_t *cip = &Container[i];
 
-        if (cip->addr && (((this_moment - cip->timestamp) <= EXPORT_EXPIRATION_TIME)
-                 || (settings->debug_flags & DEBUG_FAKEFIX))) {
+        if (cip->addr && ((this_moment - cip->timestamp) <= EXPORT_EXPIRATION_TIME)) {
 #if 0
           Serial.println(i);
           Serial.printf("%06X\r\n", cip->addr);

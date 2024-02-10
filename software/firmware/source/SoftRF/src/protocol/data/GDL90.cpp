@@ -48,7 +48,8 @@ const char *GDL90_CallSign_Prefix[] = {
   [RF_PROTOCOL_P3I]       = "PA",
   [RF_PROTOCOL_ADSB_1090] = "AD",
   [RF_PROTOCOL_ADSB_UAT]  = "UA",
-  [RF_PROTOCOL_FANET]     = "FA"
+  [RF_PROTOCOL_FANET]     = "FA",
+  [RF_PROTOCOL_GDL90]     = "GD"    // data from external device
 };
 
 const uint8_t aircraft_type_to_gdl90[] PROGMEM = {
@@ -485,8 +486,9 @@ void GDL90_Export()
   size_t size;
   float distance;
   time_t this_moment = now();
-  uint8_t *buf = (uint8_t *) (sizeof(UDPpacketBuffer) < UDP_PACKET_BUFSIZE ?
-                              NMEABuffer : UDPpacketBuffer);
+//  uint8_t *buf = (uint8_t *) (sizeof(UDPpacketBuffer) < UDP_PACKET_BUFSIZE ?
+//                              NMEABuffer : UDPpacketBuffer);
+  uint8_t *buf = (uint8_t *) UDPpacketBuffer;
 
   if (settings->gdl90 != DEST_OFF) {
     size = makeHeartbeat(buf);
@@ -559,7 +561,7 @@ void process_traffic_message(char* buf)
   //uint32_t ialt = (((tp->altitude & 0xFF) << 4) | tp->misc);
   //uint8_t misc = ((tp->altitude & 0xF00) >> 8);
   // another way to handle this mess is to reference byte positions in the buf
-  uint32_t ialt = (((uint8_t)buf[10]) << 4) | ((((uint8_t)buf[11]) & 0xF0) >> 4);
+  uint32_t ialt = (((uint32_t)((uint8_t)buf[10])) << 4) | ((((uint8_t)buf[11]) & 0xF0) >> 4);
   uint8_t misc = (((uint8_t)buf[11]) & 0x0F);
   fo.altitude = ((float) (25*ialt - 1000)) * (1.0 / _GPS_FEET_PER_METER);
   // this is pressure altitude, try and correct
@@ -567,13 +569,13 @@ void process_traffic_message(char* buf)
     fo.altitude += ThisAircraft.altitude - ThisAircraft.pressure_altitude;
   fo.airborne = ((misc & 0x08) != 0);
   // similar mess:
-  uint16_t horiz_vel = (((uint8_t)buf[13]) << 4) | ((((uint8_t)buf[14]) & 0xF0) >> 4);
+  uint16_t horiz_vel = (((uint32_t)((uint8_t)buf[13])) << 4) | ((((uint8_t)buf[14]) & 0xF0) >> 4);
   fo.speed = (float) horiz_vel;       // knots
   //uint16_t vert_vel  = ((((uint8_t)buf[14]) & 0x0F) << 8) | ((uint8_t)buf[15]);
   if ((((uint8_t)buf[14]) & 0x0F) != 0) {
       fo.vs = 0;  // not available
   } else {
-      fo.vs = (float) (((uint8_t)buf[15]) << 6);    // was in units of 64 fpm
+      fo.vs = (float) (((uint32_t)((uint8_t)buf[15])) << 6);    // was in units of 64 fpm
   }
   //fo.course = ((float)tp->track) * (360.0 / 256.0);
   if (misc & 0x03)

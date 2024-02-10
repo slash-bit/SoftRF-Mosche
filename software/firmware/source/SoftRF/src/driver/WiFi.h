@@ -44,7 +44,7 @@ enum
 
 void WiFi_setup(void);
 void WiFi_loop(void);
-size_t Raw_Receive_UDP(uint8_t *);
+size_t WiFi_Receive_UDP(uint8_t *buf, size_t max_size);
 void Raw_Transmit_UDP(void);
 void WiFi_fini(void);
 
@@ -54,6 +54,8 @@ extern WiFiUDP Uni_Udp;
 #endif
 
 extern bool udp_is_ready;
+extern bool input_udp_is_ready;
 extern char UDPpacketBuffer[UDP_PACKET_BUFSIZE];
+extern char UDPinputBuffer[UDP_PACKET_BUFSIZE];
 
 #endif /* WIFIHELPER_H */
