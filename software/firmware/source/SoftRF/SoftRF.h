@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB115"
+#define SOFTRF_FIRMWARE_VERSION "MB116"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -77,7 +77,8 @@
 #define GDL90_DST_PORT    4000
 #define NMEA_UDP_PORT     10110
 #define NMEA_TCP_PORT     2000
-#define NMEA_ALT_PORT     8880             // XCvario
+#define ALT_UDP_PORT      4352             // Tophat
+#define ALT_TCP_PORT      8880             // XCvario
 #define NMEA_TCP_IP       "192.168.4.1"    // XCVario
 
 /*

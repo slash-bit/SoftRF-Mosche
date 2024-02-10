@@ -1537,12 +1537,12 @@ void handleInput() {
     if (nmea2==DEST_USB)    nmea2==DEST_UART;   // same thing
   }
   if (nmea2 == nmea1)    nmea2 = DEST_OFF;
-//  if (settings->gdl90_in == DEST_UDP) {
-//    if (nmea1 == DEST_UDP)
-//      nmea1 = DEST_OFF;
-//    if (nmea2 == DEST_UDP)
-//      nmea2 = DEST_OFF;
-//  }
+  if (settings->gdl90_in == DEST_UDP) {
+      if (settings->gdl90 == DEST_UDP) {
+          settings->gdl90 = DEST_OFF;
+          Serial.println(F("GDL input from UDP, GDL output turned OFF"));
+      }
+  }
 //  bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
 //  bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
   bool wifi1 = (nmea1==DEST_UDP || nmea1==DEST_TCP);

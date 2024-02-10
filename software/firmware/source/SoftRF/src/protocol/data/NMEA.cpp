@@ -62,7 +62,7 @@ static int WiFi_connect_TCP()
     // if (Ping.ping(host, 2))
     {
         if (!client.connect(settings->host_ip,
-                            settings->tcpport? NMEA_ALT_PORT : NMEA_TCP_PORT,
+                            settings->tcpport? ALT_TCP_PORT : NMEA_TCP_PORT,
                             5000)) {
             Serial.println(F("Failed to connect as TCP client"));
             return 0;
@@ -699,14 +699,14 @@ void NMEA_loop()
 
     static char udp_buf[128+3];
     static int udp_n = 0;
-    while (input_udp_is_ready) {
+    while (udp_is_ready) {
       NMEA_Source = DEST_UDP;
       gdl90 = (settings->gdl90_in == DEST_UDP);
-      size_t size = WiFi_Receive_UDP((uint8_t *) UDPinputBuffer, sizeof(UDPinputBuffer));
+      size_t size = WiFi_Receive_UDP((uint8_t *) UDPpacketBuffer, sizeof(UDPpacketBuffer));
       if (size <= 0)
           break;
       for (size_t i=0; i < size; i++) {
-          char c = UDPinputBuffer[i];
+          char c = UDPpacketBuffer[i];
           if (gdl90)
               GDL90_bridge_buf(c, udp_buf, udp_n);
           else

@@ -54,8 +54,6 @@ extern WiFiUDP Uni_Udp;
 #endif
 
 extern bool udp_is_ready;
-extern bool input_udp_is_ready;
 extern char UDPpacketBuffer[UDP_PACKET_BUFSIZE];
-extern char UDPinputBuffer[UDP_PACKET_BUFSIZE];
 
 #endif /* WIFIHELPER_H */
