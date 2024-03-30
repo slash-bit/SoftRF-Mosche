@@ -1,9 +1,10 @@
-# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://groups.google.com/g/softrf_community]](https://groups.google.com/g/softrf_community)
+# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
 <br>
 <br>
-Note: new discussion forum (to replace gitter): [groups.google.com/g/softrf_community](https://groups.google.com/g/softrf_community)
+
+* Note: new discussion forum (to replace gitter): [groups.google.com/g/softrf_community](https://groups.google.com/g/softrf_community)
 
 ## Features of this fork:
 
