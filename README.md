@@ -2,9 +2,10 @@
 
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
 <br>
-<br>
 
 * Note: new discussion forum (to replace gitter): [groups.google.com/g/softrf_community](https://groups.google.com/g/softrf_community)
+
+<br>
 
 ## Features of this fork:
 
