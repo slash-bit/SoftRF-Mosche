@@ -1,5 +1,9 @@
-# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://gitter.im/SoftRF-open/community](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/SoftRF-open/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml/badge.svg)](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml "Build Status") 
+# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://groups.google.com/g/softrf_community]](https://groups.google.com/g/softrf_community)
+
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
+<br>
+<br>
+Note: new discussion forum (to replace gitter): [groups.google.com/g/softrf_community](https://groups.google.com/g/softrf_community)
 
 ## Features of this fork:
 
@@ -36,7 +40,7 @@ Latest additions:
 * These new WiFi options allow wireless output to XCvario
 <br>
 
-Open [discussion forum](https://gitter.im/SoftRF-open/community).
+Open [discussion forum](https://groups.google.com/g/softrf_community).
 <br>
 <br>
 
