@@ -1,5 +1,7 @@
-# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [![Join the chat at https://gitter.im/SoftRF-open/community](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/SoftRF-open/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Build Status](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml/badge.svg)](https://github.com/moshe-braner/SoftRF/actions/workflows/main.yml "Build Status") 
+# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
+<br>
 
 ## Features of this fork:
 
