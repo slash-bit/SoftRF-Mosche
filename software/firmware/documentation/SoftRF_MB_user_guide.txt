@@ -3,10 +3,12 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Feb. 10, 2024
-to fit software version MB116 based on v1.0 with some parts of v1.2
+This version last updated May 15, 2024
+to fit software version MB120 based on v1.0 with some parts of v1.2
 The latest version of this document is always here:
- https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
+  https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
+Discussion group:
+  https://groups.google.com/g/softrf_community
 
 
 PART 1: USER GUIDE
@@ -14,14 +16,14 @@ PART 1: USER GUIDE
 
 WHAT IS SOFTRF
 
-SoftRF is a do-it-yourself, multifunctional, compatible, radio-based proximity awareness system for general aviation.  SoftRF is free, open-source software that runs on inexpensive off-the-shelf hardware.  This software, when installed on suitable hardware and carried in an aircraft, transmits data on its position, and receives position data from other aircraft with compatible systems.  It can send information about nearby traffic, in standard formats, to visualization devices and to navigation software commonly used in sailplanes.  Several radio communications and local data exchange protocols are supported, but the one of interest to most glider pilots is the FLARM-compatible "Legacy" mode.  Both incoming and outgoing radio transmissions are fully interoperable with FLARM devices and with OGN ground stations.
+SoftRF is a do-it-yourself, multifunctional, compatible, radio-based proximity awareness system for general aviation.  SoftRF is free, open-source software that runs on inexpensive off-the-shelf hardware.  This software, when installed on suitable hardware and carried in an aircraft, transmits data on its position, and receives position data from other aircraft with compatible systems.  It can send information about nearby traffic, in standard formats, to visualization devices and to navigation software commonly used in sailplanes.  Several radio communications and local data exchange protocols are supported, but the one of interest to most glider pilots is the FLARM-compatible "Latest" mode.  Both incoming and outgoing radio transmissions are fully interoperable with FLARM devices and with OGN ground stations.
 
-Using SoftRF in your aircraft (when configured as "Legacy") will:
+Using SoftRF in your aircraft (when configured to use the "Latest" protocol) will:
 * make you visible to other FLARMs
 * allow you to see other FLARMs
 * make you visible to the OGN and viewable on websites like https://glidertracker.org/
 
-Some people call this an "OGN tracker", although that label should be reserved for the devices used in some high level soaring competitions for the spectators' benefit.  SoftRF in "Legacy" mode is better described as a functional equivalent for FLARM.
+Some people call this an "OGN tracker", although that label should be reserved for the devices used in some high level soaring competitions for the spectators' benefit.  SoftRF is better described as a functional equivalent for FLARM.
 
 What can SoftRF do that FLARM cannot?
 
@@ -33,7 +35,7 @@ The more advanced PowerFLARM units can listen to FLARM signals via two antennas 
 
 What can my version of SoftRF do that the mainline version cannot?
 
-My version fixes some radio protocol bugs, making interoperability with FLARM more reliable.  My version correctly transmits the curved path of the aircraft (if circling) so that FLARM units receiving the data can predict collisions accordingly.  My version also receives and interprets the curved path of other aircraft as sent by FLARM units, and predicts collisions based on that.  And it does so even when the aircraft are subject to significant wind drift.  My version also offers built-in audible collision warnings in 3 levels of urgency, similar to what PowerFLARM Portable does.  My version also offers some conveniences, such as assigning the ID to this aircraft, and other IDs to ignore or to follow.
+My version can now receive and transmit in the new FLARM protocol (V7) that went into effect in March 2024.  My version also fixes some radio protocol bugs, making interoperability with FLARM more reliable.  My version correctly transmits the curved path of the aircraft (if circling) so that FLARM units receiving the data can predict collisions accordingly.  My version also receives and interprets the curved path of other aircraft as sent by FLARM units, and predicts collisions based on that.  And it does so even when the aircraft are subject to significant wind drift.  My version also offers built-in audible collision warnings in 3 levels of urgency, similar to what PowerFLARM Portable does.  My version also offers some conveniences, such as assigning the ID to this aircraft, and specifying other IDs to ignore or to follow.
 
 What can the mainline version of SoftRF do that my version cannot?
 
@@ -72,7 +74,7 @@ or from their "store" on Amazon or from banggood.com (they accept Paypal).
 
 With my version of SoftRF you have the option of attaching a passive piezo buzzer (through a 100-ohm resistor) to the T-Beam, between GPIO pins 14 and 15, to get audible indications of collision warnings.  A suitable buzzer is this one:
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
-The beeps are higher pitched, shorter, and more numerous for higher alarm levels.  If more than one aircraft is a collision danger, the beeps are split into double-beeps.  The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external amplifier, or, select "external" in the buzzer volume setting to get +3v DC output signal on pin 14, and drive an external (12V) *active* buzzer via a transistor.  Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm happens (or could happen).
+The beeps are higher pitched, shorter, and more numerous for higher alarm levels.  If more than one aircraft is a collision danger, the beeps are split into double-beeps.  The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external audio amplifier (or the aux audio input of an aircraft radio), or, select "external" in the buzzer volume setting to get +3v DC output signal on pin 14, and use it to trigger an external (12V) *active* buzzer via a transistor.  (Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".)  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm is called for.
 
 This version of SoftRF, on the T-Beam, also has the ability to generate *voice* warnings about traffic that is in danger of collision.  For example, "traffic, 3 o'clock, low" for alarm levels 1 & 2, or "danger, ahead, level" for alarm level 3.  If more than one aircraft is a collision danger, the word "traffic" is appended at the end.  The audio data file needs to be uploaded via the web interface, see below.  The voice audio output is from pin 25.  This is a line-level output, it needs an external amplifier to drive a speaker.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/audio_output_circuit_.jpg
 for an example connection circuit.  The resistors reduce the output signal level to what the amplifier probably wants - if it is too weak, increase the value of the 2.2K resistors.  The 10 uF capacitor (positive side towards the T-Beam) blocks the DC component.  The 10 nF capacitor tries to filter out high frequencies, from the DAC steps and from the circuit board as a whole.  The amplifier can be a standalone device, or one can feed the signal into the AUX input of the aircraft communications radio, etc.  Another option is an external I2S decoder/amplifier, such as those based on the Max98357 chip.  The connection pins are: Serial Clock (SCK) (BCK): pin 14, Word Select (WS): pin 15, and Serial Data (SD): pin 25.  Note that while using an external I2S decoder, both the internal analog signal generator (output to pin 25), and the piezo buzzer option (on pins 14,15), are not available. This digital-output method has not been tested yet, let me know if it works!
@@ -88,11 +90,11 @@ https://drive.google.com/drive/folders/1hdEJ-nRVz4D_sYihwv1Re2S-p8_nsYaM?usp=sha
 which is a bit larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
 Or you can find a slightly deeper case here: https://www.dropbox.com/sh/iav5bai4vxluv5s/AADZT4aboAOxVr0VuBjDEtAAa?dl=0 that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case via treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  But better yet cut out the middleman and go here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
 
-A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, should give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is cluttered with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
+A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, should give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is cluttered with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  For example: https://www.data-alliance.net/antenna-900mhz-3g-gsm-omni-directional-rp-sma-or-sma/ (select SMA male).  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
 
 Even when using an antenna with a cable, the T-Beam needs to be mounted with its antenna connector on top, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one gets an external GNSS antenna with a longer cable, that is possible (via the UFL connector on the board), and can improve GNSS signal reception.  
 
-Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  Note: this device may take as long as 30 minutes to find the first GPS fix.  The stock gps antenna is passive and poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.
+Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  Note: this device may take as long as 30 minutes to find the first GPS fix.  The stock gps antenna is passive and poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.  For example:  https://www.data-alliance.net/antenna-gps-lna-embedded-u-fl-sma/ (choose the 25x25mm version with 4-inch cable and U.FL connector).
 
 The T-Echo offers a 1.5-inch e-paper display, which makes the device more self-contained.  But adjusting the settings on it is more difficult than on the T-Beam, because the T-Echo does not have WiFi connectivity.  It also transmits at lower power, and the stock antenna is nice-looking but has low performance.
 
@@ -176,13 +178,13 @@ Aircraft ID to ignore: You can enter an aircraft (or device) ID that you do NOT 
 
 Aircraft ID to follow: You can enter an aircraft (or device) ID to prioritize in traffic reports.  E.g., your flying buddy in another aircraft.  Leave as 000000 to not use this feature.  SoftRF reports up to 8 aircraft, normally selecting the closest ones.  If an ID to follow is specified, it will be shown even if it is not one of the 8 closest.  A close-by aircraft that is a collision danger will always take priority though.
 
-Protocol:  Choose "Legacy" for the FLARM radio protocol.  Legacy is visible to FLARMS, to SoftRF devices in Legacy mode, and to OGN stations. OGNTP is invisible to FLARMS but visible to OGN stations.  If you are using this device to see and be seen by other gliders using FLARM, change it to Legacy.  For towplanes: If the device is setting off collision alerts on tow, it can be configured to OGNTP, so that it does not alert FLARMs, but is still visible to OGN receivers on the ground for logging purposes.
+Protocol:  Choose "Latest" for the new (2024) FLARM radio protocol.  Choose "Legacy" for the older FLARM radio protocol.  Legacy is visible to SoftRF devices and to OGN stations, but not to FLARMs.  (FLARMs are visible to SoftRF devices in either "Latest" or "Legacy" setting.)  OGNTP is visible to OGN stations but invisible to FLARMS.  If you are using this device to see and be seen by other gliders using FLARM, choose "Latest".  For towplanes: If the device is setting off collision alerts on tow, it can be configured to OGNTP (or Legacy), so that it does not alert FLARMs, but is still visible to OGN receivers on the ground for logging purposes.
 
 Region: you must choose your geographical region, otherwise the radio will be on the wrong frequency and fail to communicate with the devices in other aircraft in your area.  E.g., choose EU (868 MHz) in Europe, and US (915 MHz) in the USA and Canada.
 
 Aircraft type: E.g., glider, powered plane, etc.  This is important for collision avoidance and situational awareness, and also for OGN tracking.  This version of SoftRF added the aircraft type "winch", see the relevant section below.
 
-Alarm trigger: this setting chooses an algorithm to base collision warnings on.  Recommended: "Legacy" (unique to my version), which mimics what FLARM does, predicting near-future paths of circling aircraft.  If neither aircraft is circling, this algorithm will automatically revert to the "Vector" method, which extrapolates straight lines.  And if movement is not determined, that (in my version) will revert to "Distance", which warns simply by the distance between the aircraft.  Thus, if you select "Legacy", then ALL the algorithms are used as appropriate.  If you select "None" then you will not get collision warnings.
+Alarm trigger: this setting chooses an algorithm to base collision warnings on.  Recommended: "Legacy" (unique to my version), which mimics what FLARM does, predicting near-future paths of circling aircraft.  If neither aircraft is circling, this algorithm will automatically revert to the "Vector" method, which extrapolates straight lines.  And if movement is not determined, that (in my version) will revert to "Distance", which warns simply by the distance between the aircraft.  Thus, if you select "Legacy", then ALL the algorithms are used as appropriate.  If you select "None" then you will not get collision warnings.  Note: there is no "Latest" alarm algorithm, use "Legacy" here even when using the "Latest" radio protocol.
 
 Tx Power: transmitter power.  Normally use "Full" (which is less then a tenth of a watt).  Use "Low" (2 mw) for short-range testing, and "Off" if you want to see but not be seen - appropriate when running SoftRF on the ground just to see where other aircraft are.  If you are flying, and want to limit visibility to other aircraft while retaining collision avoidance, use "Stealth mode" instead - see below.
 
@@ -225,17 +227,19 @@ Aux Serial Port Baud Rate: If you want to use the auxiliary (second) serial port
 
 Aux Serial Port Logic: "Normal" to connect to TTL serial devices or a chip that converts to RS232. "Inverted" to connect to RS232 devices without a conversion chip (voltage may be not suffice - see section on connecting devices).
 
+UDP Port for NMEA output: can choose 10111 instead of the default 10110.
+
 GDL90 input: this is for importing data from an ADS-B receiver, else leave Off.  GDL90 uses UDP port 4000, while NMEA uses 10110.  Cannot use the same port for both input and output.
 
 GDL90 output: this is for a different local data transfer protocol, usually leave Off.  If used, probably should not also choose UDP as an NMEA output destination.
 
-Dump1090: yet another local data transfer protocol, usually leave Off.
+Dump1090: yet another local data output protocol, usually leave Off.
 
 Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
 
 Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".  Note: this feature currently supported only on T-Beam v1.0 and v1.1.
 
-Air Relay: Optional relaying of radio packets from other aircraft by airborne aircraft.  The relaying is transparent, and happens no more than once every 5 seconds in total, and once every 15 seconds for any given landed aircraft.  Packets are relayed one hop and not relayed again.  Recommended setting: "Landed", meaning aircraft that landed out (or back home) will be "seen" from farther away (and perhaps by an OGN ground station) if airborne traffic with SoftRF is in the area to relay the data.  Another option is to relay all aircraft that are more than 10 km away or 1 km lower (or landed).  Airborne traffic is relayed in a way that makes it visible to SoftRF but invisible to FLARM (and visible to OGNbase but probably not standard OGN ground stations), since otherwise the originating FLARM "sees itself".
+Air Relay: Optional relaying by airborne aircraft of radio packets from other aircraft.  The relaying is transparent, and happens no more than once every 5 seconds in total, and once every 15 seconds for any given landed aircraft.  Packets are relayed one hop and not relayed again.  Recommended setting: "Landed", meaning aircraft that landed out (or back home) will be "seen" from farther away (and perhaps by an OGN ground station) if airborne traffic with SoftRF is in the area to relay the data.  Another option is to relay all aircraft that are more than 10 km away or 1 km lower (or landed).  Airborne traffic is relayed in the old protocol, that makes it visible to SoftRF and to OGN ground stations, but invisible to FLARM, since otherwise the originating FLARM "sees itself".  Landed traffic is relayed in the new protocol and is visible to FLARMs including the landed-out FLARM.  In "relay only" mode, SoftRF relays other aircraft but does not transmit its own position - use this mode for testing, or on the ground to augment an OGN station.
 
 Stealth: if set to "On", your aircraft will not be shown on other aircraft' display, AND VICE VERSA (except at close range and in the case of collision danger).  This is opting out of long-range "FLARM RADAR" mutual visibility.
 
@@ -253,7 +257,7 @@ The settings displayed, and adjusted, within the T-Echo
 In the last display screen in the cycle of screens on the T-Echo, you will see something like this:
 
 Normal  Glider  _      < normal mode, aircraft type glider, relay landed aircraft
-US TX P:LEG A:LEG      < US region, full power, Legacy protocol, Legacy alarm method
+US TX P:LAT A:LEG      < US region, full power, Latest protocol, Legacy alarm method
 Device: 60ABCD         < device ID (internal, cannot be changed)
 Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")         
 --A34567 ++A45678      < ignore ID and follow ID
@@ -279,7 +283,7 @@ And so forth.  Note that after each "click" or "touch", it will take about 2 sec
 * press the reset button to reboot without changing the settings.
 The settings accessible via this method are:
 * AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
-* RF PROTOCOL: LEGACY, OGNTP, P3I, FANET.
+* RF PROTOCOL: LATEST, LEGACY, OGNTP, P3I, FANET.
 * RF BAND (REGION): EU, US, UK, AU, NZ, RU, CN, IN, IL, KR.
 * Collision prediction algorithm: Legacy, Vector, Distance, None.
 * Relay mode: None, Landed, All.
@@ -347,7 +351,7 @@ for an example protection circuit.
 
 Connecting an ADS-B receiver
 
-This version of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format, and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial, WiFi/UDP, or WiFi/TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Cannot use UDP for both input and output.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  NMEA messages are not sent to the GDL90-input source, but GDL90 output messages may (but not on UDP).
+This version of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format, and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial, WiFi/UDP, or WiFi/TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  Traffic more than 15 nm away or more than 2000 meters above or below is ignored.  NMEA messages are not sent to the GDL90-input source.
 
 
 Connecting to XCvario

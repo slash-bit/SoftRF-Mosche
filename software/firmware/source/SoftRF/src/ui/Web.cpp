@@ -34,6 +34,7 @@ void Web_fini()     {}
 #include "../driver/Battery.h"
 #include "../driver/RF.h"
 #include "Web.h"
+#include "../driver/EEPROM.h"
 #include "../driver/Baro.h"
 #include "../driver/LED.h"
 #include "../driver/Buzzer.h"
@@ -256,7 +257,7 @@ void handleSettings() {
   stop_bluetooth();
 
   bool is_prime_mk2 = false;
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8)
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
   size_t size = 12800;
@@ -397,11 +398,14 @@ void handleSettings() {
 <option %s value='%d'>%s</option>\
 <option %s value='%d'>%s</option>\
 <option %s value='%d'>%s</option>\
+<option %s value='%d'>%s</option>\
 </select>\
 </td>\
 </tr>"),
     (settings->rf_protocol == RF_PROTOCOL_LEGACY ? "selected" : ""),
      RF_PROTOCOL_LEGACY, legacy_proto_desc.name,
+    (settings->rf_protocol == RF_PROTOCOL_LATEST ? "selected" : ""),
+     RF_PROTOCOL_LATEST, "Latest",
     (settings->rf_protocol == RF_PROTOCOL_OGNTP ? "selected" : ""),
      RF_PROTOCOL_OGNTP, ogntp_proto_desc.name,
     (settings->rf_protocol == RF_PROTOCOL_P3I ? "selected" : ""),
@@ -418,12 +422,13 @@ void handleSettings() {
 </td>\
 </tr>"),
     (settings->rf_protocol == RF_PROTOCOL_LEGACY   ? legacy_proto_desc.name :
+    (settings->rf_protocol == RF_PROTOCOL_LATEST   ? "Latest" :
     (
 #if !defined(EXCLUDE_UAT978)
      settings->rf_protocol == RF_PROTOCOL_ADSB_UAT ? uat978_proto_desc.name :
 #endif
     (settings->rf_protocol == RF_PROTOCOL_FANET    ? fanet_proto_desc.name  :
-     "UNK")))
+     "UNK"))))
     );
   }
   len = strlen(offset);
@@ -443,11 +448,11 @@ void handleSettings() {
 <option %s value='%d'>CN (470 MHz)</option>\
 <option %s value='%d'>US/CA (915 MHz)</option>\
 <option %s value='%d'>NZ (869.25 MHz)</option>\
-<!--<option %s value='%d'>UK (869.52 MHz)</option>-->\
 <option %s value='%d'>AU (921 MHz)</option>\
 <option %s value='%d'>IN (866 MHz)</option>\
 <option %s value='%d'>KR (920.9 MHz)</option>\
 <option %s value='%d'>IL (916.2 MHz)</option>\
+<option %s value='%d'>UK P3I (869.52)</option>\
 </select>\
 </td>\
 </tr>\
@@ -527,11 +532,11 @@ void handleSettings() {
   (settings->band == RF_BAND_CN ? "selected" : ""), RF_BAND_CN,
   (settings->band == RF_BAND_US ? "selected" : ""), RF_BAND_US,
   (settings->band == RF_BAND_NZ ? "selected" : ""), RF_BAND_NZ,
-  (settings->band == RF_BAND_UK ? "selected" : ""), RF_BAND_UK,
   (settings->band == RF_BAND_AU ? "selected" : ""), RF_BAND_AU,
   (settings->band == RF_BAND_IN ? "selected" : ""), RF_BAND_IN,
   (settings->band == RF_BAND_KR ? "selected" : ""), RF_BAND_KR,
   (settings->band == RF_BAND_IL ? "selected" : ""), RF_BAND_IL,
+  (settings->band == RF_BAND_UK ? "selected" : ""), RF_BAND_UK,
   (settings->aircraft_type == AIRCRAFT_TYPE_GLIDER ? "selected" : ""),  AIRCRAFT_TYPE_GLIDER,
   (settings->aircraft_type == AIRCRAFT_TYPE_TOWPLANE ? "selected" : ""),  AIRCRAFT_TYPE_TOWPLANE,
   (settings->aircraft_type == AIRCRAFT_TYPE_POWERED ? "selected" : ""),  AIRCRAFT_TYPE_POWERED,
@@ -659,7 +664,7 @@ void handleSettings() {
 <option %s value='%d'>UDP</option>\
 <option %s value='%d'>Serial</option>"),
   settings->ssid, "hidepass",
-  (settings->nmea_out == DEST_OFF   ? "selected" : ""), DEST_OFF,
+  (settings->nmea_out == DEST_NONE  ? "selected" : ""), DEST_NONE,
   (settings->nmea_out == DEST_UDP   ? "selected" : ""), DEST_UDP,
   (settings->nmea_out == DEST_UART  ? "selected" : ""), DEST_UART);
 
@@ -759,7 +764,7 @@ void handleSettings() {
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>UDP</option>\
 <option %s value='%d'>Serial</option>"),
-  (settings->nmea_out2 == DEST_OFF   ? "selected" : ""), DEST_OFF,
+  (settings->nmea_out2 == DEST_NONE  ? "selected" : ""), DEST_NONE,
   (settings->nmea_out2 == DEST_UDP   ? "selected" : ""), DEST_UDP,
   (settings->nmea_out2 == DEST_UART  ? "selected" : ""), DEST_UART);
 
@@ -907,6 +912,15 @@ void handleSettings() {
 <option %s value='%d'>Inverted</option>\
 </select>\
 </td>\
+</tr>\
+<tr>\
+<th align=left>UDP Port for NMEA output:</th>\
+<td align=right>\
+<select name='alt_udp'>\
+<option %s value='%d'>10110</option>\
+<option %s value='%d'>10111</option>\
+</select>\
+</td>\
 </tr>"),
     (!settings->altpin0 ? "selected" : ""), 0,
     ( settings->altpin0 ? "selected" : ""), 1,
@@ -918,7 +932,9 @@ void handleSettings() {
     (settings->baudrate2 == BAUD_57600   ? "selected" : ""), BAUD_57600,
     (settings->baudrate2 == BAUD_115200  ? "selected" : ""), BAUD_115200,
     (!settings->invert2 ? "selected" : ""), 0,
-    ( settings->invert2 ? "selected" : ""), 1
+    ( settings->invert2 ? "selected" : ""), 1,
+    (!settings->alt_udp ? "selected" : ""), 0,
+    ( settings->alt_udp ? "selected" : ""), 1
     );
   
   len = strlen(offset);
@@ -947,7 +963,7 @@ void handleSettings() {
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>\
 <option %s value='%d'>UDP</option>"),
-  (settings->gdl90_in == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->gdl90_in == DEST_NONE ? "selected" : ""), DEST_NONE,
   (settings->gdl90_in == DEST_UART ? "selected" : ""), DEST_UART,
   (settings->gdl90_in == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
@@ -989,7 +1005,7 @@ void handleSettings() {
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>\
 <option %s value='%d'>UDP</option>"),
-  (settings->gdl90 == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->gdl90 == DEST_NONE ? "selected" : ""), DEST_NONE,
   (settings->gdl90 == DEST_UART ? "selected" : ""), DEST_UART,
   (settings->gdl90 == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
@@ -1031,7 +1047,7 @@ void handleSettings() {
 <select name='d1090'>\
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>"),
-  (settings->d1090 == DEST_OFF  ? "selected" : ""), DEST_OFF,
+  (settings->d1090 == DEST_NONE ? "selected" : ""), DEST_NONE,
   (settings->d1090 == DEST_UART ? "selected" : ""), DEST_UART,
   (settings->d1090 == DEST_UDP  ? "selected" : ""), DEST_UDP);
 
@@ -1092,6 +1108,7 @@ void handleSettings() {
 <option %s value='%d'>None</option>\
 <option %s value='%d'>Landed</option>\
 <option %s value='%d'>All</option>\
+<option %s value='%d'>Only</option>\
 </select>\
 </td>\
 </tr>\
@@ -1116,6 +1133,7 @@ void handleSettings() {
   (settings->relay==RELAY_OFF    ? "selected" : ""), RELAY_OFF,
   (settings->relay==RELAY_LANDED ? "selected" : ""), RELAY_LANDED,
   (settings->relay==RELAY_ALL    ? "selected" : ""), RELAY_ALL,
+  (settings->relay==RELAY_ONLY   ? "selected" : ""), RELAY_ONLY,
   (!settings->stealth  ? "checked" : "") , (settings->stealth  ? "checked" : ""),
   (!settings->no_track ? "checked" : "") , (settings->no_track ? "checked" : "")
   );
@@ -1468,6 +1486,8 @@ void handleInput() {
       settings->baudrate2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("invert2")) {
       settings->invert2 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("alt_udp")) {
+      settings->alt_udp = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90_in")) {
       settings->gdl90_in = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
@@ -1536,10 +1556,10 @@ void handleInput() {
     if (nmea1==DEST_USB)    nmea1==DEST_UART;
     if (nmea2==DEST_USB)    nmea2==DEST_UART;   // same thing
   }
-  if (nmea2 == nmea1)    nmea2 = DEST_OFF;
+  if (nmea2 == nmea1)    nmea2 = DEST_NONE;
   if (settings->gdl90_in == DEST_UDP) {
       if (settings->gdl90 == DEST_UDP) {
-          settings->gdl90 = DEST_OFF;
+          settings->gdl90 = DEST_NONE;
           Serial.println(F("GDL input from UDP, GDL output turned OFF"));
       }
   }
@@ -1549,9 +1569,9 @@ void handleInput() {
   bool wifi2 = (nmea2==DEST_UDP || nmea2==DEST_TCP);
 // >>> try and allow Bluetooth along with WiFi:
 //  if (wifi1 && nmea2==DEST_BLUETOOTH)
-//        nmea2 = DEST_OFF;      // only one wireless output type possible
+//        nmea2 = DEST_NONE;      // only one wireless output type possible
 //  if (wifi2 && nmea1==DEST_BLUETOOTH)
-//        nmea2 = DEST_OFF;
+//        nmea2 = DEST_NONE;
   Serial.print(F("NMEA_Output1 (adjusted) = ")); Serial.println(nmea1);
   settings->nmea_out  = nmea1;
   Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
@@ -1617,6 +1637,7 @@ PSTR("<html>\
 <tr><th align=left>Alt RX pin</th><td align=right>%d</td></tr>\
 <tr><th align=left>Baud 2</th><td align=right>%d</td></tr>\
 <tr><th align=left>Invert 2</th><td align=right>%d</td></tr>\
+<tr><th align=left>Alt UDP port</th><td align=right>%d</td></tr>\
 <tr><th align=left>Bluetooth</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP mode</th><td align=right>%d</td></tr>\
 <tr><th align=left>TCP port</th><td align=right>%d</td></tr>\
@@ -1659,9 +1680,9 @@ PSTR("<html>\
     settings->rf_protocol, settings->band,
     settings->aircraft_type, settings->alarm, settings->txpower,
     settings->volume, settings->strobe, settings->pointer, settings->voice,
-    settings->baud_rate, settings->altpin0, settings->baudrate2, settings->invert2,
-    settings->bluetooth, settings->tcpmode, settings->tcpport,
-    settings->ssid, settings->host_ip,
+    settings->baud_rate, settings->altpin0, settings->baudrate2,
+    settings->invert2, settings->alt_udp, settings->bluetooth,
+    settings->tcpmode, settings->tcpport, settings->ssid, settings->host_ip,
     settings->nmea_out,
     BOOL_STR(settings->nmea_g), BOOL_STR(settings->nmea_p), BOOL_STR(settings->nmea_l),
     BOOL_STR(settings->nmea_s), BOOL_STR(settings->nmea_d), BOOL_STR(settings->nmea_e),
@@ -1684,66 +1705,8 @@ PSTR("<html>\
     free(Input_temp);
   }
 
-Serial.println(F("New settings:"));
-Serial.print(F(" Mode "));Serial.println(settings->mode);
-Serial.print(F(" Aircraft ID "));Serial.printf("%06X\r\n", settings->aircraft_id);
-Serial.print(F(" ID method "));Serial.println(settings->id_method);
-Serial.print(F(" Ignore ID "));Serial.printf("%06X\r\n", settings->ignore_id);
-Serial.print(F(" Follow ID "));Serial.printf("%06X\r\n", settings->follow_id);
-Serial.print(F(" Protocol "));Serial.println(settings->rf_protocol);
-Serial.print(F(" Band "));Serial.println(settings->band);
-Serial.print(F(" Aircraft type "));Serial.println(settings->aircraft_type);
-Serial.print(F(" Alarm trigger "));Serial.println(settings->alarm);
-Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
-Serial.print(F(" Volume "));Serial.println(settings->volume);
-Serial.print(F(" Strobe "));Serial.println(settings->strobe);
-Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
-Serial.print(F(" Voice "));Serial.println(settings->voice);
-Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
-Serial.print(F(" Alt RX pin "));Serial.println(settings->altpin0);
-Serial.print(F(" Baud 2 "));Serial.println(settings->baudrate2);
-Serial.print(F(" Invert 2 "));Serial.println(settings->invert2);
-Serial.print(F(" Bluetooth "));Serial.println(settings->bluetooth);
-Serial.print(F(" TCP mode "));Serial.println(settings->tcpmode);
-Serial.print(F(" TCP port "));Serial.println(settings->tcpport);
-Serial.print(F(" SSID "));Serial.println(settings->ssid);
-Serial.print(F(" PSK "));Serial.println(settings->psk);
-Serial.print(F(" Host IP "));Serial.println(settings->host_ip);
-Serial.print(F(" NMEA Out 1 "));Serial.println(settings->nmea_out);
-Serial.print(F(" NMEA GNSS "));Serial.println(settings->nmea_g);
-Serial.print(F(" NMEA Private "));Serial.println(settings->nmea_p);
-Serial.print(F(" NMEA Legacy "));Serial.println(settings->nmea_l);
-Serial.print(F(" NMEA Sensors "));Serial.println(settings->nmea_s);
-Serial.print(F(" NMEA Debug "));Serial.println(settings->nmea_d);
-Serial.print(F(" NMEA External "));Serial.println(settings->nmea_e);
-Serial.print(F(" NMEA Out 2 "));Serial.println(settings->nmea_out2);
-Serial.print(F(" NMEA2 GNSS "));Serial.println(settings->nmea2_g);
-Serial.print(F(" NMEA2 Private "));Serial.println(settings->nmea2_p);
-Serial.print(F(" NMEA2 Legacy "));Serial.println(settings->nmea2_l);
-Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
-Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
-Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
-Serial.print(F(" GDL90 in "));Serial.println(settings->gdl90_in);
-Serial.print(F(" GDL90 out "));Serial.println(settings->gdl90);
-Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);
-Serial.print(F(" Air-Relay "));Serial.println(settings->relay);
-Serial.print(F(" Stealth "));Serial.println(settings->stealth);
-Serial.print(F(" No track "));Serial.println(settings->no_track);
-Serial.print(F(" Power save "));Serial.println(settings->power_save);
-Serial.print(F(" Power external "));Serial.println(settings->power_external);
-Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
-Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
-Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
-Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
-#if defined(USE_OGN_ENCRYPTION)
-if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
-Serial.print(" IGC key");
-Serial.printf(" %08X", (settings->igc_key[0]? 0x88888888 : 0));
-Serial.printf(" %08X", (settings->igc_key[1]? 0x88888888 : 0));
-Serial.printf(" %08X", (settings->igc_key[2]? 0x88888888 : 0));
-Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
-}
-#endif
+  Serial.println(F("New settings:"));
+  show_settings_serial();
 
   SoC->WDT_fini();
   if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }

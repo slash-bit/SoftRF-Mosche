@@ -222,7 +222,10 @@ static void OLED_radio()
 
     u8x8->drawString(8, 1, PROTOCOL_text);
 
-    u8x8->draw2x2Glyph(14, 2, Protocol_ID[ThisAircraft.protocol][0]);
+    char c = Protocol_ID[ThisAircraft.protocol][0];
+    if (ThisAircraft.protocol == RF_PROTOCOL_LATEST)
+        c = 'T';
+    u8x8->draw2x2Glyph(14, 2, c);
 
     u8x8->drawString(1, 5, RX_text);
 

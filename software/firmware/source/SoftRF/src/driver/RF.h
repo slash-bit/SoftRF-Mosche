@@ -114,6 +114,7 @@ byte    RF_setup(void);
 void    RF_SetChannel(void);
 void    RF_loop(void);
 size_t  RF_Encode(ufo_t *);
+bool    RF_Transmit_Ready();
 bool    RF_Transmit(size_t, bool);
 bool    RF_Receive(void);
 void    RF_Shutdown(void);
@@ -122,14 +123,17 @@ uint8_t RF_Payload_Size(uint8_t);
 extern byte TxBuffer[MAX_PKT_SIZE], RxBuffer[MAX_PKT_SIZE];
 extern uint32_t TxTimeMarker;
 extern uint32_t TxEndMarker;
+extern time_t RF_time;
+extern uint8_t RF_current_slot;
 
 extern const rfchip_ops_t *rf_chip;
 extern bool RF_SX12XX_RST_is_connected;
 extern size_t (*protocol_encode)(void *, ufo_t *);
 extern bool (*protocol_decode)(void *, ufo_t *, ufo_t *);
 
-extern int8_t RF_last_rssi;
 extern const char *Protocol_ID[];
+extern uint16_t RF_last_crc;
+extern int8_t RF_last_rssi;
 
 extern const rf_proto_desc_t legacy_proto_desc;
 

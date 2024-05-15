@@ -37,6 +37,9 @@
 
 byte RxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
 
+time_t RF_time;
+uint8_t RF_current_slot = 0;
+
 uint32_t TxTimeMarker = 0;
 uint32_t TxEndMarker  = 0;
 byte TxBuffer[MAX_PKT_SIZE] __attribute__((aligned(sizeof(uint32_t))));
@@ -45,6 +48,7 @@ uint32_t tx_packets_counter = 0;
 uint32_t rx_packets_counter = 0;
 
 int8_t RF_last_rssi = 0;
+uint16_t RF_last_crc = 0;
 
 FreqPlan RF_FreqPlan;
 static bool RF_ready = false;
@@ -60,7 +64,9 @@ const char *Protocol_ID[] = {
   [RF_PROTOCOL_P3I]       = "P3I",
   [RF_PROTOCOL_ADSB_1090] = "ADS",
   [RF_PROTOCOL_ADSB_UAT]  = "UAT",
-  [RF_PROTOCOL_FANET]     = "FAN"
+  [RF_PROTOCOL_FANET]     = "FAN",
+  [RF_PROTOCOL_GDL90]     = "GDL",
+  [RF_PROTOCOL_LATEST]    = "LAT"
 };
 
 size_t (*protocol_encode)(void *, ufo_t *);
@@ -293,6 +299,7 @@ byte RF_setup(void)
       case RF_PROTOCOL_ADSB_UAT:  p = &uat978_proto_desc; break;
 #endif
       case RF_PROTOCOL_LEGACY:
+      case RF_PROTOCOL_LATEST:
       default:                    p = &legacy_proto_desc; break;
     }
 
@@ -436,7 +443,9 @@ void RF_loop()
   /* - requires OurTime to be set to UTC time in seconds - can do in Time_loop() */
   /* - also needs time since PPS, it is stored in ref_time_ms */
 
-  if (settings->rf_protocol != RF_PROTOCOL_LEGACY && settings->rf_protocol != RF_PROTOCOL_OGNTP) {
+  if (settings->rf_protocol != RF_PROTOCOL_LEGACY
+   && settings->rf_protocol != RF_PROTOCOL_LATEST
+   && settings->rf_protocol != RF_PROTOCOL_OGNTP) {
     RF_SetChannel();    /* use original code */
     return;
   }
@@ -446,7 +455,7 @@ void RF_loop()
 
   /* internal state variables to save CPU cycles */
   static uint32_t RF_OK_until = 0;
-  static uint8_t current_slot = 0;
+  //static uint8_t RF_current_slot = 0;  - now an external variable
   static uint8_t current_chan = 0;
 
   uint32_t now_ms = millis();
@@ -456,7 +465,7 @@ void RF_loop()
     return;
   }
 
-  time_t RF_time = OurTime;    // can use now()?
+  RF_time = OurTime;    // can use now()?
 
   int ms_since_pps = now_ms - ref_time_ms;
   if (ms_since_pps < 0) {   /* should not happen */
@@ -481,14 +490,14 @@ void RF_loop()
 
   if (ms_since_pps >= 300 && ms_since_pps < 800) {
 
-    current_slot = 0;
+    RF_current_slot = 0;
     RF_OK_until = slot_base_ms + 800;
     TxTimeMarker = slot_base_ms + 400 + SoC->random(0, 395);
     TxEndMarker  = slot_base_ms + 795;
 
   } else if (ms_since_pps >= 800 && ms_since_pps < 1300) {
 
-    current_slot = 1;
+    RF_current_slot = 1;
     /* channel does _NOT_ change at PPS rollover in middle of slot 1 */
     RF_OK_until = slot_base_ms + 1300;
     TxTimeMarker = slot_base_ms + 800 + SoC->random(0, 395);
@@ -496,7 +505,7 @@ void RF_loop()
 
   } else { /* shouldn't happen */
 
-    current_slot = 0;
+    RF_current_slot = 0;
     RF_OK_until = ref_time_ms + 1400;
     TxTimeMarker = RF_OK_until;  /* do not transmit for now */
     TxEndMarker  = RF_OK_until;
@@ -505,13 +514,13 @@ void RF_loop()
 
   uint8_t OGN = (settings->rf_protocol == RF_PROTOCOL_OGNTP ? 1 : 0);
 
-  current_chan = RF_FreqPlan.getChannel(RF_time, current_slot, OGN);
+  current_chan = RF_FreqPlan.getChannel((time_t)RF_time, RF_current_slot, OGN);
 
   if (rf_chip)
     rf_chip->channel(current_chan);
 
 //Serial.printf("Chan %d, Slot %d at PPS+%d ms, tx ok %d - %d, gd to %d\r\n",
-//current_chan, current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
+//current_chan, RF_current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
 }
 
 size_t RF_Encode(ufo_t *fop)
@@ -524,7 +533,9 @@ size_t RF_Encode(ufo_t *fop)
     }
 
     /* Experimental code by Moshe Braner, specific to Legacy Protocol */
-    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+    if (settings->rf_protocol == RF_PROTOCOL_LEGACY ||
+        settings->rf_protocol == RF_PROTOCOL_LATEST ||
+        settings->rf_protocol == RF_PROTOCOL_OGNTP) {
       uint32_t now_ms = millis();
       if (now_ms >= TxTimeMarker && now_ms < TxEndMarker) {
         size = (*protocol_encode)((void *) &TxBuffer[0], fop); 
@@ -538,6 +549,13 @@ size_t RF_Encode(ufo_t *fop)
   return size;
 }
 
+bool RF_Transmit_Ready()
+{
+    if (! TxEndMarker)  return true;   // for other protocols
+    uint32_t now_ms = millis();
+    return (now_ms >= TxTimeMarker && now_ms < TxEndMarker);
+}
+
 bool RF_Transmit(size_t size, bool wait)
 {
   if (RF_ready && rf_chip && (size > 0)) {
@@ -548,16 +566,17 @@ bool RF_Transmit(size_t size, bool wait)
     RF_tx_size = size;
 
     /* Experimental code by Moshe Braner, specific to Legacy Protocol */
-    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_OGNTP) {
-      uint32_t now_ms = millis();
-      if (!wait || (now_ms >= TxTimeMarker && now_ms < TxEndMarker)) {
+    if (settings->rf_protocol == RF_PROTOCOL_LATEST
+     || settings->rf_protocol == RF_PROTOCOL_LEGACY
+     || settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+      if (!wait || RF_Transmit_Ready()) {
         rf_chip->transmit();
         tx_packets_counter++;
         RF_tx_size = 0;
         TxTimeMarker = TxEndMarker;  /* do not transmit again until next slot */
         /* do not set next transmit time here - it is done in RF_loop() */
 //Serial.println(">");
-//Serial.printf("> tx at %d s + %d ms\r\n", OurTime, now_ms-ref_time_ms);
+//Serial.printf("> tx at %d s + %d ms\r\n", OurTime, millis()-ref_time_ms);
         return true;
       }
 
@@ -638,6 +657,7 @@ uint8_t RF_Payload_Size(uint8_t protocol)
   switch (protocol)
   {
     case RF_PROTOCOL_LEGACY:    return legacy_proto_desc.payload_size;
+    case RF_PROTOCOL_LATEST:    return legacy_proto_desc.payload_size;
     case RF_PROTOCOL_OGNTP:     return ogntp_proto_desc.payload_size;
     case RF_PROTOCOL_P3I:       return p3i_proto_desc.payload_size;
     case RF_PROTOCOL_FANET:     return fanet_proto_desc.payload_size;
@@ -764,7 +784,8 @@ static void nrf905_setup()
   nRF905_setRXAddress(addr);
 
   /* Enforce radio settings to follow "Legacy" protocol's RF specs */
-  settings->rf_protocol = RF_PROTOCOL_LEGACY;
+  if (settings->rf_protocol != RF_PROTOCOL_LATEST)
+      settings->rf_protocol = RF_PROTOCOL_LEGACY;
 
   /* Enforce encoder and decoder to process "Legacy" frames only */
   protocol_encode = &legacy_encode;
@@ -1020,6 +1041,11 @@ static void sx12xx_setup()
     protocol_encode = &fanet_encode;
     protocol_decode = &fanet_decode;
     break;
+  case RF_PROTOCOL_LATEST:
+    LMIC.protocol = &legacy_proto_desc;   // same packet size, modulation, etc as LEGACY
+    protocol_encode = &legacy_encode;
+    protocol_decode = &legacy_decode;     // decodes both LEGACY and LATEST
+    break;
   case RF_PROTOCOL_LEGACY:
   default:
     LMIC.protocol = &legacy_proto_desc;
@@ -1234,6 +1260,7 @@ static void sx12xx_rx_func (osjob_t* job) {
   switch (LMIC.protocol->type)
   {
   case RF_PROTOCOL_LEGACY:
+  case RF_PROTOCOL_LATEST:
     /* take in account NRF905/FLARM "address" bytes */
     crc16 = update_crc_ccitt(crc16, 0x31);
     crc16 = update_crc_ccitt(crc16, 0xFA);
@@ -1308,6 +1335,7 @@ static void sx12xx_rx_func (osjob_t* job) {
     }
 #endif
     if (crc8 == pkt_crc8) {
+      RF_last_crc = crc8;
       sx12xx_receive_complete = true;
     } else {
       sx12xx_receive_complete = false;
@@ -1325,6 +1353,7 @@ static void sx12xx_rx_func (osjob_t* job) {
     }
 #endif
     if (crc16 == pkt_crc16) {
+      RF_last_crc = crc16;
       sx12xx_receive_complete = true;
     } else {
       sx12xx_receive_complete = false;
@@ -1370,6 +1399,7 @@ static void sx12xx_tx(unsigned char *buf, size_t size, osjobcb_t func) {
   switch (LMIC.protocol->type)
   {
   case RF_PROTOCOL_LEGACY:
+  case RF_PROTOCOL_LATEST:
     /* take in account NRF905/FLARM "address" bytes */
     crc16 = update_crc_ccitt(crc16, 0x31);
     crc16 = update_crc_ccitt(crc16, 0xFA);
@@ -1691,6 +1721,7 @@ void cc13xx_Receive_callback(EasyLink_RxPacket *rxPacket_ptr, EasyLink_Status st
     switch (cc13xx_protocol->type)
     {
     case RF_PROTOCOL_LEGACY:
+    case RF_PROTOCOL_LATEST:
       /* take in account NRF905/FLARM "address" bytes */
       crc16 = update_crc_ccitt(crc16, 0x31);
       crc16 = update_crc_ccitt(crc16, 0xFA);
@@ -1727,6 +1758,7 @@ void cc13xx_Receive_callback(EasyLink_RxPacket *rxPacket_ptr, EasyLink_Status st
       break;
     case RF_PROTOCOL_OGNTP:
     case RF_PROTOCOL_LEGACY:
+    case RF_PROTOCOL_LATEST:
       offset = cc13xx_protocol->syncword_size - 4;
       size =  cc13xx_protocol->payload_offset +
               cc13xx_protocol->payload_size +
@@ -1777,7 +1809,7 @@ void cc13xx_Receive_callback(EasyLink_RxPacket *rxPacket_ptr, EasyLink_Status st
           if (offset + 1 < sizeof(RxBuffer)) {
             pkt_crc16 = (RxBuffer[offset] << 8 | RxBuffer[offset+1]);
             if (crc16 == pkt_crc16) {
-
+              RF_last_crc = crc16;
               success = true;
             }
           }
@@ -1903,6 +1935,7 @@ static void cc13xx_setup()
     myLink.begin(EasyLink_Phy_38400bps2gfsk_p3i);
     break;
   case RF_PROTOCOL_LEGACY:
+  case RF_PROTOCOL_LATEST:
     cc13xx_protocol = &legacy_proto_desc;
     protocol_encode = &legacy_encode;
     protocol_decode = &legacy_decode;
@@ -2006,6 +2039,7 @@ static void cc13xx_transmit()
   switch (cc13xx_protocol->type)
   {
   case RF_PROTOCOL_LEGACY:
+  case RF_PROTOCOL_LATEST:
     /* take in account NRF905/FLARM "address" bytes */
     crc16 = update_crc_ccitt(crc16, 0x31);
     crc16 = update_crc_ccitt(crc16, 0xFA);

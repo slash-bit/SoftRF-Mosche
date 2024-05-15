@@ -341,7 +341,7 @@ static void print_dest(int dest)
     case DEST_UDP        :  Serial.println(F("UDP"));       break;
     case DEST_TCP        :  Serial.println(F("TCP"));       break;
     case DEST_BLUETOOTH  :  Serial.println(F("Bluetooth")); break;
-    case DEST_OFF        :
+    case DEST_NONE       :
     default              :  Serial.println(F("NULL"));      break;
   }
 }

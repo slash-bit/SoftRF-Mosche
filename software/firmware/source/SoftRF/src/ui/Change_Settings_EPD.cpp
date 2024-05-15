@@ -62,6 +62,7 @@ set_entry actypes[] = {
 
 set_entry protocols[] = {
   {RF_PROTOCOL_LEGACY,    "LEGACY"},
+  {RF_PROTOCOL_LATEST,    "LATEST"},
   {RF_PROTOCOL_OGNTP,     "OGNTP"},
   {RF_PROTOCOL_P3I,       "P3I"},
   {RF_PROTOCOL_FANET,     "FANET"},
@@ -73,7 +74,7 @@ set_entry protocols[] = {
 set_entry regions[] = {
   {RF_BAND_EU, "EU"},
   {RF_BAND_US, "US"},
-//  {RF_BAND_UK, "UK"},
+  {RF_BAND_UK, "UK"},
   {RF_BAND_AU, "AU"},
   {RF_BAND_NZ, "NZ"},
   {RF_BAND_RU, "RU"},
@@ -109,6 +110,7 @@ set_entry relays[] = {
   {RELAY_OFF, "None"},
   {RELAY_LANDED, "Landed"},
   {RELAY_ALL, "All"},
+  {RELAY_ONLY, "Only"},
   {-1, NULL}
 };
 

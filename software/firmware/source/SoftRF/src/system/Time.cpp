@@ -25,7 +25,7 @@ time_t  OurTime = 0;           /* UTC time in seconds since start of 1970 */
 uint32_t base_time_ms = 0;     /* this device millis() at last verified PPS */
 uint32_t ref_time_ms = 0;      /* assumed local millis() at last PPS */
 
-#define ADJ_FOR_FLARM_RECEPTION 40     /* seems to receive FLARM packets better this way */
+#define ADJ_FOR_FLARM_RECEPTION 25     // was 40 - seemed to receive FLARM packets better that way
 
 #if defined(EXCLUDE_WIFI)
 void Time_setup()     {}
@@ -172,10 +172,41 @@ void Time_setup()
 /* Experimental code by Moshe Braner, specific to Legacy Protocol */
 void Time_loop()
 {
-    if (settings->rf_protocol != RF_PROTOCOL_LEGACY && settings->rf_protocol != RF_PROTOCOL_OGNTP)
+    uint32_t now_ms = millis();
+
+#if 0
+    // gather some data on how often the main loop() goes around
+    static uint32_t last_loop = 0;
+    static uint32_t counter = 0;
+    static int min_loop = 9999;
+    static int max_loop = 0;
+    static uint32_t initial_time;
+    if (last_loop > 0) {
+        int interval = now_ms - last_loop;
+        if (interval < min_loop)
+            min_loop = interval;
+        if (interval > max_loop)
+            max_loop = interval;
+        ++counter;
+        if (counter >= (1<<13)) {
+            Serial.printf("loop() ms: min %d, max %d, avg %d/16\r\n",
+                            min_loop, max_loop, ((now_ms-initial_time)>>(13-4)));
+            counter = 0;
+            min_loop = 9999;
+            max_loop = 0;
+            initial_time = now_ms;
+        }
+    } else {
+        initial_time = now_ms;
+    }
+    last_loop = now_ms;
+#endif
+
+    if (settings->rf_protocol != RF_PROTOCOL_LEGACY
+     && settings->rf_protocol != RF_PROTOCOL_LATEST
+     && settings->rf_protocol != RF_PROTOCOL_OGNTP)
         return;       /* time still handled in RF.cpp RF_SetChannel() */
 
-    uint32_t now_ms = millis();
     uint32_t gnss_age = gnss.time.age();
     uint32_t last_Commit_Time = now_ms - gnss_age;
     bool newfix = false;

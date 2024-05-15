@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+bool BTactive = false;
+
 #if defined(ESP32)
 #include "sdkconfig.h"
 #endif
@@ -50,8 +52,6 @@
 #include "Battery.h"
 
 #include <core_version.h>
-
-bool BTactive = false;
 
 BLEServer* pServer = NULL;
 BLECharacteristic* pUARTCharacteristic = NULL;
@@ -1323,9 +1323,9 @@ BLEBeacon iBeacon(BeaconUuid, 0x0102, 0x0304, -64);
 
 void startAdv(void)
 {
-  bool no_data = (settings->nmea_out != NMEA_BLUETOOTH  &&
-                  settings->gdl90    != GDL90_BLUETOOTH &&
-                  settings->d1090    != D1090_BLUETOOTH);
+  bool no_data = (settings->nmea_out != DEST_BLUETOOTH  &&
+                  settings->gdl90    != DEST_BLUETOOTH &&
+                  settings->d1090    != DEST_BLUETOOTH);
 
   // Advertising packet
 
@@ -1413,6 +1413,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 
 void nRF52_Bluetooth_setup()
 {
+  BTactive = true;
+
   //BT_name += "-";
   BT_name += String(SoC->getChipId() & 0x00FFFFFFU, HEX);
 

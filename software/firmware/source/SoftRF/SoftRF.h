@@ -35,11 +35,11 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB116"
+#define SOFTRF_FIRMWARE_VERSION "MB120"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
-#define ENTRY_EXPIRATION_TIME  10 /* seconds */
+#define ENTRY_EXPIRATION_TIME  17 /* seconds */
 #define ENTRY_RELAY_TIME       15 /* seconds */
 #define ANY_RELAY_TIME          5 /* seconds */
 #define LED_EXPIRATION_TIME     5 /* seconds */
@@ -75,9 +75,10 @@
 #define RELAY_SRC_PORT  (RELAY_DST_PORT - 1)
 
 #define GDL90_DST_PORT    4000
-#define NMEA_UDP_PORT     10110
 #define NMEA_TCP_PORT     2000
-#define ALT_UDP_PORT      4352             // Tophat
+#define NMEA_UDP_PORT     10110  // default local port to listen for UDP packets
+#define NMEA_UDP_PORT2    10111  // alternative NMEA output port
+#define ALT_UDP_PORT      4352   // input port if NMEA UDP output is using NMEA_UDP_PORT
 #define ALT_TCP_PORT      8880             // XCvario
 #define NMEA_TCP_IP       "192.168.4.1"    // XCVario
 
@@ -131,13 +132,13 @@ typedef struct UFO {
     int8_t    alarm_level;
     int8_t    alert_level;
 
-    time_t    timestamp;      // seconds
+    time_t    timestamp;      // seconds (unix epoch)
     time_t    timerelayed;
     uint32_t  addr;
     float     latitude;      // signed decimal-degrees
     float     longitude;
     float     altitude;      // meters
-    float     geoid_separation; /* metres */
+    float     geoid_separation; /* meters */
     float     pressure_altitude;
     float     course;     /* CoG */   // degrees
     float     heading;    /* where the nose points = course - wind drift */
@@ -154,20 +155,24 @@ typedef struct UFO {
     float     prevaltitude;   /* previous altitude */
     float     distance;
     float     bearing;
-    float     turnrate;
+    float     turnrate;       // ground reference
     float     alt_diff;
     float     adj_alt_diff;
     float     adj_distance;
 
+    // projections in air reference frame for "Legacy" collision prediction
+    int16_t   air_ns[6];
+    int16_t   air_ew[6];
+
     /* 'legacy' specific data */
     int16_t   fla_ns[4];     // quarter-meters per second
     int16_t   fla_ew[4];
-    int16_t   air_ns[6];     // corrected to air reference frame
-    int16_t   air_ew[6];
     int32_t   dx;        // EW distance to this other aircraft, in meters
     int32_t   dy;        // NS distance
+//  uint8_t   msg_type;  // 2 = new 2024 protocol
     bool      stealth;
     bool      no_track;
+    bool      relayed;    // has already been relayed one hop
     uint8_t   aircraft_type;
     uint8_t   airborne;
     int8_t    circling;   // 1=right, -1=left
@@ -177,8 +182,9 @@ typedef struct UFO {
 
     int16_t   RelativeBearing;    // for voice and strobe
 
-    int8_t    rssi; /* SX1276 only */
     uint16_t  hdop; /* cm */
+    uint16_t  last_crc;
+    int8_t    rssi; /* SX1276 only */
 
     /* ADS-B (ES, UAT, GDL90) specific data */
     uint8_t   callsign[10];    /* size of mdb.callsign + 1 */

@@ -74,7 +74,7 @@ enum
 
 enum
 {
-	DEST_OFF,
+	DEST_NONE,
 	DEST_UART,
 	DEST_UDP,
 	DEST_TCP,
@@ -91,7 +91,8 @@ enum
 	BAUD_19200 = 3,
 	BAUD_38400 = 4,
 	BAUD_57600 = 5,
-	BAUD_115200 = 6
+	BAUD_115200 = 6,
+	BAUD_2000000 = 7
 };
 
 enum
@@ -104,7 +105,8 @@ enum
 {
 	RELAY_OFF=0,
 	RELAY_LANDED,
-	RELAY_ALL
+	RELAY_ALL,
+	RELAY_ONLY
 };
 
 typedef struct Settings {
@@ -140,7 +142,7 @@ typedef struct Settings {
     uint8_t  resvd2;
     uint8_t  relay:2;
     uint8_t  gdl90_in:3;    // data from this port will be interpreted as GDL90
-    uint8_t  resvd3:1;
+    uint8_t  alt_udp:1;     // if 1 then use 10111 instead of 10110
     bool     nmea_e:1;
     bool     nmea2_e:1;     // whether to send bridged data
     uint8_t  baud_rate:3;   /* for serial UART0 */
@@ -198,6 +200,7 @@ typedef union EEPROM_U {
 void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
+void show_settings_serial(void);
 extern settings_t *settings;
 extern uint32_t baudrates[];
 

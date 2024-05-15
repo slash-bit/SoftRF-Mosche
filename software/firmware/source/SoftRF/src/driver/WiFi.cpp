@@ -368,7 +368,7 @@ void WiFi_setup()
   else if (settings->mode == SOFTRF_MODE_BRIDGE)
       UDP_Input_Port = RELAY_SRC_PORT;
   else if (settings->nmea_out==DEST_UDP || settings->nmea_out2==DEST_UDP)
-      UDP_Input_Port = ALT_UDP_PORT;
+      UDP_Input_Port = ALT_UDP_PORT;  // <<< or use NMEA_UDP_PORT2 (10111)?
   if (Uni_Udp.begin(UDP_Input_Port)) {
       Serial.print(F("UDP server started, listening at port: "));
       Serial.println(UDP_Input_Port);

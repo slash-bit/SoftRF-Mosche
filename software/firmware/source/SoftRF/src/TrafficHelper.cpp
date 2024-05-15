@@ -51,6 +51,7 @@ uint8_t fo_raw[34];
 traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 int max_alarm_level = ALARM_LEVEL_NONE;
 bool alarm_ahead = false;                    /* global, used for visual displays */
+bool relay_waiting = false;
 
 static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
 
@@ -153,7 +154,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   /* if either aircraft is turning, vector method is not usable */
   if (fabs(this_aircraft->turnrate) > 3.0 || fabs(fop->turnrate) > 3.0)
         return Alarm_Distance(this_aircraft, fop);
-//  if (fop->turnrate == 0.0) {   /* fop->turnrate not available */
+//  if (fop->turnrate == 0.0) {   /* turnrate not available */
 //    float angle = fabs(fop->course - fop->prevcourse);
 //    if (angle > 270.0)  angle = 360.0 - angle;
 //    if (angle > 6.0)
@@ -277,6 +278,11 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
+
+  //if (fop->protocol == RF_PROTOCOL_LATEST) {
+  //  return (Alarm_Vector(this_aircraft, fop));
+    /* we don't know how to fully interpret the new protocol yet */
+  //}
 
   /* here start the expensive calculations */
 
@@ -539,7 +545,8 @@ void Traffic_Update(ufo_t *fop)
 
   /* follow FLARM docs: do not issue alarms about non-airborne traffic */
   /* - except in the first minute, for testing */
-  if ((fop->protocol == RF_PROTOCOL_LEGACY && fop->airborne == 0)
+  if ((fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST)
+       && (fop->airborne == 0)
        && (millis() - SetupTimeMarker > 60000)) {
     fop->alarm_level = ALARM_LEVEL_NONE;
     return;
@@ -567,7 +574,7 @@ bool air_relay()
     static uint32_t lastrelay = 0;
 
     if (fo.airborne && (millis() > SetupTimeMarker + 60000)) {
-      if (settings->relay != RELAY_ALL)
+      if (settings->relay < RELAY_ALL)
         return false;
       /* do not relay close-by traffic unless it is low (or landed) */
       if (fo.distance < 10000.0 && fo.alt_diff > -1000.0)
@@ -580,39 +587,23 @@ bool air_relay()
     if (fo.timerelayed + ENTRY_RELAY_TIME > fo.timestamp)
         return true;
 
-    // Since (legacy) decryption happens in-place, fo_raw is now cooked,
-    // so use the original (still encrypted) data in RxBuffer.
+    relay_waiting = true;
 
-    // need to flag relayed packets so they won't be relayed again:
-    // change the "address type" field without affecting bit parity.
-    legacy_packet_t* pkt = (legacy_packet_t *) RxBuffer;
-    uint8_t addr_type = pkt->addr_type;
-    if (addr_type == 1)         // ADDR_TYPE_ICAO
-        pkt->addr_type = 4;     // ADDR_TYPE_P3I
-    else if (addr_type == 2)   // ADDR_TYPE_FLARM
-        pkt->addr_type = 7;     // ADDR_TYPE_7
-    else if (addr_type == 0)   // ADDR_TYPE_RANDOM
-        pkt->addr_type = 5;     // ADDR_TYPE_FANET
-    else if (addr_type == 3)   // ADDR_TYPE_ANONYMOUS
-        pkt->addr_type = 6;     // ADDR_TYPE_6
-    else
-        return false;          // should not happen
+    // only try and relay during first time slot,
+    // to maximize chance that OGN ground stations will receive it
+    if (RF_current_slot != 0 || !RF_Transmit_Ready())
+        return true;
 
-    if (fo.airborne) {
-        // also munge the packet to make it invisible to FLARMs,
-        //   otherwise the relayed FLARM "sees" itself
-        // but do make landed traffic visible to FLARMs
-        pkt->_unk0 = 0xF;  // this leaves parity intact since it was 0x0
-        pkt->_unk1 = 1;    // this spoils the parity - intentionally
-    }
-
-    memcpy((void *) &TxBuffer[0], (void *) &RxBuffer[0], sizeof(legacy_packet_t));
-
-    bool relayed = RF_Transmit(sizeof(legacy_packet_t), true);
+    // >>> re-encode new-protocol packets into old protocol for relaying
+    bool relayed = false;
+    size_t s = RF_Encode(&fo);
+    if (s != 0)
+        relayed = RF_Transmit(sizeof(legacy_packet_t), true);
 
     if (relayed) {
         fo.timerelayed = ThisAircraft.timestamp;
         lastrelay = millis();
+        relay_waiting = false;
         // Serial.print("Relayed packet from ");
         // Serial.println(fo.addr, HEX);
         if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags)) {
@@ -634,10 +625,24 @@ bool air_relay()
     return true;
 }
 
-void AddTraffic(ufo_t *fop, bool do_relay)
+void AddTraffic(ufo_t *fop)
 {
     ufo_t *cip;
     time_t timenow = ThisAircraft.timestamp;
+
+    bool do_relay = false;
+
+    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
+      // relay some traffic if we are airborne (or in first-minute test)
+      // do not relay GDL90 or ADS-B traffic
+      if (settings->relay != RELAY_OFF
+          && (fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST)
+          && fop->relayed == false         // not a packet already relayed one hop
+          && (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
+      {
+            do_relay = true;
+      }
+    }
 
     /* first check whether we are already tracking this object */
     int i;
@@ -814,38 +819,9 @@ void ParseData(void)
     if (((*protocol_decode)((void *) fo_raw, &ThisAircraft, &fo)) == false)
         return;
 
-    bool do_relay = false;
-
-    if (rf_protocol == RF_PROTOCOL_LEGACY) {
-
-      uint8_t addr_type = fo.addr_type;
-
-      /* relay some traffic if we are airborne (or in first-minute test) */
-      if (rf_protocol == RF_PROTOCOL_LEGACY
-          && settings->relay != RELAY_OFF
-          && addr_type < 4                // not a packet already relayed one hop
-          && (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
-      {
-            do_relay = true;
-      }
-
-      /* restore addr_type of received relayed packets */
-      if (addr_type > 3) {
-        if (addr_type == ADDR_TYPE_P3I)
-            fo.addr_type = ADDR_TYPE_ICAO;
-        else if (addr_type == ADDR_TYPE_7)
-            fo.addr_type = ADDR_TYPE_FLARM;
-        else if (addr_type == ADDR_TYPE_6)
-            fo.addr_type = ADDR_TYPE_ANONYMOUS;
-        else if (addr_type == ADDR_TYPE_FANET)
-            fo.addr_type = ADDR_TYPE_RANDOM;
-      }
-
-    }
-
     fo.rssi = RF_last_rssi;
 
-    AddTraffic(&fo, do_relay);
+    AddTraffic(&fo);
 }
 
 void Traffic_setup()
@@ -876,6 +852,7 @@ void Traffic_loop()
     ufo_t *mfop = NULL;
     max_alarm_level = ALARM_LEVEL_NONE;          /* global, used for visual displays */
     alarm_ahead = false;                         /* global, used for strobe pattern */
+    relay_waiting = false;
     int sound_alarm_level = ALARM_LEVEL_NONE;    /* local, used for sound alerts */
     int alarmcount = 0;
 
@@ -914,7 +891,10 @@ void Traffic_loop()
 
         } else {   /* expired ufo */
 
-          *fop = EmptyFO;
+          fop->addr = 0;
+
+          //*fop = EmptyFO;
+
           /* implied by emptyFO:
           fop->addr = 0;
           fop->alert = 0;
@@ -994,12 +974,15 @@ Serial.println(NMEABuffer);
     UpdateTrafficTimeMarker = millis();
 }
 
+// currently this function is not called from anywhere (in "normal" mode)
+//   - instead expired entries are purged in Traffic_loop()
 void ClearExpired()
 {
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].addr &&
          (ThisAircraft.timestamp - Container[i].timestamp) > ENTRY_EXPIRATION_TIME) {
-      Container[i] = EmptyFO;
+      //Container[i] = EmptyFO;
+      Container[i].addr = 0;
     }
   }
 }

@@ -118,10 +118,11 @@ enum
 	TX_STATUS_ON
 };
 
-typedef struct {
+typedef struct legacy_packet
+{
     /********************/
     unsigned int addr:24;
-    unsigned int _unk0:4;
+    unsigned int msg_type:4;
     unsigned int addr_type:3;
     unsigned int _unk1:1;
     // unsigned int magic:8;
@@ -147,7 +148,40 @@ typedef struct {
     /********************/
 } __attribute__((packed)) legacy_packet_t;
 
+typedef struct latest_packet
+{
+    unsigned int addr:24;
+    unsigned int msg_type:4;
+    unsigned int addr_type:3;
+    unsigned int _unk1:1;
+    byte b1;
+    byte b2;
+    byte b3:6;
+    uint8_t stealth:1;
+    uint8_t no_track:1;
+    byte needs3:4;
+    byte has3:4;
+    byte c1:2;
+    byte timebits:4;           // increments each second
+    uint16_t aircraft_type:4;  // wider data type to avoid GCC messing the bit offset
+    byte c2:1;
+    uint16_t alt:13;           // alt+1000, enscaled(12,1,0)
+    uint32_t lat:20;
+    uint32_t lon:20;
+    uint16_t turnrate:9;       // deg/sec times 20, enscaled(6,2,1)
+    uint16_t speed:10;         // m/s times 10, enscaled(8,2,0)
+    uint16_t vs:9;             // vertical speed, m/s times 10, enscaled(6,2,1)
+    uint16_t course:10;        // degrees (0-360) times 2
+    byte airborne:2;
+    uint16_t gpsA:6;           // GNSS horizontal accuracy, meters times 10, enscaled(3,3)
+    uint16_t gpsB:5;           // GNSS vertical accuracy, meters times 4, enscaled(2,3)
+    byte unk8:5;
+    byte lastbyte;
+} __attribute__((packed)) latest_packet_t;
+
 bool legacy_decode(void *, ufo_t *, ufo_t *);
+bool latest_decode(void *, ufo_t *, ufo_t *);
 size_t legacy_encode(void *, ufo_t *);
+size_t latest_encode(void *, ufo_t *);
 
 #endif /* PROTOCOL_LEGACY_H */

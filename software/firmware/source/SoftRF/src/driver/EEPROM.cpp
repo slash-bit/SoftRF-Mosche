@@ -95,8 +95,8 @@ void EEPROM_setup()
 
   SoC->EEPROM_extension(cmd);
 
-  // >>> can remove this after next change in EEPROM version ID:
-  if (settings->relay > RELAY_ALL)  settings->relay = RELAY_LANDED;
+  Serial.println(F("Settings:"));
+  show_settings_serial();
 }
 
 void EEPROM_defaults()
@@ -106,7 +106,7 @@ void EEPROM_defaults()
 
   settings->mode          = SOFTRF_MODE_NORMAL;
   settings->rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
-                              RF_PROTOCOL_FANET : RF_PROTOCOL_LEGACY;
+                              RF_PROTOCOL_FANET : RF_PROTOCOL_LATEST;
 #if defined(DEFAULT_REGION_US)
   settings->band          = RF_BAND_US;
 #else
@@ -141,7 +141,7 @@ void EEPROM_defaults()
 //#endif
 //#endif
 
-  settings->relay = RELAY_LANDED;
+  settings->relay = RELAY_OFF;   // >>> revert to RELAY_LANDED as default eventually
 
   settings->nmea_g  = true;
   settings->nmea_p  = false;
@@ -159,7 +159,7 @@ void EEPROM_defaults()
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   settings->nmea_out   = DEST_USB;
-  settings->nmea_out2  = DEST_OFF;
+  settings->nmea_out2  = DEST_NONE;
 #else
   settings->nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              DEST_BLUETOOTH :
@@ -174,13 +174,13 @@ void EEPROM_defaults()
                                              DEST_UART :
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
                                              DEST_UART :
-                                           DEST_OFF));
+                                           DEST_NONE));
 #endif
 
-  settings->gdl90_in   = DEST_OFF;
-  settings->gdl90      = DEST_OFF;
+  settings->gdl90_in   = DEST_NONE;
+  settings->gdl90      = DEST_NONE;
 #if !defined(EXCLUDE_D1090)
-  settings->d1090      = DEST_OFF;
+  settings->d1090      = DEST_NONE;
 #endif
   settings->json       = JSON_OFF;
   settings->stealth    = false;
@@ -191,6 +191,7 @@ void EEPROM_defaults()
   settings->freq_corr  = 0;
   settings->baud_rate  = BAUD_DEFAULT;      // Serial  - meaning 38400
   settings->altpin0    = false;
+  settings->alt_udp    = false;
   settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
   settings->invert2    = false;
   settings->igc_key[0] = 0;
@@ -215,6 +216,70 @@ void EEPROM_defaults()
   settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
   settings->tcpport = 0;   // 2000
   settings->ppswire = false;   /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
+}
+
+void show_settings_serial()
+{
+    Serial.print(F(" Mode "));Serial.println(settings->mode);
+    Serial.print(F(" Aircraft ID "));Serial.printf("%06X\r\n", settings->aircraft_id);
+    Serial.print(F(" ID method "));Serial.println(settings->id_method);
+    Serial.print(F(" Ignore ID "));Serial.printf("%06X\r\n", settings->ignore_id);
+    Serial.print(F(" Follow ID "));Serial.printf("%06X\r\n", settings->follow_id);
+    Serial.print(F(" Protocol "));Serial.println(settings->rf_protocol);
+    Serial.print(F(" Band "));Serial.println(settings->band);
+    Serial.print(F(" Aircraft type "));Serial.println(settings->aircraft_type);
+    Serial.print(F(" Alarm trigger "));Serial.println(settings->alarm);
+    Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
+    Serial.print(F(" Volume "));Serial.println(settings->volume);
+    Serial.print(F(" Strobe "));Serial.println(settings->strobe);
+    Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
+    Serial.print(F(" Voice "));Serial.println(settings->voice);
+    Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
+    Serial.print(F(" Alt RX pin "));Serial.println(settings->altpin0);
+    Serial.print(F(" Baud 2 "));Serial.println(settings->baudrate2);
+    Serial.print(F(" Invert 2 "));Serial.println(settings->invert2);
+    Serial.print(F(" Alt UDP "));Serial.println(settings->alt_udp);
+    Serial.print(F(" Bluetooth "));Serial.println(settings->bluetooth);
+    Serial.print(F(" TCP mode "));Serial.println(settings->tcpmode);
+    Serial.print(F(" TCP port "));Serial.println(settings->tcpport);
+    Serial.print(F(" SSID "));Serial.println(settings->ssid);
+    Serial.print(F(" PSK "));Serial.println(settings->psk);
+    Serial.print(F(" Host IP "));Serial.println(settings->host_ip);
+    Serial.print(F(" NMEA Out 1 "));Serial.println(settings->nmea_out);
+    Serial.print(F(" NMEA GNSS "));Serial.println(settings->nmea_g);
+    Serial.print(F(" NMEA Private "));Serial.println(settings->nmea_p);
+    Serial.print(F(" NMEA Legacy "));Serial.println(settings->nmea_l);
+    Serial.print(F(" NMEA Sensors "));Serial.println(settings->nmea_s);
+    Serial.print(F(" NMEA Debug "));Serial.println(settings->nmea_d);
+    Serial.print(F(" NMEA External "));Serial.println(settings->nmea_e);
+    Serial.print(F(" NMEA Out 2 "));Serial.println(settings->nmea_out2);
+    Serial.print(F(" NMEA2 GNSS "));Serial.println(settings->nmea2_g);
+    Serial.print(F(" NMEA2 Private "));Serial.println(settings->nmea2_p);
+    Serial.print(F(" NMEA2 Legacy "));Serial.println(settings->nmea2_l);
+    Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
+    Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
+    Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
+    Serial.print(F(" GDL90 in "));Serial.println(settings->gdl90_in);
+    Serial.print(F(" GDL90 out "));Serial.println(settings->gdl90);
+    Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);
+    Serial.print(F(" Air-Relay "));Serial.println(settings->relay);
+    Serial.print(F(" Stealth "));Serial.println(settings->stealth);
+    Serial.print(F(" No track "));Serial.println(settings->no_track);
+    Serial.print(F(" Power save "));Serial.println(settings->power_save);
+    Serial.print(F(" Power external "));Serial.println(settings->power_external);
+    Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
+    Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
+    Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
+    Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
+#if defined(USE_OGN_ENCRYPTION)
+    if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {
+        Serial.print(" IGC key");
+        Serial.printf(" %08X", (settings->igc_key[0]? 0x88888888 : 0));
+        Serial.printf(" %08X", (settings->igc_key[1]? 0x88888888 : 0));
+        Serial.printf(" %08X", (settings->igc_key[2]? 0x88888888 : 0));
+        Serial.printf(" %08X\r\n", (settings->igc_key[3]? 0x88888888 : 0));
+    }
+#endif
 }
 
 void EEPROM_store()

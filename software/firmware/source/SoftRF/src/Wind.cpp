@@ -522,13 +522,12 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
 #endif
     if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        PSTR("$PSPTA,%d,%d,%.1f,%.1f,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
+        PSTR("$PSPTA,%d,%d,%.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%d\r\n"),
         this_aircraft->airborne,
         proj_type, this_aircraft->course, this_aircraft->heading,
+        this_aircraft->prevheading, this_aircraft->turnrate, this_aircraft->circling,
         this_aircraft->air_ns[0], this_aircraft->air_ew[0],
-        this_aircraft->air_ns[1], this_aircraft->air_ew[1],
-        this_aircraft->fla_ns[0], this_aircraft->fla_ew[0],
-        this_aircraft->fla_ns[1], this_aircraft->fla_ew[1]);
+        this_aircraft->air_ns[1], this_aircraft->air_ew[1]);
       NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
     }
 }
@@ -562,7 +561,8 @@ void project_this(ufo_t *this_aircraft)
     int i, endturn;
     int16_t ns, ew;
     float gspeed, aspeed;
-    float course, heading, turnrate, gturnrate, gs_ns, gs_ew, as_ns, as_ew;
+    float course, heading, turnrate, gs_ns, gs_ew, as_ns, as_ew;
+    uint32_t interval;
     float c, s;
     bool report = false;
     int proj_type = 0;
@@ -589,23 +589,40 @@ void project_this(ufo_t *this_aircraft)
     gs_ns = gspeed * cos_approx(course);
     gs_ew = gspeed * sin_approx(course);
 
+    /* compute airspeed and heading from course and speed and wind */
+    as_ns = gs_ns - wind_best_ns;
+    as_ew = gs_ew - wind_best_ew;
+    heading = atan2_approx(as_ns, as_ew);
+    this_aircraft->heading = heading;
+
+    /* also compute ground-reference turn rate */
+    interval = this_aircraft->gnsstime_ms - this_aircraft->prevtime_ms;
+    this_aircraft->projtime_ms = this_aircraft->gnsstime_ms - (interval >> 1);
+          /* midway between the 2 time points */
+    turnrate = (course - this_aircraft->prevcourse) / (0.001 * (float) interval);
+    if (fabs(turnrate) <  2.0)  turnrate = 0.0;
+    if (fabs(turnrate) > 50.0)  turnrate = 0.0;
+    if (interval < 1200) {
+       /* short interval between packets, average with previously known turn rate */
+       this_aircraft->turnrate = 0.5 * (turnrate + this_aircraft->turnrate);
+    } else {
+       this_aircraft->turnrate = turnrate;
+    }
+
     /* if this aircraft is circling then use the average turn rate       */
     /* around the circle as measured within the wind estimation function */
     /* - this differs from the momentary turn rate if there is wind      */
 
-    if (ThisAircraft.circling != 0 && avg_turnrate != 0.0) {
+    if (this_aircraft->circling != 0 && avg_turnrate != 0.0) {
 
       proj_type = 3;
       this_aircraft->projtime_ms = this_aircraft->gnsstime_ms;
       turnrate = avg_turnrate;
-      this_aircraft->turnrate = turnrate;
+      //this_aircraft->aturnrate = turnrate;
 
-      /* compute heading from course and speed and wind */
-      as_ns = gs_ns - wind_best_ns;
-      as_ew = gs_ew - wind_best_ew;
-      heading = atan2_approx(as_ns, as_ew);
-      this_aircraft->heading = heading;
       aspeed = airspeed;   /* average airspeed measured while circling */
+
+      // fall through to computation of ground-reference turn rate
 
     } else if (this_aircraft->gnsstime_ms - this_aircraft->prevtime_ms > 3000) {
 
@@ -614,21 +631,26 @@ void project_this(ufo_t *this_aircraft)
       this_aircraft->projtime_ms = this_aircraft->gnsstime_ms;
       this_aircraft->prevcourse  = this_aircraft->course;
       this_aircraft->prevheading = this_aircraft->heading;
+      //this_aircraft->aturnrate = 0.0;
       this_aircraft->turnrate = 0.0;
 
-      ns = (int16_t) roundf(4.0 * (gs_ns - wind_best_ns));
-      ew = (int16_t) roundf(4.0 * (gs_ew - wind_best_ew));
+      //aspeed = approxHypotenuse(as_ns, as_ew);
+      //this_aircraft->airspeed = aspeed;
+      ns = (int16_t) roundf(4.0 * as_ns);
+      ew = (int16_t) roundf(4.0 * as_ew);
       for (i=0; i<6; i++) {
         this_aircraft->air_ns[i] = ns;
         this_aircraft->air_ew[i] = ew;
       }
 
-      /* also need to compute fla_ns[] & fla_ew[] for transmissions */
-      ns = (int16_t) roundf(4.0 * gs_ns);
-      ew = (int16_t) roundf(4.0 * gs_ew);
-      for (i=0; i<4; i++) {
-        this_aircraft->fla_ns[i] = ns;
-        this_aircraft->fla_ew[i] = ew;
+      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+        /* also need to compute fla_ns[] & fla_ew[] for transmissions */
+        ns = (int16_t) roundf(4.0 * gs_ns);
+        ew = (int16_t) roundf(4.0 * gs_ew);
+        for (i=0; i<4; i++) {
+          this_aircraft->fla_ns[i] = ns;
+          this_aircraft->fla_ew[i] = ew;
+        }
       }
 
       if (report) report_this_projection(this_aircraft, 1);
@@ -639,15 +661,10 @@ void project_this(ufo_t *this_aircraft)
 
       proj_type = 4;
 
+      aspeed = approxHypotenuse(as_ns, as_ew);
+
       /* compute turn rate - degrees per second */
       /* uses current and previous course and time_ms */
-
-      /* heading for current time point */
-      as_ns = gs_ns - wind_best_ns;
-      as_ew = gs_ew - wind_best_ew;
-      heading = atan2_approx(as_ns, as_ew);
-      this_aircraft->heading = heading;
-      aspeed = approxHypotenuse(as_ns, as_ew);
 
       /* previous heading from past course and speed and wind */
       float prevheading = this_aircraft->prevheading;
@@ -660,25 +677,19 @@ void project_this(ufo_t *this_aircraft)
         if (heading > 0.0)  heading_change -= 360.0;
         else heading_change += 360.0;
       }
-      uint32_t interval = this_aircraft->gnsstime_ms - this_aircraft->prevtime_ms;
-      this_aircraft->projtime_ms = this_aircraft->gnsstime_ms - (interval >> 1);
-            /* midway between the 2 time points */
+      //interval = this_aircraft->gnsstime_ms - this_aircraft->prevtime_ms;
       turnrate = heading_change / (0.001 * (float) interval);
       if (fabs(turnrate) <  2.0)  turnrate = 0.0;        /* ignore inaccurate data */
       if (fabs(turnrate) > 50.0)  turnrate = 0.0;        /* ignore implausible data */
-      if (interval < 1200 && this_aircraft->turnrate != 0) {
+      //if (interval < 1200) {
          /* short interval between packets, average with previously known turn rate */
-         this_aircraft->turnrate = 0.5 * (turnrate + this_aircraft->turnrate);
-      } else {
-         this_aircraft->turnrate = turnrate;
-      }
-      /* also compute ground-reference turn rate */
-      //gturnrate = (course - this_aircraft->prevcourse) / (0.001 * (float) interval);
-      //if (fabs(gturnrate) <  2.0)  gturnrate = 0.0;
-      //if (fabs(gturnrate) > 50.0)  gturnrate = 0.0;
+         //this_aircraft->aturnrate = 0.5 * (turnrate + this_aircraft->aturnrate);
+      //} else {
+         //this_aircraft->aturnrate = turnrate;
+      //}
     }
 
-    /* compute NS & EW speed components for 4 future time points */
+    /* compute NS & EW speed components for future time points */
 
     if (fabs(turnrate) < 2.0) {
 
@@ -689,14 +700,19 @@ void project_this(ufo_t *this_aircraft)
         this_aircraft->air_ns[i] = ns;
         this_aircraft->air_ew[i] = ew;
       }
+      //this_aircraft->aturnrate = 0.0;
+      this_aircraft->turnrate = 0.0;
 
-      /* also need to compute fla_ns[] & fla_ew[] for transmissions */
-      ns = (int16_t) roundf(4.0 * gs_ns);
-      ew = (int16_t) roundf(4.0 * gs_ew);
-      for (i=0; i<4; i++) {
-        this_aircraft->fla_ns[i] = ns;
-        this_aircraft->fla_ew[i] = ew;
+      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+        /* also need to compute fla_ns[] & fla_ew[] for transmissions */
+        ns = (int16_t) roundf(4.0 * gs_ns);
+        ew = (int16_t) roundf(4.0 * gs_ew);
+        for (i=0; i<4; i++) {
+          this_aircraft->fla_ns[i] = ns;
+          this_aircraft->fla_ew[i] = ew;
+        }
       }
+      //this_aircraft->airspeed = aspeed;
 
       if (report) report_this_projection(this_aircraft, 2);
 
@@ -723,6 +739,7 @@ void project_this(ufo_t *this_aircraft)
       if (factor < 0.86)  factor = 0.86;
       if (factor < 0.99)  aspeed *= factor;
     }
+    //this_aircraft->airspeed = aspeed;
 
     float dir_chg = 1.5 * turnrate;  // average heading between now and the first point
     heading += dir_chg;              //   which will be 3 seconds into future
@@ -752,31 +769,33 @@ void project_this(ufo_t *this_aircraft)
         return;
     }
 
+    // if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+
     /* also need to compute fla_ns[] & fla_ew[] for transmissions */
 
     /* first need to compute initial ground-reference turn rate */
     // compute this (approximately) for now+2s instead of now:
-    float windangle = course + 2.0*turnrate - wind_direction;
-    if (windangle > 0)  windangle -= 180.0;
-    else                windangle += 180.0;     /* angle from DOWNwind */
-    turnrate /= (1.0 + cos_approx(windangle) * wind_speed / aspeed);
+    //float windangle = course + 2.0*turnrate - wind_direction;
+    //if (windangle > 0)  windangle -= 180.0;
+    //else                windangle += 180.0;     /* angle from DOWNwind */
+    //turnrate = turnrate / (1.0 + cos_approx(windangle) * wind_speed / aspeed);
     /* this increases the turnrate when heading upwind, and vice versa */
 
-    // alternative: use gturnrate computed above
+    // alternative: use turnrate computed above from course and prevcourse
 
     /* now imitate FLARM and keep speed and turn rate constant while circling */
-    float interval;
+    float delta_t;
     if (this_aircraft->aircraft_type == AIRCRAFT_TYPE_TOWPLANE)         // known 4-second intervals
-        interval = 4.0;
+        delta_t = 4.0;
     else if (this_aircraft->aircraft_type == AIRCRAFT_TYPE_DROPPLANE)   // unverified assumptions
-        interval = 4.0;
+        delta_t = 4.0;
     else if (this_aircraft->aircraft_type == AIRCRAFT_TYPE_POWERED)
-        interval = 4.0;
+        delta_t = 4.0;
     else if (this_aircraft->circling)                  // typically gliders
-        interval = 3.0;
+        delta_t = 3.0;
     else
-        interval = 2.0;
-    dir_chg = interval * turnrate;
+        delta_t = 2.0;
+    dir_chg = delta_t * turnrate;
     if (this_aircraft->circling) {
         endturn = 4;
     } else if (fabs(dir_chg) > 22.5) {
@@ -789,7 +808,7 @@ void project_this(ufo_t *this_aircraft)
     }
     for (i=0; i<4; i++) {
       if (i < endturn) {
-        // first velocity direction will be "interval" seconds into future
+        // first velocity direction will be "delta_t" seconds into future
         //   - because that is what FLARM seems to send
         course += dir_chg;
         if (course >  360.0)  course -= 360.0;
@@ -801,6 +820,8 @@ void project_this(ufo_t *this_aircraft)
       this_aircraft->fla_ew[i] = ew;
     }
 
+    //}
+
     if (report) report_this_projection(this_aircraft, proj_type);
 }
 
@@ -811,7 +832,7 @@ void project_this(ufo_t *this_aircraft)
 void project_that(ufo_t *fop)
 {
     int i, endturn;
-    float aspeed, gspeed, course, heading, turnrate;
+    float aspeed, gspeed, course, heading, aturnrate;
     float gs_ns, gs_ew, as_ns, as_ew, windangle;
     int16_t ns, ew;
     bool report = false;
@@ -822,14 +843,14 @@ void project_that(ufo_t *fop)
         report = true;
     }
 
-    if (fop->protocol == RF_PROTOCOL_LEGACY) {
+    if (fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST) {
 
-      /* A crude turn rate was computed in Legacy_decode() */
+      /* Turn rate was obtained in Legacy_decode() */
       /* For vector alarm method don't need more than that */
       if (settings->alarm != TRAFFIC_ALARM_LEGACY)
             return;
-  
-      /* Incoming Legacy packets provide us with the ns[] & ew[] data.    */
+
+      /* Incoming Legacy packets provide us with the velocity data.       */
       /* But it is not in a good format, neither air nor ground reference */
       /* The data in the packets ignores the wind!                        */
       /* It is Ground Speed at some point in time (presumably now)        */
@@ -858,15 +879,14 @@ To compute the correct air-reference circling path:
 * Use the initial heading and the corrected turn rate to project the 4 future points.
 * this is a total of 13 trig calls!
 * might as well continue and compute 2 more points? (can use the no-trig method)
-*/
-#if 0
+*
       float direction0 = atan2_approx((float) fop->fla_ns[0], (float) fop->fla_ew[0]);
       float direction1 = atan2_approx((float) fop->fla_ns[1], (float) fop->fla_ew[1]);
       float dir_chg = direction1 - direction0;
       if (dir_chg >  270.0) dir_chg -= 360.0;
       if (dir_chg < -270.0) dir_chg += 360.0;
-      /* FLARMs send lat/lon of position 2, 3, or 4 seconds into future */
-      /* compute present ground-reference direction */
+      // FLARMs send lat/lon of position 2, 3, or 4 seconds into future
+      // compute present ground-reference direction
       float dir_now;
       if (fop->interval == 4)   // AIRCRAFT_TYPE_TOWPLANE, 4-second intervals
           dir_now = direction0 - 0.5 * dir_chg;
@@ -874,11 +894,10 @@ To compute the correct air-reference circling path:
           dir_now = direction0 - 0.667 * dir_chg;  // 3-second intervals
       else
           dir_now = direction0 - dir_chg;          // 2-second intervals
-#endif
-      float dir_now = fop->course;           // already computed in legacy_decode()
-      float dir_chg = 3.0 * fop->turnrate;   // internally we use 3-second intervals
-      // gspeed = approxHypotenuse((float) fop->fla_ns[0], (float) fop->fla_ew[0]);
-      //  - already computed in legacy_decode()
+      gspeed = approxHypotenuse((float) fop->fla_ns[0], (float) fop->fla_ew[0]);
+*/
+      float dir_now = fop->course;            // already computed in legacy_decode()
+      float dir_chg = 3.0 * fop->turnrate;    // internally we use 3-second intervals
       gspeed = fop->speed * (4.0 * _GPS_MPS_PER_KNOT);   /* quarter-meters per sec */
       gs_ns = gspeed * cos_approx(dir_now);
       gs_ew = gspeed * sin_approx(dir_now);     /* present ground-speed vector */
@@ -926,14 +945,12 @@ To compute the correct air-reference circling path:
          fop->air_ew[i] = ew;
       }
 
-// >>> check what gets passed into new packets in parse()
-
       if (report) report_that_projection(fop, 1);
 
       return;
     }
 
-    /* for other protocols, turn rate was NOT computed in decode() */
+    /* for other protocols, turn rate was NOT obtained in decode() */
     /* rely on history to compute turn rate */
 
     /* if no usable history, assume a straight path */
@@ -941,8 +958,9 @@ To compute the correct air-reference circling path:
     if (fop->gnsstime_ms - fop->prevtime_ms > 3000) {
 
       fop->turnrate = 0.0;
-      if (settings->alarm != TRAFFIC_ALARM_LEGACY)
-            return;
+
+      if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
+          return;
 
       gspeed = fop->speed * _GPS_MPS_PER_KNOT;
 
@@ -976,6 +994,8 @@ To compute the correct air-reference circling path:
     as_ns = gspeed * cos_approx(fop->course) - wind_best_ns;
     as_ew = gspeed * sin_approx(fop->course) - wind_best_ew;
     heading = atan2_approx(as_ns, as_ew);
+    if (heading >  360.0) heading -= 360.0;
+    if (heading < -360.0) heading += 360.0;
     fop->heading = heading;                      /* will be carried over into prevheading */
     aspeed = approxHypotenuse(as_ns, as_ew);     /* air speed */
 
@@ -989,14 +1009,14 @@ To compute the correct air-reference circling path:
     }
     uint32_t interval = fop->gnsstime_ms - fop->prevtime_ms;
     fop->projtime_ms = fop->gnsstime_ms - (interval >> 1);  /* midway between the 2 time points */
-    turnrate = heading_change / (0.001 * (float) interval);
-    if (fabs(turnrate) > 50.0)  turnrate = 0.0;        /* ignore implausible data */
-    if (fabs(turnrate) <  2.0)  turnrate = 0.0;        /* ignore inaccurate data */
+    aturnrate = heading_change / (0.001 * (float) interval);
+    if (fabs(aturnrate) > 50.0)  aturnrate = 0.0;        /* ignore implausible data */
+    if (fabs(aturnrate) <  2.0)  aturnrate = 0.0;        /* ignore inaccurate data */
     if (interval < 1200 && fop->turnrate != 0) {
        /* short interval between packets, average with previously known turn rate */
-       fop->turnrate = 0.5 * (turnrate + fop->turnrate);
+       fop->turnrate = 0.5 * (aturnrate + fop->turnrate);
     } else {
-       fop->turnrate = turnrate;
+       fop->turnrate = aturnrate;   // (stores air ref turnrate in the gnd ref field)
     }
 
     if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
@@ -1004,7 +1024,7 @@ To compute the correct air-reference circling path:
 
     /*  compute air-reference NS & EW speed components for future time points */
 
-    if (fabs(turnrate) < 2.0) {   /* hardly turning - treat it as not turning at all */
+    if (fabs(aturnrate) < 2.0) {   /* hardly turning - treat it as not turning at all */
 
       ns = (int16_t) roundf(4.0 * as_ns);
       ew = (int16_t) roundf(4.0 * as_ew);
@@ -1021,23 +1041,23 @@ To compute the correct air-reference circling path:
     /* else, if turning */
 
     if (fop->projtime_ms > fop->gnsstime_ms)
-      heading += turnrate * (float) (fop->projtime_ms - fop->gnsstime_ms);
+      heading += aturnrate * (float) (fop->projtime_ms - fop->gnsstime_ms);
     else
-      heading -= turnrate * (float) (fop->gnsstime_ms - fop->projtime_ms);
+      heading -= aturnrate * (float) (fop->gnsstime_ms - fop->projtime_ms);
 
-    if (fabs(turnrate) > 6.0) {
+    if (fabs(aturnrate) > 6.0) {
       /* since the projection is in straight segments rather than a circle, */
       /* correct the speed for the polygon shortcut relative to the circumference */
       /* so that the projected trajectory will reach the points at the right time */
       /* factor = 360/PI/turnrate/interval * sin_approx(turnrate*interval/2) */
      /* - 1/2 slice angle in degrees over interval=3seconds is turnrate * 1.5 */
-      float factor = (360.0/3.0/3.1416)/turnrate * sin_approx(turnrate*1.5);
+      float factor = (360.0/3.0/3.1416)/aturnrate * sin_approx(aturnrate*1.5);
       if (factor < 0.86)  factor = 0.86;
       if (factor < 0.99)  aspeed *= factor;
     }
 
-    heading += 1.5 * turnrate;         // first point will be 1.5 seconds into future
-    float dir_chg = 3.0 * turnrate;   // 3-second intervals after that
+    heading += 1.5 * aturnrate;         // first point will be 1.5 seconds into future
+    float dir_chg = 3.0 * aturnrate;   // 3-second intervals after that
     endturn = 6;
     if (fabs(dir_chg) > 15.0) {
         endturn = (int) (90.0 / fabs(dir_chg));    // limit to a 90-degree turn

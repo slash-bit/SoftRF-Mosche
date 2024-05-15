@@ -78,7 +78,7 @@ static void D1090_Out(byte *buf, size_t size)
       WiFi_transmit_TCP((char*)buf, size);
 #endif
     break;
-  case DEST_OFF:
+  case DEST_NONE:
   default:
     break;
   }
@@ -109,7 +109,7 @@ void D1090_Export()
   interactiveRemoveStaleAircrafts(&state);
 #endif /* ENABLE_D1090_INPUT || ENABLE_RTLSDR || ENABLE_HACKRF || ENABLE_MIRISDR */
 
-  if (settings->d1090 != DEST_OFF && isValidFix()) {
+  if (settings->d1090 != DEST_NONE && isValidFix()) {
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr && (this_moment - Container[i].timestamp) <= EXPORT_EXPIRATION_TIME) {
 

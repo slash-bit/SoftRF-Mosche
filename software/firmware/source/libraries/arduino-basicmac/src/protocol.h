@@ -28,9 +28,7 @@ enum
 	RF_PROTOCOL_ADSB_UAT,  /* ADS-B UAT */
 	RF_PROTOCOL_FANET,     /* Skytraxx */
 	RF_PROTOCOL_GDL90,     /* from external device */
-	/* Volunteer contributors are welcome */
-	RF_PROTOCOL_EID,       /* UAS eID */
-	RF_PROTOCOL_GOTENNA    /* goTenna Mesh */
+	RF_PROTOCOL_LATEST     /* new 2024 protocol */
 };
 
 enum

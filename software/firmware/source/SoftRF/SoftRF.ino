@@ -175,6 +175,7 @@ void setup()
   uint32_t SerialBaud = baudrates[settings->baud_rate];
   if (SerialBaud == 0)    // BAUD_DEFAULT
     SerialBaud = SERIAL_OUT_BR;
+#if defined(ESP32)
   if (SerialBaud != SERIAL_OUT_BR || settings->altpin0) {
     if (settings->altpin0) {
       Serial.print("Switching RX pin to ");
@@ -193,6 +194,18 @@ void setup()
       Serial.begin(SerialBaud, SERIAL_OUT_BITS);
   }
   Serial.setRxBufferSize(SerialBufSize);
+#else
+  if (SerialBaud != SERIAL_OUT_BR) {
+    if (SerialBaud != SERIAL_OUT_BR) {
+      Serial.print("Switching baud rate to ");
+      Serial.println(SerialBaud);
+    }
+    delay(500);
+    Serial.end();
+    delay(1500);
+    Serial.begin(SerialBaud, SERIAL_OUT_BITS);
+  }
+#endif
 
   if (settings->stealth
         || settings->id_method == ADDR_TYPE_RANDOM
@@ -471,7 +484,9 @@ void normal()
 {
   static bool firstfix = true;
 
-  bool success;
+  bool rx_tried   = false;
+  bool rx_success = false;
+  bool tx_success = false;
 
   Baro_loop();
 
@@ -505,7 +520,12 @@ void normal()
 
     if (newfix) {
 
-      ThisAircraft.timestamp = now();
+      if (settings->rf_protocol != RF_PROTOCOL_LEGACY
+       && settings->rf_protocol != RF_PROTOCOL_LATEST
+       && settings->rf_protocol != RF_PROTOCOL_OGNTP)
+        ThisAircraft.timestamp = OurTime;
+      else
+        ThisAircraft.timestamp = now();
       ThisAircraft.gnsstime_ms = thistime_ms;
 
 //Serial.printf("new GNSS fix from %d at %d, PPS was %d\r\n", thistime_ms, millis(), ref_time_ms);
@@ -614,19 +634,39 @@ void normal()
 
     }  /* end of if(newfix) */
 
+    // check for newly received data, usually returns false
+    // >>> do this here too to ensure no incoming packets are missed
+    rx_tried = true;
+    rx_success = RF_Receive();
+    // if received a packet, postpone transmission until next time around the loop().
+
     /* try and transmit, between "newfix" times, */
     /*    since it is waiting for the time slot, */
     /*  and also repeat to help ensure reception */
-    static uint32_t try_tx = 0;
-    if (millis() > try_tx) {
-      size_t s = RF_Encode(&ThisAircraft);  // returns 0 if implausible data
-      if (s != 0) {
-        RF_Transmit(s, true);
-        /* - this only actually transmits when some preset time intervals are reached */
+    //static uint32_t try_tx = 0;
+    //if (millis() > try_tx) {
+      if (!rx_success && RF_Transmit_Ready() && (RF_current_slot != 0 || !relay_waiting)) {
+        // Don't bother with the encode() if can't transmit right now
+        // Reserve slot 0 for relay message if any relaying is pending
+        //   (this only happens once in 5 or more seconds)
+        if (settings->relay != RELAY_ONLY) {
+          size_t s = RF_Encode(&ThisAircraft);  // returns 0 if implausible data
+          if (s != 0) {
+            RF_Transmit(s, true);
+            // if actually transmitted, time-slot is then locked out
+            if (RF_Transmit_Ready()==false || TxEndMarker==0)
+              tx_success = true;
+          }
+        }
       }
-      /* - but don't try too often, to give air-relay a chance to happen */
-      try_tx = millis() + 66;
-    }
+      /* - this only actually transmits when some preset random time is reached */
+      /* don't try again right away: */
+      //try_tx = millis() + 19;
+      //try_tx += (try_tx & 0x0F);
+      /* give air-relay a better chance to happen: */
+      //if (RF_current_slot == 0 && relay_waiting)
+          //try_tx += 51;
+    //}
 
   } else if (GNSSTimeMarker) {      /* not validfix but had fix before */
 
@@ -642,15 +682,19 @@ void normal()
     }
   }
 
-  success = RF_Receive();
-  /* this checks for newly received data, usually returns false */
+  // ensure receiver is re-activated
+  if (!rx_tried || tx_success)
+    rx_success = RF_Receive();
+
+//if (rx_success)
+//Serial.println("received packet...");
 
 #if DEBUG
-  success = true;
+  rx_success = true;
 #endif
 
   /* process received data - only if we know where we are */
-  if (success && validfix)  ParseData();
+  if (rx_success && validfix)  ParseData();
 
 #if defined(ENABLE_TTN)
   TTN_loop();

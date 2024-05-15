@@ -133,8 +133,14 @@ size_t p3i_encode(void *p3i_pkt, ufo_t *this_aircraft) {
   pkt->track = (uint16_t) this_aircraft->course; // degrees relative to true north
   pkt->knots = (uint16_t) this_aircraft->speed;  // knots
 
-  pkt->msd[0] = 0;
-  pkt->msd[1] = 0;
+/*
+"Pilotaware changed something a couple of years ago that stopped Soft-RF
+ from being seen by OGN - we re-enabled this by setting the following
+ pkt->msd[0] = 0x0f; // Old code pkt->msd[0] = 0;
+ pkt->msd[1] = 0x05;;// Old code pkt->msd[1] = 0"
+*/
+  pkt->msd[0] = 0x0F;
+  pkt->msd[1] = 0x05;
   pkt->msd[2] = 0;
   pkt->msd[3] = 0;
 

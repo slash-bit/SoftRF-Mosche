@@ -1129,7 +1129,7 @@ byte GNSS_setup() {
 #endif
 
 //#if defined(USE_NMEA_CFG)
-  NMEA_Source = DEST_OFF;
+  NMEA_Source = DEST_NONE;
 //#endif /* USE_NMEA_CFG */
 
   return (byte) gnss_id;
@@ -1205,7 +1205,7 @@ bool Try_GNSS_sentence() {
     int ndx;
     bool isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
     if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
-      NMEA_Source = DEST_OFF;
+      NMEA_Source = DEST_NONE;
       if (settings->nmea_g || settings->nmea2_g) {
         for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // jump over CS and *
           if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
@@ -1358,7 +1358,7 @@ void PickGNSSFix()
     /* Built-in GNSS input */
     } else if (Serial_GNSS_In.available() > 0) {
       c = Serial_GNSS_In.read();
-      NMEA_Source = DEST_OFF;
+      NMEA_Source = DEST_NONE;
     } else {
       /* return back if no input data */
       break;

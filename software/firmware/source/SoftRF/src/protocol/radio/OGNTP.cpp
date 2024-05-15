@@ -196,7 +196,7 @@ size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
 
   ogn_tx_pkt.Packet.Position.AcftType = (int16_t) aircraft_type;
   ogn_tx_pkt.Packet.Position.Stealth  = (int16_t) this_aircraft->stealth;
-  ogn_tx_pkt.Packet.Position.Time     = second();
+  ogn_tx_pkt.Packet.Position.Time     = this_aircraft->timestamp;   // second();
 
 #if defined(USE_OGN_ENCRYPTION)
   if (ogn_tx_pkt.Packet.Header.Encrypted)

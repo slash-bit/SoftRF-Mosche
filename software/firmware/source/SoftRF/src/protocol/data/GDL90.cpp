@@ -30,6 +30,7 @@
 #include "../../driver/WiFi.h"
 #include "../../TrafficHelper.h"
 #include "../radio/Legacy.h"
+#include "../../ApproxMath.h"
 #include "NMEA.h"
 
 #if defined(ENABLE_AHRS)
@@ -49,7 +50,8 @@ const char *GDL90_CallSign_Prefix[] = {
   [RF_PROTOCOL_ADSB_1090] = "AD",
   [RF_PROTOCOL_ADSB_UAT]  = "UA",
   [RF_PROTOCOL_FANET]     = "FA",
-  [RF_PROTOCOL_GDL90]     = "GD"    // data from external device
+  [RF_PROTOCOL_GDL90]     = "GD",    // data from external device
+  [RF_PROTOCOL_LATEST]    = "FL"
 };
 
 const uint8_t aircraft_type_to_gdl90[] PROGMEM = {
@@ -474,7 +476,7 @@ static void GDL90_Out(byte *buf, size_t size)
       WiFi_transmit_TCP((char*)buf, size);
 #endif
       break;
-    case DEST_OFF:
+    case DEST_NONE:
     default:
       break;
     }
@@ -490,7 +492,7 @@ void GDL90_Export()
 //                              NMEABuffer : UDPpacketBuffer);
   uint8_t *buf = (uint8_t *) UDPpacketBuffer;
 
-  if (settings->gdl90 != DEST_OFF) {
+  if (settings->gdl90 != DEST_NONE) {
     size = makeHeartbeat(buf);
     GDL90_Out(buf, size);
 
@@ -535,6 +537,7 @@ void GDL90_Export()
 // Code for processing GDL90 input - by Moshe Braner, Feb 2024
 
 // decode the GDL90 traffic message and pass it to TrafficHelper.cpp
+//   - but first discard traffic that is too far or too high
 void process_traffic_message(char* buf)
 {
   static ufo_t fo;
@@ -552,10 +555,14 @@ void process_traffic_message(char* buf)
   if (ulatlon & 0x800000)  ulatlon |= 0xFF000000;
   int32_t ilatlon = (int32_t) ulatlon;
   fo.latitude = ((float) ilatlon) * (180.0 / 0x800000);
+  if (fabs(fo.latitude - ThisAircraft.latitude) > 0.25)  // 15 nm
+      return;
   ulatlon = pack24bit(tp->longitude);
   if (ulatlon & 0x800000)  ulatlon |= 0xFF000000;
   ilatlon = (int32_t) ulatlon;
   fo.longitude = ((float) ilatlon) * (180.0 / 0x800000);
+  if (fabs(fo.longitude - ThisAircraft.longitude) > 0.25 * InvCosLat())  // 15 nm
+      return;
   // tp->misc is really the LSNibble of alt
   // the real misc is in bits 8-11 of tp->altitude
   //uint32_t ialt = (((tp->altitude & 0xFF) << 4) | tp->misc);
@@ -566,7 +573,9 @@ void process_traffic_message(char* buf)
   fo.altitude = ((float) (25*ialt - 1000)) * (1.0 / _GPS_FEET_PER_METER);
   // this is pressure altitude, try and correct
   if (ThisAircraft.pressure_altitude != 0.0)
-    fo.altitude += ThisAircraft.altitude - ThisAircraft.pressure_altitude;
+      fo.altitude += ThisAircraft.altitude - ThisAircraft.pressure_altitude;
+  if (fabs(fo.altitude - ThisAircraft.altitude) > 2000)  // meters
+      return;
   fo.airborne = ((misc & 0x08) != 0);
   // similar mess:
   uint16_t horiz_vel = (((uint32_t)((uint8_t)buf[13])) << 4) | ((((uint8_t)buf[14]) & 0xF0) >> 4);
@@ -593,7 +602,7 @@ Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
 
   fo.protocol = RF_PROTOCOL_GDL90;  // not an RF protocol, but that is the data source
   fo.timestamp = ThisAircraft.timestamp;
-  AddTraffic(&fo, false);
+  AddTraffic(&fo);
 }
 
 // Accummulate bytes in traffic data message - ignore all others

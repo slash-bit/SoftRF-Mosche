@@ -36,7 +36,7 @@
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
 
-uint8_t NMEA_Source = DEST_OFF;   // identifies which port a sentence came from
+uint8_t NMEA_Source = DEST_NONE;   // identifies which port a sentence came from
 
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
 char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
@@ -155,13 +155,14 @@ NmeaMallocedBuffer nmealib_buf;
 #endif /* USE_NMEALIB */
 
 const char *NMEA_CallSign_Prefix[] = {
-  [RF_PROTOCOL_LEGACY]    = "FLR",
+  [RF_PROTOCOL_LEGACY]    = "FL1",
   [RF_PROTOCOL_OGNTP]     = "OGN",
   [RF_PROTOCOL_P3I]       = "PAW",
   [RF_PROTOCOL_ADSB_1090] = "ADS",
   [RF_PROTOCOL_ADSB_UAT]  = "UAT",
   [RF_PROTOCOL_FANET]     = "FAN",
-  [RF_PROTOCOL_GDL90]     = "GDL"    // data from external device
+  [RF_PROTOCOL_GDL90]     = "GDL",   // data from external device
+  [RF_PROTOCOL_LATEST]    = "FL2",
 };
 
 #define isTimeToPGRMZ() (millis() - PGRMZ_TimeMarker > 1000)
@@ -299,18 +300,24 @@ void sendPFLAV()
 // copy into plain static variables for efficiency in NMEA_Loop():
 bool is_a_prime_mk2 = false;
 bool has_serial2 = false;
+static unsigned int UDP_NMEA_Output_Port = NMEA_UDP_PORT;
 
 void NMEA_setup()
 {
+  if (settings->alt_udp)
+    UDP_NMEA_Output_Port = NMEA_UDP_PORT2;  // or use ALT_UDP_PORT (4352)?
+
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
 
     is_a_prime_mk2 = true;
 
+#if defined(ESP32)
     // use Serial2 as an auxillary port for data bridging
     uint32_t Serial2Baud = baudrates[settings->baudrate2];
     if (Serial2Baud != 0) {
-        Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
         Serial2.setRxBufferSize(SerialBufSize);
+        Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
+        //Serial2.setRxBufferSize(SerialBufSize);
         has_serial2 = true;
         Serial.printf("Serial2 started at baud rate %d, logic:%d\r\n",
                Serial2Baud, settings->invert2);
@@ -318,6 +325,7 @@ void NMEA_setup()
         // note BAUD_DEFAULT here means Serial2 disabled, not 38400
         Serial.println(F("Serial2 NOT started"));
     }
+#endif
   }
 
 #if defined(USE_NMEA_CFG)
@@ -454,7 +462,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
 #endif
 
   if (dest == NMEA_Source)          // do not echo NMEA back to its source
-    return;                         // NMEA_Source = DEST_OFF for internal NMEA
+    return;                         // NMEA_Source = DEST_NONE for internal NMEA
 
   if (dest == settings->gdl90_in)   // do not send NMEA to GDL90 source
     return;
@@ -494,7 +502,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (nl)
         UDPpacketBuffer[udp_size] = '\n';
 
-      SoC->WiFi_transmit_UDP(NMEA_UDP_PORT, (byte *) UDPpacketBuffer,
+      SoC->WiFi_transmit_UDP(UDP_NMEA_Output_Port, (byte *) UDPpacketBuffer,
                               nl ? udp_size + 1 : udp_size);
     }
     break;
@@ -527,7 +535,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       }
     }
     break;
-  case DEST_OFF:
+  case DEST_NONE:
   default:
     break;
   }
@@ -623,6 +631,10 @@ void NMEA_loop()
 {
   NMEA_bridge_sent = false;
 
+  NMEA_Source = DEST_NONE;
+
+#if defined(ESP32)
+
   if (is_a_prime_mk2) {
 
     /*
@@ -635,9 +647,9 @@ void NMEA_loop()
     static char usb_buf[128+3];
     static int usb_n = 0;
     if (SoC->USB_ops) {
-      NMEA_Source = DEST_USB;
       gdl90 = (settings->gdl90_in == DEST_USB);
       while (SoC->USB_ops->available() > 0) {
+          NMEA_Source = DEST_USB;
           int c = SoC->USB_ops->read();
           if (gdl90)
               GDL90_bridge_buf(c, usb_buf, usb_n);
@@ -649,9 +661,9 @@ void NMEA_loop()
 
     static char uart_buf[128+3];
     static int uart_n = 0;
-    NMEA_Source = DEST_UART;
     gdl90 = (settings->gdl90_in == DEST_UART);
     while (Serial.available() > 0) {
+        NMEA_Source = DEST_UART;
         int c = Serial.read();
         if (gdl90)
             GDL90_bridge_buf(c, uart_buf, uart_n);
@@ -662,9 +674,9 @@ void NMEA_loop()
     static char uart2_buf[128+3];
     static int uart2_n = 0;
     if (has_serial2) {
-      NMEA_Source = DEST_UART2;
       gdl90 = (settings->gdl90_in == DEST_UART2);
       while (Serial.available() > 0) {
+          NMEA_Source = DEST_UART2;
           int c = Serial.read();
           if (gdl90)
               GDL90_bridge_buf(c, uart2_buf, uart2_n);
@@ -681,9 +693,9 @@ void NMEA_loop()
     static char bt_buf[128+3];
     static int bt_n = 0;
     if (SoC->Bluetooth_ops) {
-      NMEA_Source = DEST_BLUETOOTH;
       gdl90 = (settings->gdl90_in == DEST_BLUETOOTH);
       while (BTactive && SoC->Bluetooth_ops->available() > 0) {
+          NMEA_Source = DEST_BLUETOOTH;
           int c = SoC->Bluetooth_ops->read();
           if (gdl90)
               GDL90_bridge_buf(c, bt_buf, bt_n);
@@ -700,11 +712,11 @@ void NMEA_loop()
     static char udp_buf[128+3];
     static int udp_n = 0;
     while (udp_is_ready) {
-      NMEA_Source = DEST_UDP;
       gdl90 = (settings->gdl90_in == DEST_UDP);
       size_t size = WiFi_Receive_UDP((uint8_t *) UDPpacketBuffer, sizeof(UDPpacketBuffer));
       if (size <= 0)
           break;
+      NMEA_Source = DEST_UDP;
       for (size_t i=0; i < size; i++) {
           char c = UDPpacketBuffer[i];
           if (gdl90)
@@ -720,13 +732,13 @@ void NMEA_loop()
     static int tcp_n[MAX_NMEATCP_CLIENTS] = {0};
 //  static bool tcp_n_init = false;
     if (TCP_active) {
-      NMEA_Source = DEST_TCP;
       gdl90 = (settings->gdl90_in == DEST_TCP);
       if (settings->tcpmode == TCP_MODE_CLIENT) {
         while (1) {
           int n = WiFi_receive_TCP(tcpinbuf, 128);
           if (n <= 0)
               break;
+          NMEA_Source = DEST_TCP;
           for (int i=0; i<n; i++) {
                if (gdl90)
                    GDL90_bridge_buf(tcpinbuf[i], tcpoutbuf[0], tcp_n[0]);
@@ -744,6 +756,7 @@ void NMEA_loop()
 //            if (! tcp_n_init)
 //              tcp_n[i] = 0;
             while (NmeaTCP[i].client.available()) {
+                NMEA_Source = DEST_TCP;
                 int c = NmeaTCP[i].client.read();
                 if (gdl90)
                     GDL90_bridge_buf(c, tcpoutbuf[i], tcp_n[i]);
@@ -763,6 +776,10 @@ void NMEA_loop()
     }
 
   }  // end if (is_a_prime_mk2)
+
+#endif
+
+  NMEA_Source = DEST_NONE;  // for all internal messages sent below
 
   sendPFLAV();
 
@@ -876,7 +893,7 @@ void NMEA_Export()
     if (! settings->nmea_l && ! settings->nmea2_l)
          return;
 
-    NMEA_Source = DEST_OFF;
+    NMEA_Source = DEST_NONE;
 
     int alt_diff;
     int abs_alt_diff;
@@ -1070,7 +1087,7 @@ void NMEA_Export()
 
         }  /* done skipping the HP object */
 
-        if (fop->next >= MAX_NMEA_OBJECTS)  break;    /* belt and suspenders */
+        if (fop->next >= MAX_TRACKING_OBJECTS)  break;    /* belt and suspenders */
 
         fop = &Container[fop->next];
       }
@@ -1104,6 +1121,12 @@ void NMEA_Export()
         }
     }
 
+    int gps_status = (ThisAircraft.airborne ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_3D_GROUND);
+    int tx_status = (settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON);
+    if (! has_Fix) {
+        gps_status = GNSS_STATUS_NONE;
+        tx_status = TX_STATUS_OFF;
+    }
     if (HP_addr) {
         if (HP_stealth && HP_alarm_level <= ALARM_LEVEL_CLOSE) {
             HP_alt_diff = (HP_alt_diff & 0xFFFFFF00) + 128;   /* fuzzify */
@@ -1113,18 +1136,14 @@ void NMEA_Export()
         if (HP_alarm_level > ALARM_LEVEL_NONE)  --HP_alarm_level;
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                 PSTR("$PFLAU,%d,%d,%d,%d,%d,%d,%d,%d,%u,%06X" PFLAU_EXT1_FMT "*"),
-                total_objects,
-                (settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON),
-                (ThisAircraft.airborne ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_3D_GROUND),
+                total_objects, tx_status, gps_status,
                 power_status, HP_alarm_level, rel_bearing,
                 ALARM_TYPE_AIRCRAFT, HP_alt_diff, (int) HP_distance, HP_addr
                 PFLAU_EXT1_ARGS );
     } else {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                 PSTR("$PFLAU,0,%d,%d,%d,%d,,0,,," PFLAU_EXT1_FMT "*"),
-                has_Fix && (settings->txpower != RF_TX_POWER_OFF) ?
-                  TX_STATUS_ON : TX_STATUS_OFF,
-                has_Fix ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_NONE,
+                tx_status, gps_status,
                 power_status, ALARM_LEVEL_NONE
                 PFLAU_EXT1_ARGS );
     }
@@ -1520,16 +1539,16 @@ void NMEA_Process_SRF_SKV_Sentences()
             int nmea2 = atoi(D_NMEA2.value());
             Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
             if (nmea2 == nmea1)
-                nmea2 = DEST_OFF;
+                nmea2 = DEST_NONE;
             if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
               if ((nmea1==DEST_UART || nmea1==DEST_USB)
                && (nmea2==DEST_UART || nmea2==DEST_USB))
-                  nmea2 = DEST_OFF;      // USB & UART wired together
+                  nmea2 = DEST_NONE;      // USB & UART wired together
             }
 //            bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
 //            bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
 //            if (wireless1 && wireless2)
-//                  nmea2 = DEST_OFF;      // only one wireless output route possible
+//                  nmea2 = DEST_NONE;      // only one wireless output route possible
             Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
             settings->nmea_out2 = nmea2;
             cfg_is_updated = true;
@@ -1573,6 +1592,7 @@ void NMEA_Process_SRF_SKV_Sentences()
             Serial.print(F("Bluetooth = ")); Serial.println(settings->bluetooth);
             cfg_is_updated = true;
           }
+#if defined(ESP32)
           if (D_altpin0.isUpdated()) {
             settings->altpin0 = atoi(D_altpin0.value());
             Serial.print(F("Use alt RX pin = ")); Serial.println(settings->altpin0);
@@ -1588,6 +1608,7 @@ void NMEA_Process_SRF_SKV_Sentences()
             Serial.print(F("Serial2 logic = ")); Serial.println(settings->invert2);
             cfg_is_updated = true;
           }
+#endif
           if (D_extern1.isUpdated()) {
             settings->nmea_e = atoi(D_extern1.value());
             Serial.print(F("NMEA1_ext = ")); Serial.println(settings->nmea_e);

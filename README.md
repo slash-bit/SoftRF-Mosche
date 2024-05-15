@@ -3,7 +3,7 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ## Features of this fork:
 
-Beyond Lyusupov's version 1.0:
+Beyond Lyusupov's version:
 
 * Collision prediction for circling aircraft
 * Can set aircraft ID for self, ID to ignore, and ID to follow
@@ -22,6 +22,7 @@ Beyond Lyusupov's version 1.0:
 
 Latest additions:
 
+* vMB120: supports the latest 2024 radio protocol
 * vMB114: experimental: import traffic data in GDL90 format (from ADS-B receiver)
 * vMB110: added second serial port and data bridging (only on T-Beam)
 * vMB10h: added winch mode ("aircraft type") with variable reported altitude
@@ -36,7 +37,7 @@ Latest additions:
 * These new WiFi options allow wireless output to XCvario
 <br>
 
-Open [discussion forum](https://gitter.im/SoftRF-open/community).
+For discussions join the [SoftRF Community](https://groups.google.com/g/softrf_community).
 <br>
 <br>
 

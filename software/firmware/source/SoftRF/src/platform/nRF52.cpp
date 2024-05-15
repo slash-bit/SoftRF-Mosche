@@ -575,7 +575,7 @@ static void print_dest(int dest)
     case DEST_UART       :  Serial.println(F("UART"));          break;
     case DEST_USB        :  Serial.println(F("USB CDC"));       break;
     case DEST_BLUETOOTH  :  Serial.println(F("Bluetooth LE"));  break;
-    case DEST_OFF        :
+    case DEST_NONE       :
     default              :  Serial.println(F("NULL"));          break;
   }
 }

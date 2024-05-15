@@ -129,7 +129,7 @@ enum
 
 enum
 {
-	VOICE_OFF,
+	VOICE_0=0,
 	VOICE_1,
 	VOICE_2,
 	VOICE_3
