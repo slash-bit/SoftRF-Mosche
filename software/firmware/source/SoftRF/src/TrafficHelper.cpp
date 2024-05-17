@@ -573,7 +573,8 @@ bool air_relay()
 {
     static uint32_t lastrelay = 0;
 
-    if (fo.airborne && (millis() > SetupTimeMarker + 60000)) {
+    //if (fo.airborne && (millis() > SetupTimeMarker + 60000)) {
+    if (fo.airborne) {
       if (settings->relay < RELAY_ALL)
         return false;
       /* do not relay close-by traffic unless it is low (or landed) */
@@ -638,7 +639,8 @@ void AddTraffic(ufo_t *fop)
       if (settings->relay != RELAY_OFF
           && (fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST)
           && fop->relayed == false         // not a packet already relayed one hop
-          && (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
+          //&& (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
+          && ThisAircraft.airborne)
       {
             do_relay = true;
       }

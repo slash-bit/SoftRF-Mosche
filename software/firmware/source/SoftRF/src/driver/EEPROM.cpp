@@ -81,17 +81,16 @@ void EEPROM_setup()
     Serial.print(F("EEPROM version: "));
     Serial.println(eeprom_block.field.version);
 
-    if (eeprom_block.field.version != SOFTRF_EEPROM_VERSION) {
+    if (eeprom_block.field.version  != SOFTRF_EEPROM_VERSION
+    ||  settings->ssid[sizeof(settings->ssid)-1] != '\0'
+    ||  settings->psk[sizeof(settings->psk)-1] != '\0'
+    ||  eeprom_block.field.version2 != SOFTRF_EEPROM_VERSION) {
       Serial.println(F("WARNING! Version mismatch of user defined settings. Loading defaults..."));
 
       EEPROM_defaults();
       cmd = EEPROM_EXT_DEFAULTS;
     }
   }
-
-//#if defined(DEFAULT_REGION_US)
-//      settings->band = RF_BAND_US;
-//#endif
 
   SoC->EEPROM_extension(cmd);
 
@@ -101,8 +100,9 @@ void EEPROM_setup()
 
 void EEPROM_defaults()
 {
-  eeprom_block.field.magic   = SOFTRF_EEPROM_MAGIC;
-  eeprom_block.field.version = SOFTRF_EEPROM_VERSION;
+  eeprom_block.field.magic    = SOFTRF_EEPROM_MAGIC;
+  eeprom_block.field.version  = SOFTRF_EEPROM_VERSION;
+  eeprom_block.field.version2 = SOFTRF_EEPROM_VERSION;
 
   settings->mode          = SOFTRF_MODE_NORMAL;
   settings->rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
@@ -135,11 +135,7 @@ void EEPROM_defaults()
     settings->pointer = LED_OFF;
   }
 
-//#if !defined(EXCLUDE_VOICE)
-//#if defined(ESP32)
-  settings->voice   = VOICE_OFF;
-//#endif
-//#endif
+  settings->voice = VOICE_OFF;
 
   settings->relay = RELAY_OFF;   // >>> revert to RELAY_LANDED as default eventually
 

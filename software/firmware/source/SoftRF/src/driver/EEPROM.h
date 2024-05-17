@@ -44,7 +44,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0x00000B0C
+#define SOFTRF_EEPROM_VERSION 0xACAC0B0C
 
 enum
 {
@@ -110,14 +110,14 @@ enum
 };
 
 typedef struct Settings {
-    uint8_t  mode;
-    uint8_t  rf_protocol;
-    uint8_t  band;
+    uint8_t  mode:4;
+    uint8_t  rf_protocol:4;
+    uint8_t  band:4;
+    uint8_t  txpower:2;
+    uint8_t  volume:2;
     uint8_t  aircraft_type;
-    uint8_t  txpower;
-    uint8_t  volume;
-    uint8_t  led_num;
-    uint8_t  pointer;
+    //uint8_t  led_num;    // not used
+    uint8_t  resvd1;
 
     bool     nmea_g:1;
     bool     nmea_p:1;
@@ -135,11 +135,14 @@ typedef struct Settings {
     uint8_t  d1090:3;
     uint8_t  json:2;
 
-    uint8_t  power_save;
-    uint8_t  power_external;  /* if nonzero, shuts down if battery is not full */
+    uint8_t  pointer:2;
+    uint8_t  power_save:2;
+    uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
+    uint8_t  resvd2:3;
+
+    uint8_t  resvd3;
 
     int8_t   freq_corr; /* +/-, kHz */
-    uint8_t  resvd2;
     uint8_t  relay:2;
     uint8_t  gdl90_in:3;    // data from this port will be interpreted as GDL90
     uint8_t  alt_udp:1;     // if 1 then use 10111 instead of 10110
@@ -183,6 +186,7 @@ typedef struct EEPROM_S {
     uint32_t  magic;
     uint32_t  version;
     settings_t settings;
+    uint32_t  version2;    // guard from both ends
 } eeprom_struct_t;
 
 typedef union EEPROM_U {

@@ -1052,6 +1052,7 @@ void NMEA_Export()
          data_source = fop->protocol == RF_PROTOCOL_ADSB_UAT ?
                             DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
 
+#if 0
          /*
           * When callsign is available - send it to a NMEA client.
           * If it is not - generate a callsign substitute,
@@ -1081,7 +1082,15 @@ void NMEA_Export()
               course, speed, ltrim(str_climb_rate), fop->aircraft_type
               PFLAA_EXT1_ARGS );
          }
-
+#else
+         // skip the callsign
+         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
+            alarm_level, (int) fop->dy, (int) fop->dx,
+            alt_diff, addr_type, id,
+            course, speed, ltrim(str_climb_rate), fop->aircraft_type
+            PFLAA_EXT1_ARGS );
+#endif
          NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 
