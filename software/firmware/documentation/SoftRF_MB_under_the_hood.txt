@@ -3,8 +3,8 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated May 15, 2024
-to fit software version MB120 based on v1.0 with some parts of v1.2
+This version last updated May 18, 2024
+to fit software version MB122 based on v1.0 with some parts of v1.2
 
 
 PART 1: USER GUIDE - see separate document
@@ -166,10 +166,6 @@ Stealth Mode
 
 Masked additional data fields in stealth mode to fit FLARM specifications.
 
-Air Relay
-
-Added one-hop relay of radio packets from landed (or all) aircraft.  The relayed packets are marked by a different "address (ID) type".  Main file changed: TrafficHelper.cpp.  Also changed EEPROM.* and Web.cpp (for the relay setting), NMEA.cpp (for relay setting), and SoftRF.ino (added pauses between transmissions).
-
 WiFi Client Mode
 
 Revived the option of connecting to an external WiFi network.  Can enter the SSID & PSK via the settings page in the web UI.  After booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  The IP address can be seen in the third OLED screen.  Also added the ability to choose the IP address, and the port to which the TCP client connects to, either 2000 or 8880.  And allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario (and potentially other devices that, like XCvario, create their own WiFi network).
@@ -192,18 +188,13 @@ Which pins to use for UART2 is a problem, as there are few remaining pins still 
 
 Added option to input GDL90 traffic messages and merge them into the traffic table.  Decoding is done in GDL90.cpp, called from NMEA_loop() in NMEA.cpp.  Separated the code adding into the table as "AddTraffic()" from the ParseData() function in TrafficHelper.cpp.  GDL90 traffic is marked as having a different "protocol".  If the same ICAO ID is already in the table under another protocol then the GDL90 report is ignored.  Duplicates may still happen if the other protocol (e.g., FLARM) of the same aircraft is not set up to use the ICAO ID.
 
-
 The latest protocol
 
 This version of SoftRF can now receive and transmit in the new FLARM protocol (V7) that went into effect in March 2024.  The protocol setting only chooses the transmission format.  If either "legacy" or "latest" is chosen, it receives both.
 
+Air Relay
 
-Relaying with the latest protocol
-
-The air-relay feature is now set up to do this: Packets to be relayed are re-encoded into the old (pre-2024, V6) protocol.  These can be received by other SoftRF devices and by OGN ground stations.  The relayed packets are invisible to FLARMs.  An exception is when relaying packets from landed aircraft: they are relayed in the new protocol (if "latest" is chosen in the settings).  This is so as to make them visible to FLARMs too.
-
-Relayed packets are marked as such, by setting the third bit in the "address type" field, which seems to be ignored by OGN ground stations (and FLARMs).  Relayed packets are not relayed a second time.
-
+Added one-hop relay of radio packets from landed (or all) aircraft.  Relayed packets are re-encoded into the old (pre-2024, V6) protocol.  These can be received by other SoftRF devices and by OGN ground stations but are invisible to FLARMs.  It is done that way since otherwise the originating FLARM "sees itself" and switches its ID randomly.  (SoftRF ignores received packets with its own ID.)  Relayed packets are marked as such, by setting the third bit in the "address type" field, which seems to be ignored by OGN ground stations.  Relayed packets are not relayed a second time.
 
 Other changes in version 120
 
@@ -218,11 +209,9 @@ Packets-transmitted count on OLED sometimes increments by dozens or hundreds at 
 
 Reception of FLARM signals can be further improved by shifting our clock (for frequency hopping) by about 50 ms.  Not clear why.
 
-Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.  For now only BMP280 is probed for.
+Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.  For now only the BMP280 is probed for.
 
 AXP192 and AXP2101 are handled via different libraries.  This needs to be simplified if possible, to save memory space if nothing else.
-
-OLED is supported only via one I2C channel.  Should probe for it on both channels and be able to use either, same as is done for the baro chip.
 
 Should switch (from the version used in SoftRF v1.0) to a later version of the basicmac library.
 

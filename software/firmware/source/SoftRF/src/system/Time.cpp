@@ -27,6 +27,17 @@ uint32_t ref_time_ms = 0;      /* assumed local millis() at last PPS */
 
 #define ADJ_FOR_FLARM_RECEPTION 25     // was 40 - seemed to receive FLARM packets better that way
 
+#if defined(ESP32)
+#define EXCLUDE_NTP
+#endif
+
+#if defined(ARDUINO_ARCH_NRF52)
+#define EXCLUDE_NTP
+#endif
+
+#if defined(EXCLUDE_NTP)
+void Time_setup()     {}
+#else
 #if defined(EXCLUDE_WIFI)
 void Time_setup()     {}
 #else
@@ -167,6 +178,7 @@ void Time_setup()
 }
 
 #endif /* EXCLUDE_WIFI */
+#endif /* EXCLUDE_NTP */
 
 
 /* Experimental code by Moshe Braner, specific to Legacy Protocol */

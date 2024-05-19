@@ -634,13 +634,12 @@ void AddTraffic(ufo_t *fop)
     bool do_relay = false;
 
     if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
-      // relay some traffic if we are airborne (or in first-minute test)
-      // do not relay GDL90 or ADS-B traffic
+      // relay some traffic - only if we are airborne (or in "relay only" mode)
       if (settings->relay != RELAY_OFF
           && (fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST)
+              // - do not relay GDL90 or ADS-B traffic - perhaps should?
           && fop->relayed == false         // not a packet already relayed one hop
-          //&& (ThisAircraft.airborne || (millis() < SetupTimeMarker + 60000)))
-          && ThisAircraft.airborne)
+          && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
       {
             do_relay = true;
       }

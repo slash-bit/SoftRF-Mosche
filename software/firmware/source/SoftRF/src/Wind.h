@@ -28,6 +28,8 @@ extern float avg_turnrate;
 extern float avg_speed;       /* average around the circle */
 extern float avg_climbrate;
 
+extern time_t AirborneTime;
+
 void project_this(ufo_t *);
 void project_that(ufo_t *);
 void Estimate_Wind(void);

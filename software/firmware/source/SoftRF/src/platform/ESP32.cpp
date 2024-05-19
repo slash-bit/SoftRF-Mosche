@@ -94,7 +94,17 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIX_NUM, SOC_GPIO_PIN_LED,
 #endif /* USE_NEOPIXELBUS_LIBRARY */
 
 #if defined(USE_OLED)
-U8X8_OLED_I2C_BUS_TYPE u8x8_ttgo  (TTGO_V2_OLED_PIN_RST);
+//U8X8_OLED_I2C_BUS_TYPE u8x8_ttgo  (TTGO_V2_OLED_PIN_RST);
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+U8X8_SSD1306_128X64_NONAME_HW_I2C     u8x8_ttgo (TTGO_V2_OLED_PIN_RST);
+#else
+// for T-Beam create two u8x8_ttgo objects, for Wire & Wire1
+//    - default is Wire1 (GPIO 21,22)
+U8X8_SSD1306_128X64_NONAME_2ND_HW_I2C
+   u8x8_ttgo (TTGO_V2_OLED_PIN_RST, TTGO_V2_OLED_PIN_SCL, TTGO_V2_OLED_PIN_SDA);      // GPIO 21,22
+U8X8_SSD1306_128X64_NONAME_HW_I2C
+   u8x8_ttgo2(TTGO_V2_OLED_PIN_RST, SOC_GPIO_PIN_TBEAM_SCL, SOC_GPIO_PIN_TBEAM_SDA);  // GPIO 13,2
+#endif /* CONFIG_IDF_TARGET_ESP32S3 */
 U8X8_OLED_I2C_BUS_TYPE u8x8_heltec(HELTEC_OLED_PIN_RST);
 U8X8_SH1106_128X64_NONAME_HW_I2C u8x8_1_3(U8X8_PIN_NONE);
 #endif /* USE_OLED */
@@ -512,7 +522,12 @@ static void ESP32_setup()
   } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     esp32_board = ESP32_TTGO_T_BEAM;
 
-    Wire1.begin(TTGO_V2_OLED_PIN_SDA , TTGO_V2_OLED_PIN_SCL);
+    // Start up both Wires here, on fixed GPIO pins
+    // Do not change these later (on PRIME_MK2)
+    // Baro probe and OLED probe try both wires
+    Wire.begin (SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
+    Wire1.begin(TTGO_V2_OLED_PIN_SDA  , TTGO_V2_OLED_PIN_SCL);      // GPIO 21,22
+
     Wire1.beginTransmission(AXP192_SLAVE_ADDRESS);
     Wire_Trans_rval = Wire1.endTransmission();
 
@@ -563,7 +578,7 @@ static void ESP32_setup()
         // DCDC1 1500~3400mV, IMAX=2A
         axp_2xxx.setDC1Voltage(3300); // ESP32,  AXP2101 power-on value: 3300
 
-        // ALDO 500~3500V, 100mV/step, IMAX=300mA
+        // ALDO 500~3500mV, 100mV/step, IMAX=300mA
         axp_2xxx.setButtonBatteryChargeVoltage(3100); // GNSS battery
 
         axp_2xxx.setALDO2Voltage(3300); // LoRa, AXP2101 power-on value: 2800
@@ -596,8 +611,10 @@ static void ESP32_setup()
         hw_info.revision = 12;
         hw_info.pmu = PMU_AXP2101;
       } else {
-        WIRE_FINI(Wire1);
+        //WIRE_FINI(Wire1);
         hw_info.revision = 2;
+        if (RF_SX12XX_RST_is_connected)
+          hw_info.revision = 5;
       }
     }
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
@@ -2043,6 +2060,7 @@ static byte ESP32_Display_setup()
     bool has_oled = false;
 
     /* SSD1306 I2C OLED probing */
+
     if (esp32_board == ESP32_S3_DEVKIT) {
       Wire.begin(SOC_GPIO_PIN_S3_SDA, SOC_GPIO_PIN_S3_SCL);
       Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);
@@ -2061,62 +2079,33 @@ static byte ESP32_Display_setup()
         u8x8 = &u8x8_1_3;
         rval = DISPLAY_OLED_1_3;
       }
-    } else if (GPIO_21_22_are_busy) {
-      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision >= 8) {
-        // Wire1 = Wire;
-        Wire1.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);  // redundant?
-        Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
+    } if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+        Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 21,22
         has_oled = (Wire1.endTransmission() == 0);
         if (has_oled) {
           u8x8 = &u8x8_ttgo;
           rval = DISPLAY_OLED_TTGO;
-          Serial.println(F("u8x8_ttgo OLED found"));
-        }
-      } else {
-        Wire1.begin(HELTEC_OLED_PIN_SDA , HELTEC_OLED_PIN_SCL);
-        Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
-        has_oled = (Wire1.endTransmission() == 0);
-        WIRE_FINI(Wire1);
-        if (has_oled) {
-          u8x8 = &u8x8_heltec;
-          esp32_board = ESP32_HELTEC_OLED;
-          rval = DISPLAY_OLED_HELTEC;
-        }
-      }
-    } else {
-      Wire1.begin(TTGO_V2_OLED_PIN_SDA , TTGO_V2_OLED_PIN_SCL);
-      Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
-      has_oled = (Wire1.endTransmission() == 0);
-      if (has_oled) {
-        u8x8 = &u8x8_ttgo;
-
-        if (hw_info.model == SOFTRF_MODEL_STANDALONE) {
-          esp32_board = ESP32_TTGO_V2_OLED;
-
-          if (RF_SX12XX_RST_is_connected) {
-            hw_info.revision = 16;
-          } else {
-            hw_info.revision = 11;
-          }
-          hw_info.storage = STORAGE_CARD;
-        }
-
-        rval = DISPLAY_OLED_TTGO;
-      } else {
-        if (!(hw_info.model    == SOFTRF_MODEL_PRIME_MK2 &&
-              hw_info.revision >= 8)) {
-          Wire1.begin(HELTEC_OLED_PIN_SDA , HELTEC_OLED_PIN_SCL);
-          Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
-          has_oled = (Wire1.endTransmission() == 0);
-          WIRE_FINI(Wire1);
+          Serial.println(F("u8x8_ttgo OLED found at pins 21,22"));
+        } else {
+          Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 13,2
+          has_oled = (Wire.endTransmission() == 0);
           if (has_oled) {
-            u8x8 = &u8x8_heltec;
-            esp32_board = ESP32_HELTEC_OLED;
-            rval = DISPLAY_OLED_HELTEC;
+            u8x8 = &u8x8_ttgo2;
+            rval = DISPLAY_OLED_TTGO;
+            Serial.println(F("u8x8_ttgo OLED found at pins 2,13"));
+          } else {
+            Wire1.begin(HELTEC_OLED_PIN_SDA , HELTEC_OLED_PIN_SCL);
+            Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
+            has_oled = (Wire1.endTransmission() == 0);
+            if (has_oled) {
+              u8x8 = &u8x8_heltec;
+              esp32_board = ESP32_HELTEC_OLED;
+              rval = DISPLAY_OLED_HELTEC;
+            }
           }
         }
-      }
-    }
+
+    }  // end if (PRIME_MK2)
 
     if (u8x8) {
       u8x8->begin();
@@ -2699,28 +2688,26 @@ static bool ESP32_Baro_setup()
 
   } else {   // is SOFTRF_MODEL_PRIME_MK2
 
-    if (hw_info.revision == 2 && RF_SX12XX_RST_is_connected) {
-      hw_info.revision = 5;
-    }
+//    if (hw_info.revision == 2 && RF_SX12XX_RST_is_connected) {
+//      hw_info.revision = 5;
+//    }
 
-    /* Start from 1st I2C bus (pins 2, 13) */
-    Wire.setPins(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);
-    if (Baro_probe()) {                        // found baro sensor
-#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_SCL)
-        settings->baudrate2 == BAUD_DEFAULT;   // disable Serial2 if it uses pins 2,13
-#endif
-        Serial.println(F("BMP found on pins 2,13"));
+    if (Baro_probe()) {                          // found baro sensor (it tries both Wires)
+//#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_SCL)
+//        settings->baudrate2 == BAUD_DEFAULT;   // disable Serial2 since uses pins 2,13
+//#endif
+        Serial.println(F("BMP found"));
         return true;
     }
     // not found
-    WIRE_FINI(Wire);
+    //WIRE_FINI(Wire);
 
-    if (hw_info.revision == 2)
-      return false;
+//    if (hw_info.revision == 2)
+//      return false;
 
-#if !defined(ENABLE_AHRS)
+#if 0  // !defined(ENABLE_AHRS)
     /* Try out OLED I2C bus */
-    Wire.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);
+    Wire.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);   // GPIO 21,22
     if (/* hw_info.model == SOFTRF_MODEL_PRIME_MK2 && */ hw_info.revision >= 8) {
       Wire1 = Wire;      // WIRE_FINI does not work with old libraries
     }

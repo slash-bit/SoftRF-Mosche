@@ -28,6 +28,7 @@
 #if defined(ARDUINO_ARCH_NRF52)
 #define EXCLUDE_BMP280
 #endif
+
 #if defined(EXCLUDE_BMP180) && defined(EXCLUDE_BMP280) && defined(EXCLUDE_MPL3115A2)
 byte  Baro_setup()        {return BARO_MODULE_NONE;}
 bool  Baro_probe()        {return false;}
@@ -75,9 +76,19 @@ static float Baro_VS[VS_AVERAGING_FACTOR];
 static int avg_ndx = 0;
 
 #if !defined(EXCLUDE_BMP180)
+
 static bool bmp180_probe()
 {
-  return bmp180.begin();
+//  return bmp180.begin();
+  bmp180.setWire(&Wire);
+  if (bmp180.begin())
+      return true;
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      bmp180.setWire(&Wire1);
+      if (bmp180.begin())
+          return true;
+  }
+  return false;
 }
 
 static void bmp180_setup()
@@ -129,10 +140,23 @@ barochip_ops_t bmp180_ops = {
 #if !defined(EXCLUDE_BMP280)
 static bool bmp280_probe()
 {
+// is there a problem with probing both Wires on oldest T-Beams?
+//    if (hw_info.revision == 2)
+//      return false;
+  bmp280.setWire(&Wire);
   if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
   if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
   if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
   if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      Serial.println(F("BMP280 not found on pins 2,13..."));
+      Serial.println(F("probing BMP280 on pins 21,22..."));
+      bmp280.setWire(&Wire1);
+      if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
+      if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
+      if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
+      if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+  }
   return false;
 }
 
@@ -183,7 +207,12 @@ barochip_ops_t bmp280_ops = {
 #if !defined(EXCLUDE_MPL3115A2)
 static bool mpl3115a2_probe()
 {
-  return mpl3115a2.begin();
+//  return mpl3115a2.begin();
+  if (mpl3115a2.begin(&Wire))
+    return true;
+  if (mpl3115a2.begin(&Wire1))
+    return true;
+  return false;
 }
 
 static void mpl3115a2_setup()
@@ -247,6 +276,7 @@ bool Baro_probe()
   if (baro_chip->probe())  return true;
 #endif /* EXCLUDE_MPL3115A2 */
 
+  baro_chip = NULL;
   return false;
 }
 
@@ -255,6 +285,7 @@ byte Baro_setup()
 Serial.println("baro setting up");
 
   if ( SoC->Baro_setup() /* && Baro_probe() */ ) {    // Baro_probe() also called from inside ESP32_Baro_setup()
+
     Serial.print(baro_chip->name);
     Serial.println(F(" barometric pressure sensor is detected."));
 
@@ -276,7 +307,7 @@ Serial.println("baro setting up");
 
   } else {
     baro_chip = NULL;
-    Serial.println(F("WARNING! Barometric pressure sensor is NOT detected."));
+    //Serial.println(F("WARNING! Barometric pressure sensor is NOT detected."));
 
     return BARO_MODULE_NONE;
   }
@@ -340,4 +371,4 @@ float Baro_temperature()
   return Baro_temperature_cache;
 }
 
-#endif /* EXCLUDE_BMP180 && EXCLUDE_BMP280 EXCLUDE_MPL3115A2 */
+#endif /* EXCLUDE_BMP180 && EXCLUDE_BMP280 && EXCLUDE_MPL3115A2 */

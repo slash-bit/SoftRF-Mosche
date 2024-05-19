@@ -60,7 +60,12 @@ enum
 };
 #endif /* EXCLUDE_OLED_049 */
 
-U8X8_OLED_I2C_BUS_TYPE u8x8_i2c(U8X8_PIN_NONE);
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+U8X8_SSD1306_128X64_NONAME_HW_I2C     u8x8_i2c(U8X8_PIN_NONE);
+#else
+U8X8_SSD1306_128X64_NONAME_HW_I2C     u8x8_i2c(U8X8_PIN_NONE, SOC_GPIO_PIN_TBEAM_SCL, SOC_GPIO_PIN_TBEAM_SDA);
+U8X8_SSD1306_128X64_NONAME_2ND_HW_I2C u8x8_i2c2(U8X8_PIN_NONE, TTGO_V2_OLED_PIN_SCL, TTGO_V2_OLED_PIN_SDA);
+#endif
 
 U8X8 *u8x8 = NULL;
 
@@ -123,22 +128,35 @@ static const uint8_t Dot_Tile[] = { 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x
 static uint8_t OLED_current_page = OLED_PAGE_RADIO;
 static uint8_t page_count        = OLED_PAGE_COUNT;
 
+#if 0
+// done in ESP32.cpp ESP32_Display_setup() instead
+
 byte OLED_setup() {
 
   byte rval = DISPLAY_NONE;
   bool oled_probe = false;
 
-#if defined(plat_oled_probe_func)
-  oled_probe = plat_oled_probe_func();
-#else
   /* SSD1306 I2C OLED probing */
   Wire.begin();
   Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);
   oled_probe = (Wire.endTransmission() == 0);
-#endif /* plat_oled_probe_func */
-  if (oled_probe)
-  {
+  if (oled_probe) {
     u8x8 = &u8x8_i2c;
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    //u8x8_SetPin(u8x8, U8X8_PIN_I2C_CLOCK, SOC_GPIO_PIN_TBEAM_SCL);
+    //u8x8_SetPin(u8x8, U8X8_PIN_I2C_DATA,  SOC_GPIO_PIN_TBEAM_SDA);
+  } else {
+      Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
+      oled_probe = (Wire1.endTransmission() == 0);
+      if (oled_probe) {
+        u8x8 = &u8x8_i2c2;
+        //u8x8_SetPin(u8x8, U8X8_PIN_I2C_CLOCK, TTGO_V2_OLED_PIN_SCL);
+        //u8x8_SetPin(u8x8, U8X8_PIN_I2C_DATA,  TTGO_V2_OLED_PIN_SDA);
+      }
+  }
+#endif
+
+  if (oled_probe) {
     rval = (hw_info.model == SOFTRF_MODEL_MINI     ? DISPLAY_OLED_HELTEC :
             hw_info.model == SOFTRF_MODEL_BRACELET ? DISPLAY_OLED_0_49   :
             DISPLAY_OLED_TTGO);
@@ -205,6 +223,8 @@ byte OLED_setup() {
 
   return rval;
 }
+
+#endif
 
 static void OLED_radio()
 {

@@ -249,6 +249,7 @@ int descale( unsigned int value, unsigned int mbits, unsigned int ebits, unsigne
 }
 
 // interpret the data fields in the 2024 protocol packet
+//     https://pastebin.com/YB1ppAbt
 bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
 {
     //uint32_t timestamp = (uint32_t) this_aircraft->timestamp;
@@ -437,7 +438,7 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
 
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr == fop->addr) {
-        if (Container[i].last_crc == RF_last_crc) {
+        if (RF_last_crc != 0 && RF_last_crc == Container[i].last_crc) {
           //Serial.println("duplicate packet");      // usually duplicated in 2nd time slot
           return false;
           //break;
@@ -728,9 +729,32 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     else
         pkt->addr_type = settings->id_method;
 
+#if 0
     if (settings->rf_protocol == RF_PROTOCOL_LATEST && (!relay || landed))
         // relay in old protocol unless landed
         return latest_encode(pkt_buffer, aircraft);
+    // or
+    if (settings->rf_protocol == RF_PROTOCOL_LATEST) {
+        if (!relay)
+            return latest_encode(pkt_buffer, aircraft);
+        if (landed && (((uint32_t) RF_time) & 0x03) == 0x03) {
+            // alternate old (3/4 of the time) and new protocol (1/4)
+            // - but only after we've been airborne for 120 minutes
+            //   (to avoid relaying a not-yet-launched contest grid)
+            if (AirborneTime != 0 && RF_time - AirborneTime > (120*60)) {
+                // munge the ID to avoid annoying FLARMs
+                // - alas that will prevent display of tail number etc
+                pkt->addr ^= 0x00800000;   // or change address type?
+                return latest_encode(pkt_buffer, aircraft);
+            }
+        }
+        // else fall through - relay in old protocol
+    }
+#else
+    // always relay in old protocol
+    if (settings->rf_protocol == RF_PROTOCOL_LATEST && !relay)
+        return latest_encode(pkt_buffer, aircraft);
+#endif
 
     int ndx;
     uint8_t pkt_parity;

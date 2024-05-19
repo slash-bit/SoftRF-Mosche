@@ -35,6 +35,7 @@ float avg_turnrate = 0.0;
 float avg_speed = 0.0;     /* average around the circle */
 float avg_climbrate = 0.0; /* fpm, based on GNSS data */
 
+time_t AirborneTime = 0;
 
 void Estimate_Wind()
 {
@@ -447,10 +448,11 @@ void this_airborne()
 
     }
 
+    if (ThisAircraft.airborne==0 && airborne>0) {
+      AirborneTime = RF_time;
 #if defined(ESP32)
-    // restart alarm log on first takeoff after boot
-    if (AlarmLogOpen==false) {
-      if (settings->logalarms && ThisAircraft.airborne==0 && airborne>0) {
+      // restart alarm log on first takeoff after boot
+      if (AlarmLogOpen==false && settings->logalarms) {
         if (SPIFFS.begin(true)) {
           bool append = false;
           if (SPIFFS.exists("/alarmlog.txt") && SPIFFS.totalBytes() - SPIFFS.usedBytes() > 10000)
@@ -469,13 +471,15 @@ void this_airborne()
             Serial.println(F("Failed to start SPIFFS"));
         }
       }
-
-    // close the alarm log after landing
-    } else if (ThisAircraft.airborne==1 && airborne<=0) {
-        AlarmLog.close();
-        AlarmLogOpen = false;
-    }
 #endif
+    } else if (ThisAircraft.airborne==1 && airborne<=0) {
+      AirborneTime = 0;
+#if defined(ESP32)
+      // close the alarm log after landing
+      AlarmLog.close();
+      AlarmLogOpen = false;
+#endif
+    }
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
 
