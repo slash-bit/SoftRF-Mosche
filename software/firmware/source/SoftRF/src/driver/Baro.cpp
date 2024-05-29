@@ -24,10 +24,8 @@
 // #define EXCLUDE_BMP280
 #define EXCLUDE_BMP180
 #define EXCLUDE_MPL3115A2
-// even the BMP280 probe hangs the nRF52 version
-#if defined(ARDUINO_ARCH_NRF52)
-#define EXCLUDE_BMP280
-#endif
+
+barochip_ops_t *baro_chip = NULL;
 
 #if defined(EXCLUDE_BMP180) && defined(EXCLUDE_BMP280) && defined(EXCLUDE_MPL3115A2)
 byte  Baro_setup()        {return BARO_MODULE_NONE;}
@@ -36,7 +34,6 @@ void  Baro_loop()         {}
 float Baro_altitude()     {return 0;}
 float Baro_pressure()     {return 0;}
 float Baro_temperature()  {return 0;}
-barochip_ops_t *baro_chip = NULL;
 
 #else
 
@@ -51,8 +48,6 @@ barochip_ops_t *baro_chip = NULL;
 #endif /* EXCLUDE_MPL3115A2 */
 
 #include <TinyGPS++.h>
-
-barochip_ops_t *baro_chip = NULL;
 
 #if !defined(EXCLUDE_BMP180)
 Adafruit_BMP085 bmp180;
@@ -83,11 +78,13 @@ static bool bmp180_probe()
   bmp180.setWire(&Wire);
   if (bmp180.begin())
       return true;
+#if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
       bmp180.setWire(&Wire1);
       if (bmp180.begin())
           return true;
   }
+#endif
   return false;
 }
 
@@ -148,6 +145,7 @@ static bool bmp280_probe()
   if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
   if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
   if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+#if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
       Serial.println(F("BMP280 not found on pins 2,13..."));
       Serial.println(F("probing BMP280 on pins 21,22..."));
@@ -157,6 +155,7 @@ static bool bmp280_probe()
       if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
       if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
   }
+#endif
   return false;
 }
 
@@ -210,8 +209,10 @@ static bool mpl3115a2_probe()
 //  return mpl3115a2.begin();
   if (mpl3115a2.begin(&Wire))
     return true;
+#if defined(ESP32)
   if (mpl3115a2.begin(&Wire1))
     return true;
+#endif
   return false;
 }
 
@@ -286,6 +287,11 @@ Serial.println("baro setting up");
 
   if ( SoC->Baro_setup() /* && Baro_probe() */ ) {    // Baro_probe() also called from inside ESP32_Baro_setup()
 
+    if (baro_chip == NULL) {
+        Serial.println(F("BUG WARNING! Baro_probe() was not called"));
+        return BARO_MODULE_NONE;
+    }
+
     Serial.print(baro_chip->name);
     Serial.println(F(" barometric pressure sensor is detected."));
 
@@ -307,8 +313,7 @@ Serial.println("baro setting up");
 
   } else {
     baro_chip = NULL;
-    //Serial.println(F("WARNING! Barometric pressure sensor is NOT detected."));
-
+    Serial.println(F("Barometric pressure sensor was NOT detected."));
     return BARO_MODULE_NONE;
   }
 }

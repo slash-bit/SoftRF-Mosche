@@ -512,6 +512,14 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     if (ilon >= 0x080000) ilon -= 0x0100000;
     float lon = (float)((ilon + round_lon) << 7) * 1e-7;
 
+    // do some sanity checks on the data
+    if (fabs(lat - this_aircraft->latitude) > 1.0
+     || fabs(lon - this_aircraft->longitude) > InvCosLat())
+    {
+        Serial.println("implausible data - rejecting packet");
+        return false;
+    }
+
     uint8_t smult = pkt->smult;
     float nsf = (float) (((int16_t) pkt->ns[0]) << smult);      /* quarter-meters per sec */
     float ewf = (float) (((int16_t) pkt->ew[0]) << smult);

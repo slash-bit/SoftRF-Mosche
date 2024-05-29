@@ -138,7 +138,11 @@ static void EPD_Draw_NavBoxes()
 
     display->getTextBounds(navbox2.title, 0, 0, &tbx, &tby, &tbw, &tbh);
     display->setCursor(navbox2.x + 5, navbox2.y + 5 + tbh);
-    display->print(navbox2.title);
+    // kludge to indicate external power rather than battery:
+    if (navbox2.value > 45)
+        display->print("EXT");
+    else
+        display->print(navbox2.title);
 
     display->setFont(&FreeMonoBold18pt7b);
 

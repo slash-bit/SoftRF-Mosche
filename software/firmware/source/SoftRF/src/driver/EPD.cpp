@@ -291,7 +291,7 @@ void EPD_info1()
 
       display->setCursor(x, y);
       display->print(EPD_Baro_text);
-      display->print(hw_info.baro != BARO_MODULE_NONE ? "  +" : "N/A");
+      display->print(hw_info.baro != BARO_MODULE_NONE ? "+" : "-");
 
       y += (tbh + INFO_1_LINE_SPACING);
 
@@ -303,7 +303,7 @@ void EPD_info1()
 
       display->setCursor(x, y);
       display->print(EPD_IMU_text);
-      display->print(hw_info.imu != IMU_NONE ? "  +" : "N/A");
+      display->print(hw_info.imu != IMU_NONE ? "+" : "-");
     }
 
 #if defined(USE_EPD_TASK)

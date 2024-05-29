@@ -235,11 +235,9 @@ settings->id_method, settings->aircraft_id, ThisAircraft.addr);
 
   delay(100);
 
+Serial.println(F("calling Baro_setup()..."));
   hw_info.baro = Baro_setup();
-  if (hw_info.baro)
-    Serial.println(F("... Baro sensor found"));
-  else
-    Serial.println(F("... Baro sensor not found"));
+Serial.println(F("... Baro_setup() returned"));
 
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();

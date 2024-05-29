@@ -393,7 +393,7 @@ static void nRF52_setup()
   nRF52_has_imu = (Wire.endTransmission() == 0);
 #endif /* EXCLUDE_IMU */
 
-  Wire.end();
+  //Wire.end();   // <<< leave active, for baro chip
 
   for (int i=0; i < sizeof(techo_prototype_boards) / sizeof(prototype_entry_t); i++) {
     if (techo_prototype_boards[i].id == ((uint64_t) DEVICE_ID_HIGH << 32 | (uint64_t) DEVICE_ID_LOW)) {
@@ -1572,7 +1572,13 @@ static unsigned long nRF52_get_PPS_TimeMarker() {
 }
 
 static bool nRF52_Baro_setup() {
-  return true;
+    //return true;
+    // Baro_probe() no longer called from Baro_setup() so need to call it here:
+    if (Baro_probe()) {                  // found baro sensor on Wire
+        Serial.println(F("BMP found"));
+        return true;
+    }
+    return false;
 }
 
 static void nRF52_UATSerial_begin(unsigned long baud)
