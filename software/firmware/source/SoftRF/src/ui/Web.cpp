@@ -35,6 +35,7 @@ void Web_fini()     {}
 #include "../driver/RF.h"
 #include "Web.h"
 #include "../driver/EEPROM.h"
+#include "../driver/OLED.h"
 #include "../driver/Baro.h"
 #include "../driver/LED.h"
 #include "../driver/Buzzer.h"
@@ -56,7 +57,7 @@ static uint32_t prev_rx_pkt_cnt = 0;
 //#include "../Logo.h"
 //    } ;
 
-#include "jquery_min_js.h"
+// #include "jquery_min_js.h"     - skipped to save space
 
 byte getVal(char c)
 {
@@ -89,6 +90,7 @@ void Hex2Bin(String str, byte *buffer)
 // But in v112 it is over 150000 - why?
 
 static bool BTpaused = false;
+static bool reboot_pending = false;
 
 void stop_bluetooth()
 {
@@ -1832,41 +1834,10 @@ void Web_setup()
  <table width=100%%>\
   <tr>\
     <td align=left>\
-<script src='/jquery.min.js'></script>\
-<form method='POST' action='#' enctype='multipart/form-data' id='upload_form'>\
+<form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>\
     <input type='file' name='update'>\
     <input type='submit' value='Update'>\
 </form>\
-<div id='prg'>progress: 0%</div>\
-<script>\
-$('form').submit(function(e){\
-    e.preventDefault();\
-      var form = $('#upload_form')[0];\
-      var data = new FormData(form);\
-       $.ajax({\
-            url: '/update',\
-            type: 'POST',\
-            data: data,\
-            contentType: false,\
-            processData:false,\
-            xhr: function() {\
-                var xhr = new window.XMLHttpRequest();\
-                xhr.upload.addEventListener('progress', function(evt) {\
-                    if (evt.lengthComputable) {\
-                        var per = evt.loaded / evt.total;\
-                        $('#prg').html('progress: ' + Math.round(per*100) + '%');\
-                    }\
-               }, false);\
-               return xhr;\
-            },\
-            success:function(d, s) {\
-                console.log('success!')\
-           },\
-            error: function (a, b, c) {\
-            }\
-          });\
-});\
-</script>\
     </td>\
   </tr>\
  </table>\
@@ -1880,13 +1851,14 @@ $('form').submit(function(e){\
     SoC->swSer_enableRx(false);
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), "*");
-    server.send(200, textplain, (Update.hasError())?"FAIL":"OK");
+    server.send(200, textplain, (Update.hasError())?"UPDATE FAILED":"UPDATE DONE, REBOOTING");
 //    SoC->swSer_enableRx(true);
     Buzzer_fini();
     Voice_fini();
     RF_Shutdown();
     delay(1000);
-    SoC->reset();
+    reboot_pending = true;   // will reboot 2 seconds later in Web_loop()
+    //SoC->reset();
   },[](){
     HTTPUpload& upload = server.upload();
     if(upload.status == UPLOAD_FILE_START){
@@ -1895,18 +1867,57 @@ $('form').submit(function(e){\
       SoC->WDT_fini();
       Serial.printf("Update: %s\r\n", upload.filename.c_str());
       uint32_t maxSketchSpace = SoC->maxSketchSpace();
-      if(!Update.begin(maxSketchSpace)){//start with max available size
+      if (Update.begin(maxSketchSpace)) {   //start with max available size
+#if defined(ESP32)
+        blue_LED_1hz();
+        OLED_msg("UPDATE", "...");
+#endif
+      } else {
         Update.printError(Serial);
+#if defined(ESP32)
+        blue_LED_4hz();
+        OLED_msg("UPDATE", "FAILED");
+#endif
+        Serial.println("update.begin failed");
       }
     } else if(upload.status == UPLOAD_FILE_WRITE){
       if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
         Update.printError(Serial);
+#if defined(ESP32)
+        blue_LED_4hz();
+        OLED_msg("UPDATE", "FAILED");
+#endif
+        Serial.println("\r\nupdate.write failed");
+      } else {
+        static uint16_t i = 0;
+        static uint16_t j = 0;
+        ++i;
+        if ((i >> 4) != j) { 
+          j = (i >> 4);
+          Serial.print(".");
+          if ((j & 31) == 0)
+              Serial.print("\r\n");
+          char buf[8];
+#if defined(ESP32)
+          snprintf(buf,7,"..%d..",j);
+          OLED_msg("UPDATE", buf);
+#endif
+        }
       }
     } else if(upload.status == UPLOAD_FILE_END){
       if(Update.end(true)){ //true to set the size to the current progress
-        Serial.printf("Update Success: %u\r\nRebooting...\r\n", upload.totalSize);
+        Serial.printf("\r\nUpdate Success: %u\r\nRebooting...\r\n", upload.totalSize);
+#if defined(ESP32)
+        blue_LED_on();
+        OLED_msg("UPDATE", "SUCCESS");
+#endif
       } else {
         Update.printError(Serial);
+#if defined(ESP32)
+        blue_LED_4hz();
+        OLED_msg("UPDATE", "FAILED");
+#endif
+        Serial.println("\r\nupdate.end failed");
       }
       Serial.setDebugOutput(false);
     }
@@ -1914,30 +1925,10 @@ $('form').submit(function(e){\
   });
 
 //  server.on ( "/logo.png", []() {
-//    server.send_P ( 200, "image/png", Logo, sizeof(Logo) );
+//    server.send_P ( 200, "image/png", Logo, sizeof(Logo) );   - skipped to save space
 //  } );
 
-  server.on ( "/jquery.min.js", []() {
-
-    // send compressed jQuery script stored inside SoftRF firmware (about 30 KB)
-    // - should move this to SPIFFS (would need to be manually uploaded)
-
-    PGM_P content = jquery_min_js_gz;
-    size_t bytes_left = jquery_min_js_gz_len;
-    size_t chunk_size;
-
-    server.setContentLength(bytes_left);
-    server.sendHeader(String(F("Content-Encoding")),String(F("gzip")));
-    server.send(200, String(F("application/javascript")), "");
-
-    do {
-      chunk_size = bytes_left > JS_MAX_CHUNK_SIZE ? JS_MAX_CHUNK_SIZE : bytes_left;
-      server.sendContent_P(content, chunk_size);
-      content += chunk_size;
-      bytes_left -= chunk_size;
-    } while (bytes_left > 0) ;
-
-  } );
+//  server.on ( "/jquery.min.js", []() { ... } );   - skipped to save space
 
   server.begin();
   Serial.println (F("HTTP server has started at port: 80"));
@@ -1948,6 +1939,10 @@ $('form').submit(function(e){\
 void Web_loop()
 {
   server.handleClient();
+  if (reboot_pending) {
+    delay(2000);
+    SoC->reset();
+  }
 }
 
 void Web_fini()

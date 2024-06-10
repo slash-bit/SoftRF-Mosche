@@ -138,7 +138,7 @@ extern Adafruit_NeoPixel strip;
                                   SOC_GPIO_PIN_TBEAM_LED_V02 :          \
                                   (hw_info.revision == 5 ?              \
                                     SOC_GPIO_PIN_TBEAM_LED_V05 :        \
-                                    (hw_info.revision == 11 ?           \
+                                    ((hw_info.revision == 11 || hw_info.revision == 12) ?   \
                                       SOC_GPIO_PIN_TBEAM_LED_V11 :      \
                                       SOC_UNUSED_PIN))))
 
@@ -503,9 +503,13 @@ struct rst_info {
 #endif /* CONFIG_IDF_TARGET_ESP32S3 */
 #endif /* USE_OLED */
 
-/* this function should be reached via SoC_Ops instead, */
+/* these functions should be reached via SoC_Ops instead, */
 /* as done in astir13 fork */
-extern bool ESP32_onExternalPower();
+bool ESP32_onExternalPower();
+void blue_LED_on();
+void blue_LED_off();
+void blue_LED_1hz();
+void blue_LED_4hz();
 
 #endif /* PLATFORM_ESP32_H */
 

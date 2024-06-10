@@ -7,6 +7,7 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ### Latest additions:
 
+* vMB124: smaller binary, and better OLED & OTA UI, on the T-Beam
 * vMB123: supports baro sensor on the T-Echo ("Badge")
 * vMB120: supports the latest 2024 radio protocol
 * vMB114: experimental: import traffic data in GDL90 format (from ADS-B receiver)

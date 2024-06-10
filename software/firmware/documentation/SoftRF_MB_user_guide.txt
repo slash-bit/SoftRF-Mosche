@@ -3,8 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated May 19, 2024
-to fit software version MB122 based on v1.0 with some parts of v1.2
+This version last updated June 9, 2024 to fit software version MB124
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -44,9 +43,9 @@ The main branch of SoftRF offers compiled binaries for a wide variety of hardwar
 
 HISTORY
 
-FLARM, the traffic awareness and collision avoidance system which has been adopted by most glider (and many other aircraft) pilots in Europe, operates in the 866-928 MHz range (depending on what is legal in each region of the world - 470 MHz in China).  It transmits in low power (20 milliwatts), in short bursts of a few milliseconds, once or twice per second.  It was developed before the latest developments in hardware integration and modulation schemes, and is oriented towards collision avoidance, not longe-range communications.
+FLARM, the traffic awareness and collision avoidance system which has been adopted by most glider (and many other aircraft) pilots in Europe, operates in the 866-928 MHz range (depending on what is legal in each region of the world - 470 MHz in China).  It transmits in low power (20 milliwatts), in short bursts of a few milliseconds, once or twice per second.  It was developed before the latest developments in hardware integration and modulation schemes, and is oriented towards collision avoidance, not long-range communications.
 
-The Open Glider Network (OGN) has encouraged the establishment of many ground stations, mainly in Europe, that listen to signals from FLARM and other devices, and feed the data to servers on the internet.  Despite FLARM's low power, these stations can receive signals from tens of km away.
+The Open Glider Network (OGN) has encouraged the establishment of many ground stations, mainly in Europe, that listen to signals from FLARM and other devices, and feed the data to servers on the internet.  Despite FLARM's low power, these stations can receive signals from tens, even hundreds, of km away.
 
 The "Internet of Things" (IoT) community has prompted manufacturers to develop inexpensive low-power hardware that integrates significant computing power and memory, along with communications capabilities including WiFi, Bluetooth, GNSS (such as GPS), and radios that operate in the unlicensed bands in the 400-1000 MHz range, in a variety of modulation schemes.
 
@@ -82,7 +81,7 @@ for an example connection circuit.  The resistors reduce the output signal level
 You also have the option to attach (through a 100-ohm resistor) an LED, or LED-strobe-driving circuit, to pin 33 (note: moved from pin 25 to allow the voice output there).  This can be an LED on the T-Beam case, or elsewhere in the cockpit, that flashes in case of collision alarm.  Or, it can trigger a high-intensity strobe mounted in the front of the canopy, to visually warn pilots of other aircraft - with periodic flashes, and more frequent flashes in case of collision alarm.  For now, this needs a wired connection, specifically to a T-Beam.  SoftRF now also sends a special $PSRSF NMEA message whenever a flash happens (or could happen).  Utilizing that, can use a separate device ("SkyStrobe"), possibly embedded into the strobe unit, that receives data from SoftRF (or FLARM, wired or wirelessly), and controls the strobe based on that data.  See pinout diagram here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-beam_wiring.jpg
 
-Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header (or is already soldered).  That is optional.  SoftRF will run just fine without the OLED display.  But if added, the OLED shows some information about SoftRF operation.  During booting, it shows the firmware version and the selected regional band.  Later it shows the device ID, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, IP address, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".  See photo of the OLED attachement to pins 21 (SDA) and 22 (SCL):
+Often T-Beams are sold with a small "OLED" display that one needs to solder to the board using a 4-pin header (or is already soldered).  That is optional.  SoftRF will run just fine without the OLED display.  But if added, the OLED shows some information about SoftRF operation.  During booting, it first shows the firmware version and whether the user settings have been restored.  Later it shows the device ID, protocol, selected regional band, aircraft type, the number of aircraft tracked, the number of radio packets sent and received, the GNSS satellite reception status, battery voltage, IP address, and so forth.  Press the power-on button briefly to switch between 2 (or 3) pages of information.  This display is too small and dim to be useful during flight.  Be sure to *remove* the battery from the T-beam before soldering the OLED display to it.  It is not enough to turn the T-Beam "off".  See photo of the OLED attachement to pins 21 (SDA) and 22 (SCL):
   https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/T-beam_OLED_attached.jpg
 It can alternatively be connected to pins 13 (SDA) and 2 (SCL), the software automatically detects which pins are used.  (But be sure to connect pin 2 in a way that is easy to disconnect - see section on USB flashing.)  Can share the same pins as the barometric sensor.  (The AXP PMU too is using pins 21,22.) 
 
@@ -90,13 +89,15 @@ It can alternatively be connected to pins 13 (SDA) and 2 (SCL), the software aut
 One needs to arrange a case for the T-Beam board.  I've hacked the plastic shell the board arrives in into a workable case.  If one uses the OLED display, note that it is very fragile, make sure the case protects it well.  It is easiest to use a 3D-printed case.  There are many designs available online as STL files for that purpose.  Some of these files make a case that is too small, hard to use, or won't fit a gopro mount.  One modified 3D model is available here:
 https://drive.google.com/drive/folders/1hdEJ-nRVz4D_sYihwv1Re2S-p8_nsYaM?usp=sharing
 which is a bit larger and has a gopro mount on the back of the enclosure. It connects with these or anything similar: https://www.amazon.com/GoPro-Grab-Bag-Official-Mount/dp/B01GCKO9IK
-Or you can find a slightly deeper case here: https://www.dropbox.com/sh/iav5bai4vxluv5s/AADZT4aboAOxVr0VuBjDEtAAa?dl=0 that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case via treatstock.com - it allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  I'm told that the user OKSharPei 3D prints and ships very quickly.  But better yet cut out the middleman and go here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
+I have adopted a slightly deeper case, my modified version here:
+ https://github.com/moshe-braner/SoftRF/blob/master/case/T-Beam_case.zip
+that allows adding small items behind the board, e.g., a 12V to 5V converter, or a TTL to RS232 converter (or both!).  You don't have to have your own 3d printer.  You can order a case via a service that allows you to upload the files, and have people with 3d printers make and ship them to you.  The black ABS material works better than PLA.  Cut out the middleman and go directly here: https://aero3ds.com/3d-printing - very reasonable prices especially if you buy several cases at once.
 
 A better antenna than the tiny whip that is included with these boards may be helpful.  A true "dipole" antenna, which does not need a "ground plane" under the whip, may give better performance.  An antenna with a cable, mounted far forward (in the nose) or rearwards (in the wing spar area or rear fuselage) should work better than an antenna in the instrument panel area that is cluttered with wires and metal instruments.  Some dipole antennas have the cable exit the middle of the antenna on a right angle.  Others have the cable exit off one end.  For example: https://www.data-alliance.net/antenna-900mhz-3g-gsm-omni-directional-rp-sma-or-sma/ (select SMA male) or https://www.data-alliance.net/gsm-antennas-850mhz-950mhz/ (select the narrower band version).  Glue the antenna to a cockpit wall in as vertical an orientation as possible.
 
-Even when using an antenna with a cable, the T-Beam needs to be mounted with its antenna connector on top, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one gets an external GNSS antenna with a longer cable, that is possible (via the UFL connector on the board), and can improve GNSS signal reception.  
+Even when using an antenna with a cable, the T-Beam needs to be mounted with its antenna connector on top, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one gets an external GNSS antenna with a longer cable (possible via the UFL connector on the board), and that can improve GNSS signal reception (especially if that antenna includes an LNA - the T-Beam does send power for it through that UFL connector).  For example:  https://www.data-alliance.net/antenna-gps-lna-embedded-u-fl-sma/ (choose the 25x25mm version with 4-inch cable and U.FL connector).
 
-Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  Note: this device may take as long as 30 minutes to find the first GPS fix.  The stock gps antenna is passive and poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.  For example:  https://www.data-alliance.net/antenna-gps-lna-embedded-u-fl-sma/ (choose the 25x25mm version with 4-inch cable and U.FL connector).
+Note: SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  This device may take as long as 30 minutes to find the first GPS fix.  The stock gps antenna is passive and poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.
 
 The T-Echo offers a 1.5-inch e-paper display, which makes the device more self-contained.  But adjusting the settings on it is more difficult than on the T-Beam, because the T-Echo does not have WiFi connectivity.  It also transmits at lower power, and the stock antenna is nice-looking but has low performance.
 
@@ -233,7 +234,7 @@ UDP Port for NMEA output: can choose 10111 instead of the default 10110.
 
 GDL90 input: this is for importing data from an ADS-B receiver, else leave Off.  GDL90 uses UDP port 4000, while NMEA uses 10110.  Cannot use the same port for both input and output.
 
-GDL90 output: this is for a different local data transfer protocol, usually leave Off.  If used, probably should not also choose UDP as an NMEA output destination.
+GDL90 output: this is for a different local data transfer protocol, usually leave Off.  If used, probably should not also choose the same destination (e.g., UDP) as an NMEA output destination.
 
 Dump1090: yet another local data output protocol, usually leave Off.
 
@@ -400,13 +401,13 @@ Here are step by step instructions for OTA firmware update:
 
 * Click the "Update" button.
 
-* Wait until the progress indicator reaches 100%, then wait some more...
+* Wait until the web page says "UPDATE DONE, REBOOTING".  This may take a minute or more, be patient.  You can see a counter progress on the OLED display if so equipped.
 
-ATTENTION! The update progress indicator shows file transfer completion only. So be patient and wait 30+ seconds more, do not touch anything or you may get a "bricked" device.
+* While updating the blue LED on the T-Beam will flash once a second, and will stay on for several seconds when done.  If instead it starts flashing 4 times per second (before rebooting), that means the update failed.
 
-* When the update is completed the SoftRF device typically reboots automatically.  If it does not reboot itself, after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
+* Do not touch anything for another minute after it is "done", or you may get a "bricked" device.  When the update is completed the SoftRF device typically reboots automatically.  If it does not reboot itself, after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
 
-* Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.
+* Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.  And whether the user settings have been preserved, or replaced with the defaults.
 
 * Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be remembered, or all of them will need to be set again (where different from the defaults).
 

@@ -38,6 +38,7 @@ void EEPROM_store()    {}
 
 // start reading from the first byte (address 0) of the EEPROM
 
+bool default_settings_used = false;
 eeprom_t eeprom_block;
 settings_t *settings;
 
@@ -90,6 +91,8 @@ void EEPROM_setup()
       EEPROM_defaults();
       cmd = EEPROM_EXT_DEFAULTS;
     }
+    else
+      Serial.println(F("Loaded existing user settings"));
   }
 
   SoC->EEPROM_extension(cmd);
@@ -100,6 +103,8 @@ void EEPROM_setup()
 
 void EEPROM_defaults()
 {
+  default_settings_used = true;
+
   eeprom_block.field.magic    = SOFTRF_EEPROM_MAGIC;
   eeprom_block.field.version  = SOFTRF_EEPROM_VERSION;
   eeprom_block.field.version2 = SOFTRF_EEPROM_VERSION;

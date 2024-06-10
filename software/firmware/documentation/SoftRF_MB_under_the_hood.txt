@@ -3,8 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated May 18, 2024
-to fit software version MB122 based on v1.0 with some parts of v1.2
+This version last updated June 9, 2024 to fit software version MB124
 
 
 PART 1: USER GUIDE - see separate document
@@ -201,6 +200,10 @@ Other changes in version 120
 Added code in arduino/basicmac/src/lmic/radio/sx127x.c to clear the FIFO before transmission.  This prevents the possible re-transmission of received packets, which was a bug in SoftRF for a long while.  Thanks Alessandro Faillace and Nick Bonniere for the work on this.
 
 Added a check for received data in the main loop just *before* transmission.  This prevents loss of received data upon the clearing of the radio chip's FIFO for transmission.
+
+Efforts to reduce the binary size
+
+Since the flash space on the T-Beam is almost full, as is RAM used, before adding new features to SoftRF it would help if the memory space used is reduced.  In version 124 the PMU chips (AXP192 and AXP2101) in the T-Beam (versions 1.1 and 1.2) are handled by the same library, XpowersLib.  Also, the "jquery" script (used to show percent progress during OTA firmware update) was removed.  These changes reduced the binary size by 60 KB.
 
 
 KNOWN ISSUES

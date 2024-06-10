@@ -39,9 +39,16 @@
 #include <rom/spi_flash.h>
 #include <soc/adc_channel.h>
 #include <flashchips.h>
-#include <axp20x.h>
-#define  XPOWERS_CHIP_AXP2102
-#include <XPowersLib.h>
+
+//#include <axp20x.h>
+//#define  XPOWERS_CHIP_AXP2102
+//#include <XPowersLib.h>
+// consolidated to a single AXP library, chip choice at runtime,
+//    based on XPowersLibInterface_Example
+#include "XPowersLibInterface.hpp"
+#include "XPowersAXP2101.tpp"
+#include "XPowersAXP192.tpp"
+
 #include <pcf8563.h>
 
 #include "../system/SoC.h"
@@ -139,8 +146,9 @@ void TFT_backlight_on()
 }
 #endif /* USE_TFT */
 
-AXP20X_Class axp_xxx;
-XPowersPMU   axp_2xxx;
+//AXP20X_Class axp_xxx;
+//XPowersPMU   axp_2xxx;
+XPowersLibInterface *PMU = NULL;
 
 uint32_t BlueLEDTimeMarker = 5000;
 
@@ -337,9 +345,9 @@ static uint32_t ESP32_getFlashId()
 #endif
 
 int Wire_Trans_rval;
-// int axp_begin_rval;
 
 gpio_num_t middle_button_pin = (gpio_num_t) SOC_UNUSED_PIN;
+
 
 static void print_dest(int dest)
 {
@@ -354,6 +362,42 @@ static void print_dest(int dest)
     case DEST_NONE       :
     default              :  Serial.println(F("NULL"));      break;
   }
+}
+
+bool has_axp = false;
+bool has_axp202 = false;
+bool has_axp192 = false;
+bool has_axp2101 = false;
+
+static bool PMU_probe() {
+
+  if (!PMU) {
+      PMU = new XPowersAXP2101(Wire1);
+      if (PMU->init()) {
+          Serial.println("AXP2101 PMU init succeeded");
+          has_axp2101 = true;
+          return true;
+      }
+      Serial.println("Failed to find AXP2101 PMU");
+      delete PMU;
+      PMU = NULL;
+  }
+
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if (!PMU) {
+        PMU = new XPowersAXP192(Wire1);
+        if (PMU->init()) {
+            Serial.println("AXP192 PMU init succeeded");
+            has_axp192 = true;
+            return true;
+        }
+        Serial.println("Failed to find AXP192 PMU");
+        delete PMU;
+        PMU = NULL;
+    }
+  }
+
+  return false;
 }
 
 static void ESP32_setup()
@@ -442,6 +486,8 @@ static void ESP32_setup()
       break;
     case MakeFlashId(WINBOND_NEX_ID, WINBOND_NEX_W25Q128_V):
       hw_info.model = SOFTRF_MODEL_SKYWATCH;
+      esp32_board = ESP32_TTGO_T_WATCH;
+      //Serial.println("Warning: T-watch AXP202 not supported");
       break;
 #if defined(CONFIG_IDF_TARGET_ESP32)
     case MakeFlashId(WINBOND_NEX_ID, WINBOND_NEX_W25Q32_V):
@@ -484,42 +530,7 @@ static void ESP32_setup()
   }
 #endif
 
-  if (hw_info.model == SOFTRF_MODEL_SKYWATCH) {
-    esp32_board = ESP32_TTGO_T_WATCH;
-    hw_info.rtc = RTC_PCF8563;
-    hw_info.imu = ACC_BMA423;
-
-    Wire1.begin(SOC_GPIO_PIN_TWATCH_SEN_SDA , SOC_GPIO_PIN_TWATCH_SEN_SCL);
-    Wire1.beginTransmission(AXP202_SLAVE_ADDRESS);
-    bool has_axp202 = (Wire1.endTransmission() == 0);
-    if (has_axp202) {
-
-      hw_info.pmu = PMU_AXP202;
-
-      axp_xxx.begin(Wire1, AXP202_SLAVE_ADDRESS);
-
-      axp_xxx.enableIRQ(AXP202_ALL_IRQ, AXP202_OFF);
-      axp_xxx.adc1Enable(0xFF, AXP202_OFF);
-
-      axp_xxx.setChgLEDMode(AXP20X_LED_LOW_LEVEL);
-
-      axp_xxx.setPowerOutPut(AXP202_LDO2, AXP202_ON); // BL
-      axp_xxx.setPowerOutPut(AXP202_LDO3, AXP202_ON); // S76G (MCU + LoRa)
-      axp_xxx.setLDO4Voltage(AXP202_LDO4_1800MV);
-      axp_xxx.setPowerOutPut(AXP202_LDO4, AXP202_ON); // S76G (Sony GNSS)
-
-      pinMode(SOC_GPIO_PIN_TWATCH_PMU_IRQ, INPUT_PULLUP);
-
-      attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_TWATCH_PMU_IRQ),
-                      ESP32_PMU_Interrupt_handler, FALLING);
-
-      axp_xxx.adc1Enable(AXP202_BATT_VOL_ADC1, AXP202_ON);
-      axp_xxx.enableIRQ(AXP202_PEK_LONGPRESS_IRQ | AXP202_PEK_SHORTPRESS_IRQ, true);
-      axp_xxx.clearIRQ();
-    } else {
-      WIRE_FINI(Wire1);
-    }
-  } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     esp32_board = ESP32_TTGO_T_BEAM;
 
     // Start up both Wires here, on fixed GPIO pins
@@ -528,95 +539,114 @@ static void ESP32_setup()
     Wire.begin (SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
     Wire1.begin(TTGO_V2_OLED_PIN_SDA  , TTGO_V2_OLED_PIN_SCL);      // GPIO 21,22
 
-    Wire1.beginTransmission(AXP192_SLAVE_ADDRESS);
-    Wire_Trans_rval = Wire1.endTransmission();
-
-    bool has_axp = (Wire_Trans_rval == 0);
-    bool has_axp192 = false;
-    if (has_axp)
-      has_axp192 = (axp_xxx.begin(Wire1, AXP192_SLAVE_ADDRESS) == AXP_PASS);
+    has_axp = PMU_probe();
 
     if (has_axp192) {
 
-      hw_info.revision = 8;
-      hw_info.pmu = PMU_AXP192;
+        hw_info.revision = 8;
+        hw_info.pmu = PMU_AXP192;
 
-      axp_xxx.setChgLEDMode(AXP20X_LED_LOW_LEVEL);
+        PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 
-      axp_xxx.setPowerOutPut(AXP192_LDO2,  AXP202_ON);
-      axp_xxx.setPowerOutPut(AXP192_LDO3,  AXP202_ON);
-      axp_xxx.setPowerOutPut(AXP192_DCDC1, AXP202_ON);
-      axp_xxx.setPowerOutPut(AXP192_DCDC2, AXP202_ON); // NC
-      axp_xxx.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
+        PMU->setPowerChannelVoltage(XPOWERS_LDO2, 3300);  // LoRa
+        PMU->enablePowerOutput(XPOWERS_LDO2);
 
-      axp_xxx.setDCDC1Voltage(3300); //       AXP192 power-on value: 3300
-      axp_xxx.setLDO2Voltage (3300); // LoRa, AXP192 power-on value: 3300
-      axp_xxx.setLDO3Voltage (3000); // GPS,  AXP192 power-on value: 2800
+        PMU->setPowerChannelVoltage(XPOWERS_DCDC1, 3300); // OLED
+        PMU->enablePowerOutput(XPOWERS_DCDC1);
 
-      pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT /* INPUT_PULLUP */);     // GPIO pin 35
+        PMU->setPowerChannelVoltage(XPOWERS_LDO3, 3300);  // GPS
+        PMU->enablePowerOutput(XPOWERS_LDO3);
 
-      attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ),
-                      ESP32_PMU_Interrupt_handler, FALLING);
+        //protected oled power source
+        PMU->setProtectedChannel(XPOWERS_DCDC1);
+        //protected esp32 power source
+        PMU->setProtectedChannel(XPOWERS_DCDC3);
 
-      axp_xxx.enableIRQ(AXP202_PEK_LONGPRESS_IRQ | AXP202_PEK_SHORTPRESS_IRQ, true);
-      axp_xxx.clearIRQ();
-    } else {
-      bool has_axp2101 = has_axp && axp_2xxx.begin(Wire1,
-                                                   AXP2101_SLAVE_ADDRESS,
-                                                   TTGO_V2_OLED_PIN_SDA,
-                                                   TTGO_V2_OLED_PIN_SCL);
-      if (has_axp2101) {
+        //disable not use channel
+        PMU->disablePowerOutput(XPOWERS_DCDC2);
+
+        PMU->setChargerConstantCurr(XPOWERS_AXP192_CHG_CUR_550MA);
+        PMU->setChargeTargetVoltage(XPOWERS_AXP192_CHG_VOL_4V2);
+
+        PMU->disableTSPinMeasure();
+        PMU->enableBattDetection();
+        PMU->enableVbusVoltageMeasure();
+        PMU->enableBattVoltageMeasure();
+        PMU->enableSystemVoltageMeasure();
+
+        PMU->setSysPowerDownVoltage(2800);
+
+        //PMU->enablePowerOutput(XPOWERS_EXTEN);
+
+        pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT /* INPUT_PULLUP */);     // GPIO pin 35
+        attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ),
+                        ESP32_PMU_Interrupt_handler, FALLING);
+        PMU->disableIRQ(XPOWERS_AXP192_ALL_IRQ);
+        PMU->enableIRQ(XPOWERS_AXP192_PKEY_LONG_IRQ |
+                       XPOWERS_AXP192_PKEY_SHORT_IRQ
+                      );
+        PMU->clearIrqStatus();
+
+    } else if (has_axp2101) {
 
         // Set the minimum common working voltage of the PMU VBUS input,
         // below this value will turn off the PMU
-        axp_2xxx.setVbusVoltageLimit(XPOWERS_AXP2101_VBUS_VOL_LIM_4V36);
+        //PMU->setVbusVoltageLimit(XPOWERS_AXP2101_VBUS_VOL_LIM_4V36);
 
         // Set the maximum current of the PMU VBUS input,
         // higher than this value will turn off the PMU
-        axp_2xxx.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_1500MA);
+        PMU->setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_1500MA);
 
         // DCDC1 1500~3400mV, IMAX=2A
-        axp_2xxx.setDC1Voltage(3300); // ESP32,  AXP2101 power-on value: 3300
+        //PMU->setDC1Voltage(3300); // ESP32,  AXP2101 power-on value: 3300
+        PMU->setPowerChannelVoltage(XPOWERS_DCDC1, 3300);
 
         // ALDO 500~3500mV, 100mV/step, IMAX=300mA
-        axp_2xxx.setButtonBatteryChargeVoltage(3100); // GNSS battery
+        //PMU->setButtonBatteryChargeVoltage(3100); // GNSS battery
 
-        axp_2xxx.setALDO2Voltage(3300); // LoRa, AXP2101 power-on value: 2800
-        axp_2xxx.setALDO3Voltage(3300); // GPS,  AXP2101 power-on value: 3300
+        //PMU->setALDO2Voltage(3300); // LoRa, AXP2101 power-on value: 2800
+        //PMU->setALDO3Voltage(3300); // GPS,  AXP2101 power-on value: 3300
+        PMU->setPowerChannelVoltage(XPOWERS_LDO2, 3300);
+        PMU->setPowerChannelVoltage(XPOWERS_LDO3, 3300);
 
-        // axp_2xxx.enableDC1();
-        axp_2xxx.enableButtonBatteryCharge();
+        // PMU->enableDC1();
+        //PMU->enableButtonBatteryCharge();
 
-        axp_2xxx.enableALDO2();
-        axp_2xxx.enableALDO3();
+        //PMU->enableALDO2();
+        //PMU->enableALDO3();
+        PMU->enablePowerOutput(XPOWERS_LDO2);
+        PMU->enablePowerOutput(XPOWERS_LDO3);
 
-        axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_ON);
+        PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 
-        pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT /* INPUT_PULLUP */);
-
+        pinMode(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ, INPUT_PULLUP);
         attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_TBEAM_V08_PMU_IRQ),
                         ESP32_PMU_Interrupt_handler, FALLING);
+        PMU->disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
 
-        axp_2xxx.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
-        axp_2xxx.clearIrqStatus();
+        PMU->setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+        PMU->disableTSPinMeasure();
+        PMU->enableBattDetection();
+        PMU->enableVbusVoltageMeasure();
+        PMU->enableBattVoltageMeasure();
+        PMU->enableSystemVoltageMeasure();
 
-        //These lines were added to lyusupov's version in Sep 2023:
-        axp_2xxx.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
-        axp_2xxx.disableTSPinMeasure();
-        axp_2xxx.enableBattVoltageMeasure();
+        PMU->setSysPowerDownVoltage(2800);
 
-        axp_2xxx.enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ |
-                           XPOWERS_AXP2101_PKEY_SHORT_IRQ);
+        PMU->enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ | XPOWERS_AXP2101_PKEY_SHORT_IRQ);
+        PMU->clearIrqStatus();
 
         hw_info.revision = 12;
         hw_info.pmu = PMU_AXP2101;
-      } else {
-        //WIRE_FINI(Wire1);
+
+    } else {
+
+        // no PMU
         hw_info.revision = 2;
         if (RF_SX12XX_RST_is_connected)
           hw_info.revision = 5;
-      }
     }
+
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
 
@@ -650,10 +680,9 @@ static void ESP32_setup()
              esp32_board   == ESP32_S3_DEVKIT) {
     Wire1.begin(SOC_GPIO_PIN_S3_PMU_SDA , SOC_GPIO_PIN_S3_PMU_SCL);
     Wire1.beginTransmission(AXP2101_SLAVE_ADDRESS);
-    bool has_axp2101 = (Wire1.endTransmission() == 0) &&
-                       axp_2xxx.begin(Wire1, AXP2101_SLAVE_ADDRESS,
-                                      SOC_GPIO_PIN_S3_PMU_SDA,
-                                      SOC_GPIO_PIN_S3_PMU_SCL);
+
+    has_axp = PMU_probe();
+
     if (has_axp2101) {
       esp32_board   = ESP32_TTGO_T_BEAM_SUPREME;
       hw_info.model = SOFTRF_MODEL_PRIME_MK3; /* allow psramFound() to fail */
@@ -664,51 +693,55 @@ static void ESP32_setup()
 
       // Set the minimum common working voltage of the PMU VBUS input,
       // below this value will turn off the PMU
-      axp_2xxx.setVbusVoltageLimit(XPOWERS_AXP2101_VBUS_VOL_LIM_4V36);
+      PMU->setVbusVoltageLimit(XPOWERS_AXP2101_VBUS_VOL_LIM_4V36);
 
       // Set the maximum current of the PMU VBUS input,
       // higher than this value will turn off the PMU
-      axp_2xxx.setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_1500MA);
+      PMU->setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_1500MA);
 
       // DCDC1 1500~3400mV, IMAX=2A
-      axp_2xxx.setDC1Voltage(3300);
+      PMU->setDC1Voltage(3300);
 
       // DCDC5 1400~3700mV, 100mV/step, 24 steps, IMAX=1A
-      axp_2xxx.setDC5Voltage(3700);
+      PMU->setDC5Voltage(3700);
 
       // ALDO 500~3500V, 100mV/step, IMAX=300mA
-      axp_2xxx.setALDO3Voltage(3300); // LoRa, AXP2101 power-on value: 3300
-      axp_2xxx.setALDO4Voltage(3300); // GNSS, AXP2101 power-on value: 2900
+      PMU->setALDO3Voltage(3300); // LoRa, AXP2101 power-on value: 3300
+      PMU->setALDO4Voltage(3300); // GNSS, AXP2101 power-on value: 2900
 
-      axp_2xxx.setALDO2Voltage(3300); // RTC
-      axp_2xxx.setALDO1Voltage(3300); // sensors, OLED
-      axp_2xxx.setBLDO1Voltage(3300); // uSD
+      PMU->setALDO2Voltage(3300); // RTC
+      PMU->setALDO1Voltage(3300); // sensors, OLED
+      PMU->setBLDO1Voltage(3300); // uSD
 
-      // axp_2xxx.enableDC1();
-      axp_2xxx.enableDC5();
+      // PMU->enableDC1();
+      PMU->enableDC5();
 
-      axp_2xxx.enableALDO3();
-      axp_2xxx.enableALDO4();
+      PMU->enableALDO3();
+      PMU->enableALDO4();
 
-      axp_2xxx.enableALDO2();
-      axp_2xxx.enableALDO1();
-      axp_2xxx.enableBLDO1();
+      PMU->enableALDO2();
+      PMU->enableALDO1();
+      PMU->enableBLDO1();
 
-      axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_ON);
+      PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 
       pinMode(SOC_GPIO_PIN_S3_PMU_IRQ, INPUT /* INPUT_PULLUP */);
 
       attachInterrupt(digitalPinToInterrupt(SOC_GPIO_PIN_S3_PMU_IRQ),
                       ESP32_PMU_Interrupt_handler, FALLING);
 
-      axp_2xxx.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
-      axp_2xxx.clearIrqStatus();
+      PMU->disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
+      PMU->clearIrqStatus();
 
-      axp_2xxx.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
-      axp_2xxx.disableTSPinMeasure();
-      axp_2xxx.enableBattVoltageMeasure();
+      PMU->setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_500MA);
+      PMU->disableTSPinMeasure();
 
-      axp_2xxx.enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ |
+      PMU->enableBattDetection();
+      PMU->enableVbusVoltageMeasure();
+      PMU->enableBattVoltageMeasure();
+      PMU->enableSystemVoltageMeasure();
+
+      PMU->enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ |
                          XPOWERS_AXP2101_PKEY_SHORT_IRQ);
 
       /* Wake up Quectel L76K GNSS */
@@ -1174,6 +1207,26 @@ static void ESP32_post_init()
   }
 }
 
+void blue_LED_on()
+{
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
+}
+
+void blue_LED_off()
+{
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_OFF);
+}
+
+void blue_LED_1hz()
+{
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
+}
+
+void blue_LED_4hz()
+{
+    PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_4HZ);
+}
+
 static void ESP32_loop()
 {
   bool is_irq = false;
@@ -1185,35 +1238,25 @@ static void ESP32_loop()
   switch (hw_info.pmu)
   {
   case PMU_AXP192:
-  case PMU_AXP202:
-
+  case PMU_AXP2101:
     portENTER_CRITICAL_ISR(&PMU_mutex);
     is_irq = PMU_Irq;
     portEXIT_CRITICAL_ISR(&PMU_mutex);
 
     if (is_irq) {
 
-      if (axp_xxx.readIRQ() == AXP_PASS) {
+      PMU->getIrqStatus();
 
-        if (axp_xxx.isPEKLongtPressIRQ()) {
-          down = true;
-#if 0
-          Serial.println(F("Long press IRQ"));
-          Serial.flush();
-#endif
-        }
-        if (axp_xxx.isPEKShortPressIRQ()) {
-#if 0
-          Serial.println(F("Short press IRQ"));
-          Serial.flush();
-#endif
-#if defined(USE_OLED)
-          OLED_Next_Page();
-#endif
-        }
-
-        axp_xxx.clearIRQ();
+      if (PMU->isPekeyLongPressIrq()) {
+        down = true;
       }
+      if (PMU->isPekeyShortPressIrq()) {
+#if defined(USE_OLED)
+        OLED_Next_Page();
+#endif
+      }
+
+      PMU->clearIrqStatus();
 
       portENTER_CRITICAL_ISR(&PMU_mutex);
       PMU_Irq = false;
@@ -1229,72 +1272,15 @@ static void ESP32_loop()
 #if 0
     if (isTimeToBattery()) {
       if (Battery_voltage() > Battery_threshold()) {
-        axp_xxx.setChgLEDMode(AXP20X_LED_LOW_LEVEL);
+        PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
       } else {
-        axp_xxx.setChgLEDMode(AXP20X_LED_BLINK_1HZ);
+        PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
       }
     }
 #else
     // new functions for blue LED:
     //   fast blink if waiting for GNSS
     //   and turn off if not transmitting
-    if (millis() > BlueLEDTimeMarker) {
-      if (! isValidFix()) {
-        blue_LED_new_state = AXP20X_LED_BLINK_4HZ;
-      } else if (settings->txpower == RF_TX_POWER_OFF) {
-        blue_LED_new_state = AXP20X_LED_OFF;
-      } else if (Battery_voltage() < Battery_threshold()) {
-        blue_LED_new_state = AXP20X_LED_BLINK_1HZ;
-      } else {
-        blue_LED_new_state = AXP20X_LED_LOW_LEVEL;
-      }
-      if (blue_LED_new_state != blue_LED_old_state) {
-        axp_xxx.setChgLEDMode((axp_chgled_mode_t) blue_LED_new_state);
-        blue_LED_old_state = blue_LED_new_state;
-      }
-      BlueLEDTimeMarker = millis() + 1000;
-    }
-#endif
-    break;
-
-  case PMU_AXP2101:
-    portENTER_CRITICAL_ISR(&PMU_mutex);
-    is_irq = PMU_Irq;
-    portEXIT_CRITICAL_ISR(&PMU_mutex);
-
-    if (is_irq) {
-
-      axp_2xxx.getIrqStatus();
-
-      if (axp_2xxx.isPekeyLongPressIrq()) {
-        down = true;
-      }
-      if (axp_2xxx.isPekeyShortPressIrq()) {
-#if defined(USE_OLED)
-        OLED_Next_Page();
-#endif
-      }
-
-      axp_2xxx.clearIrqStatus();
-
-      portENTER_CRITICAL_ISR(&PMU_mutex);
-      PMU_Irq = false;
-      portEXIT_CRITICAL_ISR(&PMU_mutex);
-
-      if (down) {
-        shutdown(SOFTRF_SHUTDOWN_BUTTON);
-      }
-    }
-
-#if 0
-    if (isTimeToBattery()) {
-      if (Battery_voltage() > Battery_threshold()) {
-        axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_ON);
-      } else {
-        axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
-      }
-    }
-#else
     if (millis() > BlueLEDTimeMarker) {
       if (! isValidFix()) {
         blue_LED_new_state = XPOWERS_CHG_LED_BLINK_4HZ;
@@ -1306,7 +1292,7 @@ static void ESP32_loop()
         blue_LED_new_state = XPOWERS_CHG_LED_ON;
       }
       if (blue_LED_new_state != blue_LED_old_state) {
-        axp_2xxx.setChargingLedMode((xpowers_chg_led_mode_t) blue_LED_new_state);
+        PMU->setChargingLedMode((xpowers_chg_led_mode_t) blue_LED_new_state);
         blue_LED_old_state = blue_LED_new_state;
       }
       BlueLEDTimeMarker = millis() + 1000;
@@ -1346,26 +1332,18 @@ static void ESP32_fini(int reason)
   esp_bt_controller_disable();
 #endif /* CONFIG_IDF_TARGET_ESP32S2 */
 
-  if (hw_info.model == SOFTRF_MODEL_SKYWATCH) {
-
-    axp_xxx.setChgLEDMode(AXP20X_LED_OFF);
-
-    axp_xxx.setPowerOutPut(AXP202_LDO2, AXP202_OFF); // BL
-    axp_xxx.setPowerOutPut(AXP202_LDO4, AXP202_OFF); // S76G (Sony GNSS)
-    axp_xxx.setPowerOutPut(AXP202_LDO3, AXP202_OFF); // S76G (MCU + LoRa)
-
-    delay(20);
-
-    esp_sleep_enable_ext1_wakeup(1ULL << SOC_GPIO_PIN_TWATCH_PMU_IRQ,
-                                 ESP_EXT1_WAKEUP_ALL_LOW);
-
-  } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
              hw_info.model == SOFTRF_MODEL_PRIME_MK3) {
 
     switch (hw_info.pmu)
     {
     case PMU_AXP192:
-      axp_xxx.setChgLEDMode(AXP20X_LED_OFF);
+      //PMU->setChargingLedMode(XPOWERS_CHG_LED_OFF);
+      PMU->setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
+             // The charging indicator is controlled by the charger
+             //  - will this work on the AXP192?
+
+      //PMU->disableButtonBatteryCharge();
 
 #if PMK2_SLEEP_MODE == 2
       { int ret;
@@ -1385,18 +1363,20 @@ static void ESP32_fini(int reason)
 
 #endif /* PMK2_SLEEP_MODE */
 
-      axp_xxx.setPowerOutPut(AXP192_LDO2,  AXP202_OFF);
-      axp_xxx.setPowerOutPut(AXP192_LDO3,  AXP202_OFF);
-      axp_xxx.setPowerOutPut(AXP192_DCDC2, AXP202_OFF);
+      //PMU->disableALDO2();
+      //PMU->disableALDO3();
+      PMU->disablePowerOutput(XPOWERS_LDO2);
+      PMU->disablePowerOutput(XPOWERS_LDO3);
+      PMU->disablePowerOutput(XPOWERS_DCDC2);
 
       /* workaround against AXP I2C access blocking by 'noname' OLED */
 #if defined(USE_OLED)
       if (u8x8 == NULL)
 #endif /* USE_OLED */
       {
-        axp_xxx.setPowerOutPut(AXP192_DCDC1, AXP202_OFF);
+          PMU->disablePowerOutput(XPOWERS_DCDC1);
       }
-      axp_xxx.setPowerOutPut(AXP192_EXTEN, AXP202_OFF);
+      //PMU->disablePowerOutput(XPOWERS_EXTEN);
 
       delay(20);
 
@@ -1422,19 +1402,21 @@ static void ESP32_fini(int reason)
        * - press and hold PWR button for 1-2 seconds then release, or
        * - cycle micro-USB power
        */
-      axp_xxx.shutdown();
+      PMU->shutdown();
 #endif /* PMK2_SLEEP_MODE */
       break;
 
     case PMU_AXP2101:
-      //axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_OFF);
-      axp_2xxx.setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
+      //PMU->setChargingLedMode(XPOWERS_CHG_LED_OFF);
+      PMU->setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
              // The charging indicator is controlled by the charger
 
-      axp_2xxx.disableButtonBatteryCharge();
+      //PMU->disableButtonBatteryCharge();
 
-      axp_2xxx.disableALDO2();
-      axp_2xxx.disableALDO3();
+      //PMU->disableALDO2();
+      //PMU->disableALDO3();
+      PMU->disablePowerOutput(XPOWERS_LDO2);
+      PMU->disablePowerOutput(XPOWERS_LDO3);
 
       delay(20);
 
@@ -1445,7 +1427,7 @@ static void ESP32_fini(int reason)
        * - press and hold PWR button for 1-2 seconds then release, or
        * - cycle micro-USB power
        */
-      axp_2xxx.shutdown();
+      PMU->shutdown();
       break;
 
     case PMU_NONE:
@@ -2010,9 +1992,7 @@ static void ESP32_swSer_begin(unsigned long baud)
 
   } else {
     if (esp32_board == ESP32_TTGO_T_WATCH) {
-      Serial.println(F("INFO: TTGO T-Watch is detected."));
-      Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
-                           SOC_GPIO_PIN_TWATCH_RX, SOC_GPIO_PIN_TWATCH_TX);
+      Serial.println(F("Warning: TTGO T-Watch detected - not supported."));
     } else if (esp32_board == ESP32_TTGO_V2_OLED) {
       /* 'Mini' (TTGO T3 + GNSS) */
       Serial.print(F("INFO: TTGO T3 rev. "));
@@ -2114,58 +2094,27 @@ static byte ESP32_Display_setup()
 
       uint8_t shift_y = (hw_info.model == SOFTRF_MODEL_PRIME_MK3 ? 1 : 0);
 
-      u8x8->draw2x2String( 2, 2 - shift_y, SoftRF_text1);
-
       if (shift_y) {
+        u8x8->draw2x2String( 2, 2 - shift_y, SoftRF_text1);
         u8x8->drawString   ( 6, 3, SoftRF_text2);
         u8x8->draw2x2String( 2, 4, SoftRF_text3);
+        u8x8->drawString   ( 3, 6 + shift_y, SOFTRF_FIRMWARE_VERSION);
+        u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
+
+      } else {
+        u8x8->draw2x2String( 2, 1, SoftRF_text1);
+        u8x8->drawString( 1, 4, "ver");
+        u8x8->draw2x2String( 5, 4, SOFTRF_FIRMWARE_VERSION);
+        u8x8->draw2x2String( 1, 6, default_settings_used? DFLT_text : USER_text);
+        u8x8->drawString( 10, 7, "stgs");
+
       }
 
-      u8x8->drawString   ( 3, 6 + shift_y, SOFTRF_FIRMWARE_VERSION);
-      u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
     }
 
     SoC->ADB_ops && SoC->ADB_ops->setup();
 #endif /* USE_OLED */
 
-  } else {  /* ESP32_TTGO_T_WATCH */
-
-#if defined(USE_TFT)
-    tft = new TFT_eSPI(LV_HOR_RES, LV_VER_RES);
-    tft->init();
-#if LV_HOR_RES != 135
-    tft->setRotation(0);
-#else
-    tft->setRotation(1);
-#endif /* LV_HOR_RES */
-    tft->fillScreen(TFT_NAVY);
-
-    int bl_pin = (esp32_board == ESP32_S2_T8_V1_1) ?
-                 SOC_GPIO_PIN_T8_S2_TFT_BL : SOC_GPIO_PIN_TWATCH_TFT_BL;
-
-    ledcAttachPin(bl_pin, BACKLIGHT_CHANNEL);
-    ledcSetup(BACKLIGHT_CHANNEL, 12000, 8);
-
-    tft->setTextFont(4);
-    tft->setTextSize(2);
-    tft->setTextColor(TFT_WHITE, TFT_NAVY);
-
-    uint16_t tbw = tft->textWidth(SoftRF_text1);
-    uint16_t tbh = tft->fontHeight();
-    tft->setCursor((tft->width() - tbw)/2, (tft->height() - tbh)/2);
-    tft->println(SoftRF_text1);
-
-    for (int level = 0; level < 255; level += 25) {
-      TFT_backlight_adjust(level);
-      delay(100);
-    }
-
-#if LV_HOR_RES != 135
-    rval = DISPLAY_TFT_TTGO_240;
-#else
-    rval = DISPLAY_TFT_TTGO_135;
-#endif /* LV_HOR_RES */
-#endif /* USE_TFT */
   }
 
   return rval;
@@ -2514,15 +2463,14 @@ bool ESP32_onExternalPower() {
     switch (hw_info.pmu)
     {
     case PMU_AXP192:
-    //case PMU_AXP202:
-        if (axp_xxx.getVbusVoltage() > 4000) {
+        if (PMU->getVbusVoltage() > 4000) {
           return true;
         } else {
           return false;
         }
         break;
     case PMU_AXP2101:
-        if (axp_2xxx.getVbusVoltage() > 4000) {
+        if (PMU->getVbusVoltage() > 4000) {
           return true;
         } else {
           return false;
@@ -2610,15 +2558,9 @@ static float ESP32_Battery_param(uint8_t param)
     switch (hw_info.pmu)
     {
     case PMU_AXP192:
-    case PMU_AXP202:
-      if (axp_xxx.isBatteryConnect()) {
-        voltage = axp_xxx.getBattVoltage();
-      }
-      break;
-
     case PMU_AXP2101:
-      if (axp_2xxx.isBatteryConnect()) {
-        voltage = axp_2xxx.getBattVoltage();
+      if (PMU->isBatteryConnect()) {
+        voltage = PMU->getBattVoltage();
       }
       break;
 
@@ -2699,30 +2641,8 @@ static bool ESP32_Baro_setup()
         Serial.println(F("BMP found"));
         return true;
     }
-    // not found
-    //WIRE_FINI(Wire);
 
-//    if (hw_info.revision == 2)
-//      return false;
-
-#if 0  // !defined(ENABLE_AHRS)
-    /* Try out OLED I2C bus */
-    Wire.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);   // GPIO 21,22
-    if (/* hw_info.model == SOFTRF_MODEL_PRIME_MK2 && */ hw_info.revision >= 8) {
-      Wire1 = Wire;      // WIRE_FINI does not work with old libraries
-    }
-    if (!Baro_probe()) {
-      if (!(/*hw_info.model == SOFTRF_MODEL_PRIME_MK2 && */ hw_info.revision >= 8)) {
-        WIRE_FINI(Wire);
-      }
-      return false;
-    }
-
-    GPIO_21_22_are_busy = true;   // will use already-started Wire1 for OLED
-    Serial.println(F("BMP found on pins 21,22"));
-#else
     return false;
-#endif
   }
 
   return true;

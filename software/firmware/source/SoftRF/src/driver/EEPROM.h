@@ -116,8 +116,7 @@ typedef struct Settings {
     uint8_t  txpower:2;
     uint8_t  volume:2;
     uint8_t  aircraft_type;
-    //uint8_t  led_num;    // not used
-    uint8_t  resvd1;
+    uint8_t  led_num;
 
     bool     nmea_g:1;
     bool     nmea_p:1;
@@ -205,6 +204,7 @@ void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 void show_settings_serial(void);
+extern bool default_settings_used;
 extern settings_t *settings;
 extern uint32_t baudrates[];
 

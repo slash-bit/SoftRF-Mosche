@@ -24,6 +24,7 @@
 
 #include "OLED.h"
 
+#include "EEPROM.h"
 #include "RF.h"
 #include "LED.h"
 #include "GNSS.h"
@@ -79,6 +80,8 @@ static uint32_t prev_sats_counter   = (uint32_t) -1;
 static uint32_t prev_uptime_minutes = (uint32_t) -1;
 static int32_t  prev_voltage        = (uint32_t) -1;
 static int8_t   prev_fix            = (uint8_t)  -1;
+static int8_t   prev_band           = -1;
+static int8_t   prev_type           = -1;
 
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
 static int32_t  prev_altitude       = (int32_t)   -10000;
@@ -103,6 +106,26 @@ const char *ISO3166_CC[] = {
   [RF_BAND_KR]   = "KR"
 };
 
+const char *aircraft_type_lbl[] = {
+  [AIRCRAFT_TYPE_UNKNOWN]    = "--",
+  [AIRCRAFT_TYPE_GLIDER]     = "GL",
+  [AIRCRAFT_TYPE_TOWPLANE]   = "TP",
+  [AIRCRAFT_TYPE_HELICOPTER] = "HC",
+  [AIRCRAFT_TYPE_PARACHUTE]  = "PC",
+  [AIRCRAFT_TYPE_DROPPLANE]  = "DP",
+  [AIRCRAFT_TYPE_HANGGLIDER] = "HG",
+  [AIRCRAFT_TYPE_PARAGLIDER] = "PG",
+  [AIRCRAFT_TYPE_POWERED]    = "PP",
+  [AIRCRAFT_TYPE_JET]        = "JT",
+  [AIRCRAFT_TYPE_UFO]        = "--",
+  [AIRCRAFT_TYPE_BALLOON]    = "BL",
+  [AIRCRAFT_TYPE_ZEPPELIN]   = "ZP",
+  [AIRCRAFT_TYPE_UAV]        = "DR",
+  [AIRCRAFT_TYPE_RESERVED]   = "--",
+  [AIRCRAFT_TYPE_STATIC]     = "ST",
+  [AIRCRAFT_TYPE_WINCH]      = "WI"
+};
+
 const char SoftRF_text1[]  = "SoftRF";
 const char SoftRF_text2[]  = "and";
 const char SoftRF_text3[]  = "LilyGO";
@@ -113,8 +136,11 @@ const char TX_text[]       = "TX";
 const char ACFTS_text[]    = "ACFTS";
 const char SATS_text[]     = "SATS";
 const char FIX_text[]      = "FIX";
-const char UPTIME_text[]   = "UPTIME";
+const char TYP_text[]      = "TYP";
+const char BND_text[]      = "BND";
 const char BAT_text[]      = "BAT";
+const char DFLT_text[]     = "DFLT";
+const char USER_text[]     = "USER";
 
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
 const char ALT_text[]      = "ALT M";
@@ -205,15 +231,22 @@ byte OLED_setup() {
     default:
       uint8_t shift_y = (hw_info.model == SOFTRF_MODEL_DONGLE ? 1 : 0);
 
-      u8x8->draw2x2String( 2, 2 - shift_y, SoftRF_text1);
-
       if (shift_y) {
+        u8x8->draw2x2String( 2, 2 - shift_y, SoftRF_text1);
         u8x8->drawString   ( 6, 3, SoftRF_text2);
         u8x8->draw2x2String( 2, 4, SoftRF_text3);
-      }
+        u8x8->drawString   ( 2, 6 + shift_y, SOFTRF_FIRMWARE_VERSION);
+        //u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
+        u8x8->drawString   (10, 6 + shift_y, default_settings_used? DFLT_text : USER_text);
 
-      u8x8->drawString   ( 3, 6 + shift_y, SOFTRF_FIRMWARE_VERSION);
-      u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
+      } else {
+        u8x8->draw2x2String( 2, 2, SoftRF_text1);
+        u8x8->drawString( 1, 4, "ver");
+        u8x8->draw2x2String( 5, 4, SOFTRF_FIRMWARE_VERSION);
+        u8x8->draw2x2String( 1, 6, default_settings_used? DFLT_text : USER_text);
+        u8x8->drawString( 8, 6, "stg");
+
+      }
 
       break;
     }
@@ -247,8 +280,98 @@ static void OLED_radio()
         c = 'T';
     u8x8->draw2x2Glyph(14, 2, c);
 
-    u8x8->drawString(1, 5, RX_text);
+    u8x8->drawString( 0, 5, BND_text);
+    u8x8->drawString( 5, 5, TYP_text);
+    u8x8->drawString(12, 5, BAT_text);
 
+    //u8x8->drawTile  (4, 6, 1, (uint8_t *) Dot_Tile);
+    //u8x8->drawTile  (4, 7, 1, (uint8_t *) Dot_Tile);
+
+    u8x8->drawGlyph (13, 7, '.');
+
+    prev_uptime_minutes = (uint32_t) -1;
+    prev_voltage        = (uint32_t) -1;
+    prev_band           = -1;
+    prev_type           = -1;
+
+    OLED_display_titles = true;
+  }
+
+#if 0
+  uint32_t uptime_minutes = millis() / 60000;
+  if (prev_uptime_minutes != uptime_minutes) {
+    uint32_t uptime_hours = uptime_minutes / 60;
+    disp_value = uptime_hours % 100;
+    if (disp_value < 10) {
+      buf[0] = '0';
+      itoa(disp_value, buf+1, 10);
+    } else {
+      itoa(disp_value, buf, 10);
+    }
+
+
+    u8x8->draw2x2String(0, 6, buf);
+
+    disp_value = uptime_minutes % 60;
+    if (disp_value < 10) {
+      buf[0] = '0';
+
+      itoa(disp_value, buf+1, 10);
+    } else {
+      itoa(disp_value, buf, 10);
+    }
+
+    u8x8->draw2x2String(5, 6, buf);
+
+    prev_uptime_minutes = uptime_minutes;
+  }
+#else
+  // uptime is not important, show band and aircraft type instead:
+  if (prev_band != settings->band) {
+    prev_band = settings->band;
+    if (prev_band >= 0 && prev_band < 11)
+      u8x8->draw2x2String(0, 6, ISO3166_CC[prev_band]);
+  }
+  if (prev_type != settings->aircraft_type) {
+    prev_type = settings->aircraft_type;
+    if (prev_type >= 0 && prev_type < 17)
+      u8x8->draw2x2String(5, 6, aircraft_type_lbl[prev_type]);
+  }
+#endif
+
+  int32_t  voltage = Battery_voltage() > BATTERY_THRESHOLD_INVALID ?
+                              (int) (Battery_voltage() * 10.0) : 0;
+
+  if (prev_voltage != voltage) {
+    if (voltage) {
+      disp_value = voltage / 10;
+      disp_value = disp_value > 9 ? 9 : disp_value;
+      u8x8->draw2x2Glyph(11, 6, '0' + disp_value);
+
+      disp_value = voltage % 10;
+
+      u8x8->draw2x2Glyph(14, 6, '0' + disp_value);
+    } else {
+      u8x8->draw2x2Glyph(11, 6, 'N');
+      u8x8->draw2x2Glyph(14, 6, 'A');
+    }
+    prev_voltage = voltage;
+  }
+}
+
+static void OLED_other()
+{
+  char buf[16];
+  uint32_t disp_value;
+
+  if (!OLED_display_titles) {
+
+    u8x8->clear();
+
+    u8x8->drawString( 1, 1, ACFTS_text);
+    u8x8->drawString( 7, 1, SATS_text);
+    u8x8->drawString(12, 1, FIX_text);
+    u8x8->drawString(1, 5, RX_text);
     u8x8->drawString(9, 5, TX_text);
 
     if (settings->power_save & POWER_SAVE_NORECEIVE &&
@@ -268,7 +391,45 @@ static void OLED_radio()
       prev_tx_packets_counter = (uint32_t) -1;
     }
 
+    prev_acrfts_counter = (uint32_t) -1;
+    prev_sats_counter   = (uint32_t) -1;
+    prev_fix            = (uint8_t)  -1;
+
     OLED_display_titles = true;
+  }
+
+  uint32_t acrfts_counter = Traffic_Count();
+  uint32_t sats_counter   = gnss.satellites.value();
+  uint8_t  fix            = (uint8_t) isValidGNSSFix();
+
+  if (prev_acrfts_counter != acrfts_counter) {
+    disp_value = acrfts_counter > 99 ? 99 : acrfts_counter;
+    itoa(disp_value, buf, 10);
+
+    if (disp_value < 10) {
+      strcat_P(buf,PSTR(" "));
+    }
+
+    u8x8->draw2x2String(1, 2, buf);
+    prev_acrfts_counter = acrfts_counter;
+  }
+
+  if (prev_sats_counter != sats_counter) {
+    disp_value = sats_counter > 99 ? 99 : sats_counter;
+    itoa(disp_value, buf, 10);
+
+    if (disp_value < 10) {
+      strcat_P(buf,PSTR(" "));
+    }
+
+    u8x8->draw2x2String(7, 2, buf);
+    prev_sats_counter = sats_counter;
+  }
+
+  if (prev_fix != fix) {
+    u8x8->draw2x2Glyph(12, 2, fix > 0 ? '+' : '-');
+//  u8x8->draw2x2Glyph(12, 2, '0' + fix);
+    prev_fix = fix;
   }
 
   if (rx_packets_counter != prev_rx_packets_counter) {
@@ -303,118 +464,6 @@ static void OLED_radio()
     }
     u8x8->draw2x2String(8, 6, buf);
     prev_tx_packets_counter = tx_packets_counter;
-  }
-}
-
-static void OLED_other()
-{
-  char buf[16];
-  uint32_t disp_value;
-
-  if (!OLED_display_titles) {
-
-    u8x8->clear();
-
-    u8x8->drawString( 1, 1, ACFTS_text);
-
-    u8x8->drawString( 7, 1, SATS_text);
-
-    u8x8->drawString(12, 1, FIX_text);
-
-    u8x8->drawString( 1, 5, UPTIME_text);
-
-    u8x8->drawString(12, 5, BAT_text);
-
-    u8x8->drawTile  (4, 6, 1, (uint8_t *) Dot_Tile);
-    u8x8->drawTile  (4, 7, 1, (uint8_t *) Dot_Tile);
-
-    u8x8->drawGlyph (13, 7, '.');
-
-    prev_acrfts_counter = (uint32_t) -1;
-    prev_sats_counter   = (uint32_t) -1;
-    prev_fix            = (uint8_t)  -1;
-    prev_uptime_minutes = (uint32_t) -1;
-    prev_voltage        = (uint32_t) -1;
-
-    OLED_display_titles = true;
-  }
-
-  uint32_t acrfts_counter = Traffic_Count();
-  uint32_t sats_counter   = gnss.satellites.value();
-  uint8_t  fix            = (uint8_t) isValidGNSSFix();
-  uint32_t uptime_minutes = millis() / 60000;
-  int32_t  voltage        = Battery_voltage() > BATTERY_THRESHOLD_INVALID ?
-                              (int) (Battery_voltage() * 10.0) : 0;
-
-  if (prev_acrfts_counter != acrfts_counter) {
-    disp_value = acrfts_counter > 99 ? 99 : acrfts_counter;
-    itoa(disp_value, buf, 10);
-
-    if (disp_value < 10) {
-      strcat_P(buf,PSTR(" "));
-    }
-
-    u8x8->draw2x2String(1, 2, buf);
-    prev_acrfts_counter = acrfts_counter;
-  }
-
-  if (prev_sats_counter != sats_counter) {
-    disp_value = sats_counter > 99 ? 99 : sats_counter;
-    itoa(disp_value, buf, 10);
-
-    if (disp_value < 10) {
-      strcat_P(buf,PSTR(" "));
-    }
-
-    u8x8->draw2x2String(7, 2, buf);
-    prev_sats_counter = sats_counter;
-  }
-
-  if (prev_fix != fix) {
-    u8x8->draw2x2Glyph(12, 2, fix > 0 ? '+' : '-');
-//  u8x8->draw2x2Glyph(12, 2, '0' + fix);
-    prev_fix = fix;
-  }
-
-  if (prev_uptime_minutes != uptime_minutes) {
-    uint32_t uptime_hours = uptime_minutes / 60;
-    disp_value = uptime_hours % 100;
-    if (disp_value < 10) {
-      buf[0] = '0';
-      itoa(disp_value, buf+1, 10);
-    } else {
-      itoa(disp_value, buf, 10);
-    }
-
-    u8x8->draw2x2String(0, 6, buf);
-
-    disp_value = uptime_minutes % 60;
-    if (disp_value < 10) {
-      buf[0] = '0';
-      itoa(disp_value, buf+1, 10);
-    } else {
-      itoa(disp_value, buf, 10);
-    }
-
-    u8x8->draw2x2String(5, 6, buf);
-
-    prev_uptime_minutes = uptime_minutes;
-  }
-
-  if (prev_voltage != voltage) {
-    if (voltage) {
-      disp_value = voltage / 10;
-      disp_value = disp_value > 9 ? 9 : disp_value;
-      u8x8->draw2x2Glyph(11, 6, '0' + disp_value);
-
-      disp_value = voltage % 10;
-
-      u8x8->draw2x2Glyph(14, 6, '0' + disp_value);
-    } else {
-      u8x8->draw2x2Glyph(11, 6, 'N');
-      u8x8->draw2x2Glyph(14, 6, 'A');
-    }
-    prev_voltage = voltage;
   }
 }
 
@@ -781,6 +830,33 @@ void OLED_fini(int reason)
     default:
       u8x8->draw2x2String(1, 3, reason == SOFTRF_SHUTDOWN_LOWBAT ?
                                 "LOW BAT" : "  OFF  ");
+      break;
+    }
+  }
+}
+
+void OLED_msg(const char *msg1, const char *msg2)
+{
+  if (u8x8) {
+    u8x8->clear();
+    switch (hw_info.display)
+    {
+#if !defined(EXCLUDE_OLED_049)
+    case DISPLAY_OLED_0_49:
+      if (msg1)
+        u8x8->draw2x2String(5, 3, msg1);
+      if (msg2)
+      u8x8->draw2x2String(5, 6, msg2);
+      break;
+#endif /* EXCLUDE_OLED_049 */
+    case DISPLAY_OLED_TTGO:
+    case DISPLAY_OLED_HELTEC:
+    case DISPLAY_OLED_1_3:
+    default:
+      if (msg1)
+        u8x8->draw2x2String(1, 2, msg1);
+      if (msg2)
+        u8x8->draw2x2String(1, 4, msg2);
       break;
     }
   }
