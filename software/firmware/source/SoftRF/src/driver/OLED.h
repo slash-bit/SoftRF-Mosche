@@ -20,6 +20,7 @@
 #define OLEDHELPER_H
 
 #include <U8x8lib.h>
+extern U8X8 *u8x8;
 
 #define SSD1306_OLED_I2C_ADDR   0x3C
 #define SH1106_OLED_I2C_ADDR    0x3C /* 0x3D */
@@ -35,7 +36,6 @@ void OLED_info3(int, char *, char *, char *);
 void OLED_Next_Page(void);
 void OLED_msg(const char *msg1, const char *msg2);
 
-extern U8X8 *u8x8;
 
 extern const char *ISO3166_CC[];
 extern const char SoftRF_text1[];

@@ -70,7 +70,16 @@ void Buzzer_setup(void)
       pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
       ext_buzzer(false);
   } else {
-      toneAC_setup(SOC_GPIO_PIN_BUZZER2, SOC_GPIO_PIN_BUZZER);
+      int buzzer2pin = SOC_GPIO_PIN_BUZZER2;
+      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+          // (gpio15 not available on T-Beam v0.7)
+          if (settings->voice != VOICE_OFF) {
+              settings->volume = BUZZER_OFF;
+              return;
+          }
+          buzzer2pin = SOC_GPIO_PIN_VOICE;    // gpio 25 instead of 15
+      }
+      toneAC_setup(buzzer2pin, SOC_GPIO_PIN_BUZZER);
       volume = (settings->volume == BUZZER_VOLUME_LOW ? 8 : 10);
   }
   BuzzerToneHz = 0;

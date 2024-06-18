@@ -212,7 +212,7 @@ extern Adafruit_NeoPixel strip;
 
 // Hardware pin definitions for TTGO LoRa V2 board
 // with OLED SSD1306 0,96" I2C Display
-#define TTGO_V2_OLED_PIN_RST            U8X8_PIN_NONE // connected to CPU RST/EN
+#define TTGO_V2_OLED_PIN_RST            SOC_UNUSED_PIN // connected to CPU RST/EN
 #define TTGO_V2_OLED_PIN_SDA            21
 #define TTGO_V2_OLED_PIN_SCL            22
 #define TTGO_V2_PIN_GNSS_RX             34
@@ -220,7 +220,7 @@ extern Adafruit_NeoPixel strip;
 #define TTGO_V2_PIN_GNSS_PPS            39
 
 // Hardware pin definitions for Heltec and TTGO-V1 LoRa-32 Boards with OLED SSD1306 I2C Display
-#define HELTEC_OLED_PIN_RST             U8X8_PIN_NONE // 16
+#define HELTEC_OLED_PIN_RST             SOC_UNUSED_PIN // 16
 #define HELTEC_OLED_PIN_SDA             4
 #define HELTEC_OLED_PIN_SCL             15
 
@@ -444,9 +444,9 @@ struct rst_info {
 #define EXCLUDE_OLED_049
 //#define EXCLUDE_OLED_BARO_PAGE
 #define USE_TFT
+
 #define USE_NMEA_CFG
 #define USE_BASICMAC
-
 #define USE_TIME_SLOTS
 
 /* Experimental */

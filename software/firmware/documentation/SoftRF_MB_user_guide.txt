@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated June 9, 2024 to fit software version MB124
+This version last updated June 17, 2024 to fit software version MB125
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -71,8 +71,9 @@ I've bought T-Beam boards from LilyGo directly:
 https://www.lilygo.cc/products/t-beam-v1-1-esp32-lora-module?variant=42204035186869
 or from their "store" on Amazon or from banggood.com (they accept Paypal).
 
-With my version of SoftRF you have the option of attaching a passive piezo buzzer (through a 100-ohm resistor) to the T-Beam, between GPIO pins 14 and 15, to get audible indications of collision warnings.  A suitable buzzer is this one:
+With my version of SoftRF you have the option of attaching a passive piezo buzzer to the T-Beam to get audible indications of collision warnings.  A suitable buzzer is this one:
 https://www.digikey.com/en/products/detail/murata-electronics/PKM22EPPH4001-B0/1219323
+Connect it between GPIO pins 14 and 15 in series with a 100-ohm resistor.  (On the old T-Beam v0.7 GPIO 15 is not available, pin 25 is used instead - as long as the audio (voice) output is not turned on in the settings, in which case the buzzer output is turned off since pin 25 is then the audio output pin.)
 The beeps are higher pitched, shorter, and more numerous for higher alarm levels.  If more than one aircraft is a collision danger, the beeps are split into double-beeps.  The two-pin push-pull arrangement yields louder beeping than connecting the buzzer between one pin and ground.  For even louder beeps, feed the pin 14 (and/or 15) signal to an external audio amplifier (or the aux audio input of an aircraft radio), or, select "external" in the buzzer volume setting to get +3v DC output signal on pin 14, and use it to trigger an external (12V) *active* buzzer via a transistor.  (Be sure to *remove* the battery from the T-beam before soldering wires for the buzzer.  It is not enough to turn the T-Beam "off".)  SoftRF also sends a special $PSRAA NMEA message whenever an audio alarm is called for.
 
 This version of SoftRF, on the T-Beam, also has the ability to generate *voice* warnings about traffic that is in danger of collision.  For example, "traffic, 3 o'clock, low" for alarm levels 1 & 2, or "danger, ahead, level" for alarm level 3.  If more than one aircraft is a collision danger, the word "traffic" is appended at the end.  The audio data file needs to be uploaded via the web interface, see below.  The voice audio output is from pin 25.  This is a line-level output, it needs an external amplifier to drive a speaker.  See: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/audio_output_circuit_.jpg
@@ -148,7 +149,7 @@ The T-Echo usually includes a "bootloader" which makes it easy to update the fir
 
 The Web Interface (T-Beam only)
 
-After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, change settings, or even update the firmware.  This feature is NOT available on the T-Echo.
+After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the third (or fourth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, whether the user settings have been restored, change settings, or update the firmware via WiFi.  This feature is NOT available on the T-Echo since it does not support WiFi.
 
 Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (except in "winch" mode) is to press the middle button, on a T-Beam v1.0, v1.1 or v1.2 - that turns Bluetooth off (until you reboot).  (The older T-Beam v0.7 does not have a "middle button".)  Wait until the T-Beam fully boots, then press the middle button, then try and access the web page.
 
@@ -401,13 +402,13 @@ Here are step by step instructions for OTA firmware update:
 
 * Click the "Update" button.
 
-* Wait until the web page says "UPDATE DONE, REBOOTING".  This may take a minute or more, be patient.  You can see a counter progress on the OLED display if so equipped.
+* Wait until the web page says "UPDATE DONE, REBOOTING".  This may take a minute or more, be patient.  There is no indication of progress on the web page, but you can see a counter incrementing on the OLED display if so equipped.
 
-* While updating the blue LED on the T-Beam will flash once a second, and will stay on for several seconds when done.  If instead it starts flashing 4 times per second (before rebooting), that means the update failed.
+* The blue LED on the T-Beam will flash once a second while updating, and will stay on for several seconds when done.  If instead it starts flashing 4 times per second (before rebooting), that means the update failed.
 
-* Do not touch anything for another minute after it is "done", or you may get a "bricked" device.  When the update is completed the SoftRF device typically reboots automatically.  If it does not reboot itself, after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
+* When the update is completed do not touch anything for another minute, or you may get a "bricked" device.  The SoftRF device typically reboots automatically.  If it does not reboot itself after a minute or two, press the reset (third) button on the T-Beam to force it to reboot.
 
-* Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.  And whether the user settings have been preserved, or replaced with the defaults.
+* Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.  The version is also shown on the OLED, along with whether the user settings have been preserved, or replaced with the defaults.
 
 * Check and restore your settings if necessary.  Depending on the old and new firmware versions, either all your settings will still be remembered, or all of them will need to be set again (where different from the defaults).
 

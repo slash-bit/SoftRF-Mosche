@@ -262,7 +262,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
-  size_t size = 12800;
+  size_t size = 12900;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -284,7 +284,9 @@ void handleSettings() {
 <title>Settings</title>\
 </head>\
 <body>\
-<h1 align=center>Settings</h1>\
+<h1 align=center>SoftRF Settings</h1>\
+<h4 align=center>%s</h4>\
+<h4 align=center>If changed, click 'Save and restart' at the bottom</h4>\
 <form action='/input' method='GET'>\
 <table width=100%%>\
 <tr>\
@@ -298,6 +300,7 @@ void handleSettings() {
 </select>\
 </td>\
 </tr>"),
+  (default_settings_used? "Warning: reverted to default settings" : "Restored user settings on boot"),
   (settings->mode == SOFTRF_MODE_NORMAL ? "selected" : "") , SOFTRF_MODE_NORMAL,
   (settings->mode == SOFTRF_MODE_TXRX_TEST ? "selected" : ""), SOFTRF_MODE_TXRX_TEST,
   (settings->mode == SOFTRF_MODE_BRIDGE ? "selected" : ""), SOFTRF_MODE_BRIDGE,
@@ -1287,7 +1290,7 @@ void handleRoot() {
   dtostrf(ThisAircraft.altitude,  7, 1, str_alt);
   dtostrf(vdd, 4, 2, str_Vcc);
 
-  snprintf_P ( Root_temp, 2900,
+  snprintf_P ( Root_temp, 3000,
     PSTR("<html>\
   <head>\
     <meta name='viewport' content='width=device-width, initial-scale=1'>\
@@ -1298,6 +1301,7 @@ void handleRoot() {
   <tr><!-- <td align=left><h1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</h1></td> -->\
   <td align=center><h1>SoftRF status</h1></td>\
   <!-- <td align=right><img src='/logo.png'></td> --></tr>\
+ %s\
  %s\
  </table>\
  <table width=100%%>\
@@ -1362,6 +1366,8 @@ void handleRoot() {
  </table>\
 </body>\
 </html>"),
+    (default_settings_used ?
+       "<tr><td align=center><h4>(Warning: reverted to default settings)</h4></td></tr>" : ""),
     (BTpaused ?
        "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>" : ""),
     ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
