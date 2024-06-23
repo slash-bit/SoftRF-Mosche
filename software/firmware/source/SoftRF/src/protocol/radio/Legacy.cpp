@@ -798,7 +798,10 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
 
 //    if (aircraft->prevtime_ms != 0) {
       /* Compute NS & EW speed components for future time points. */
-      project_this(aircraft);       /* which also calls airborne() */
+      if (relay)
+          project_that(aircraft);
+      else
+          project_this(aircraft);       /* which also calls airborne() */
       if (millis() - SetupTimeMarker < 60000) {
           pkt->airborne = 1;    /* post-boot testing */
       } else {
@@ -880,6 +883,13 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     pkt->_unk1 = 0;
     pkt->_unk3 = 0;
 //    pkt->_unk4 = 0;
+
+    if (relay
+    &&  (aircraft->protocol==RF_PROTOCOL_ADSB_1090 || aircraft->protocol==RF_PROTOCOL_GDL90)) {
+        //pkt->_unk1 = 1;
+        //pkt->addr_type = (ADDR_TYPE_ANONYMOUS | 4);
+        pkt->no_track = 1;   // so that OGN ground stations will not report it
+    }
 
     pkt->parity = 0;
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {

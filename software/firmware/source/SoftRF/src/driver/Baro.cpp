@@ -328,6 +328,7 @@ void Baro_loop()
     Baro_altitude_cache = baro_chip->altitude(1013.25);
 
     ThisAircraft.pressure_altitude = Baro_altitude_cache;
+    ThisAircraft.baro_alt_diff = ThisAircraft.altitude - ThisAircraft.pressure_altitude;
 
     Baro_VS[avg_ndx] = (Baro_altitude_cache - prev_pressure_altitude) /
                        (millis() - BaroAltitudeTimeMarker) * 1000;  /* in m/s */

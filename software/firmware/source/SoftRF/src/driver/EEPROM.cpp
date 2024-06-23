@@ -195,6 +195,7 @@ void EEPROM_defaults()
   settings->alt_udp    = false;
   settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
   settings->invert2    = false;
+  settings->rx1090     = ADSB_RX_NONE;
   settings->igc_key[0] = 0;
   settings->igc_key[1] = 0;
   settings->igc_key[2] = 0;
@@ -260,6 +261,7 @@ void show_settings_serial()
     Serial.print(F(" NMEA2 Sensors "));Serial.println(settings->nmea2_s);
     Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
     Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
+    Serial.print(F(" ADS-B Receiver "));Serial.println(settings->rx1090);
     Serial.print(F(" GDL90 in "));Serial.println(settings->gdl90_in);
     Serial.print(F(" GDL90 out "));Serial.println(settings->gdl90);
     Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);

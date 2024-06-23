@@ -647,7 +647,7 @@ void project_this(ufo_t *this_aircraft)
         this_aircraft->air_ew[i] = ew;
       }
 
-      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {    // but not LATEST
         /* also need to compute fla_ns[] & fla_ew[] for transmissions */
         ns = (int16_t) roundf(4.0 * gs_ns);
         ew = (int16_t) roundf(4.0 * gs_ew);
@@ -707,7 +707,7 @@ void project_this(ufo_t *this_aircraft)
       //this_aircraft->aturnrate = 0.0;
       this_aircraft->turnrate = 0.0;
 
-      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {
+      if (settings->rf_protocol == RF_PROTOCOL_LEGACY) {    // but not LATEST
         /* also need to compute fla_ns[] & fla_ew[] for transmissions */
         ns = (int16_t) roundf(4.0 * gs_ns);
         ew = (int16_t) roundf(4.0 * gs_ew);
@@ -725,6 +725,8 @@ void project_this(ufo_t *this_aircraft)
     }
     
     /* turning */
+
+    this_aircraft->turnrate = turnrate;
 
     if (this_aircraft->projtime_ms > this_aircraft->gnsstime_ms)
       heading += turnrate * (float) (this_aircraft->projtime_ms - this_aircraft->gnsstime_ms);
@@ -851,8 +853,8 @@ void project_that(ufo_t *fop)
 
       /* Turn rate was obtained in Legacy_decode() */
       /* For vector alarm method don't need more than that */
-      if (settings->alarm != TRAFFIC_ALARM_LEGACY)
-            return;
+      //if (settings->alarm != TRAFFIC_ALARM_LEGACY)
+      //      return;
 
       /* Incoming Legacy packets provide us with the velocity data.       */
       /* But it is not in a good format, neither air nor ground reference */
@@ -947,6 +949,11 @@ To compute the correct air-reference circling path:
          }  // else stop turning, keep same velocity vector
          fop->air_ns[i] = ns;
          fop->air_ew[i] = ew;
+        // also fill in fla[] for air_relay - but simplify: ignore wind & exact timing
+        if (i < 4) {
+            fop->fla_ns[i] = ns;
+            fop->fla_ew[i] = ew;
+        }
       }
 
       if (report) report_that_projection(fop, 1);
@@ -954,7 +961,7 @@ To compute the correct air-reference circling path:
       return;
     }
 
-    /* for other protocols, turn rate was NOT obtained in decode() */
+    /* for other protocols (including ADS-B), turn rate was NOT obtained in decode() */
     /* rely on history to compute turn rate */
 
     /* if no usable history, assume a straight path */
@@ -963,15 +970,17 @@ To compute the correct air-reference circling path:
 
       fop->turnrate = 0.0;
 
-      if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
-          return;
+      //if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
+      //    return;
 
       gspeed = fop->speed * _GPS_MPS_PER_KNOT;
 
       /* compute heading from course and speed and last wind estimate */
+      float nsf = gspeed * cos_approx(fop->course);
+      float ewf = gspeed * sin_approx(fop->course);
       int16_t ns, ew;
-      ns = (int16_t) roundf(4.0 * (gspeed * cos_approx(fop->course) - wind_best_ns));
-      ew = (int16_t) roundf(4.0 * (gspeed * sin_approx(fop->course) - wind_best_ew));
+      ns = (int16_t) roundf(4.0 * (nsf - wind_best_ns));
+      ew = (int16_t) roundf(4.0 * (ewf - wind_best_ew));
 
       /* project a straight line */
       for (i=0; i<6; i++) {
@@ -980,6 +989,14 @@ To compute the correct air-reference circling path:
       }
 
       if (report) report_that_projection(fop, 2);
+
+      // also fill in fla[] for air_relay
+      ns = (int16_t) roundf(4.0 * nsf);
+      ew = (int16_t) roundf(4.0 * ewf);
+      for (i=0; i<4; i++) {
+        fop->fla_ns[i] = ns;
+        fop->fla_ew[i] = ew;
+      }
 
       return;
 
@@ -995,8 +1012,10 @@ To compute the correct air-reference circling path:
     float prevheading = fop->prevheading;
 
     /* same for current time point */
-    as_ns = gspeed * cos_approx(fop->course) - wind_best_ns;
-    as_ew = gspeed * sin_approx(fop->course) - wind_best_ew;
+    float nsf = gspeed * cos_approx(fop->course);
+    float ewf = gspeed * sin_approx(fop->course);
+    as_ns = nsf - wind_best_ns;
+    as_ew = ewf - wind_best_ew;
     heading = atan2_approx(as_ns, as_ew);
     if (heading >  360.0) heading -= 360.0;
     if (heading < -360.0) heading += 360.0;
@@ -1023,8 +1042,8 @@ To compute the correct air-reference circling path:
        fop->turnrate = aturnrate;   // (stores air ref turnrate in the gnd ref field)
     }
 
-    if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
-          return;
+    //if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
+    //      return;
 
     /*  compute air-reference NS & EW speed components for future time points */
 
@@ -1032,9 +1051,17 @@ To compute the correct air-reference circling path:
 
       ns = (int16_t) roundf(4.0 * as_ns);
       ew = (int16_t) roundf(4.0 * as_ew);
-      for (i=0; i<6; i++) {  /* loop over the 4 time points stored in arrays */
+      for (i=0; i<6; i++) {
         fop->air_ns[i] = ns;
         fop->air_ew[i] = ew;
+      }
+
+      // also fill in fla[] for air_relay
+      ns = (int16_t) roundf(4.0 * nsf);
+      ew = (int16_t) roundf(4.0 * ewf);
+      for (i=0; i<4; i++) {
+        fop->fla_ns[i] = ns;
+        fop->fla_ew[i] = ew;
       }
 
       if (report) report_that_projection(fop, 3);
@@ -1068,15 +1095,20 @@ To compute the correct air-reference circling path:
         if (endturn == 0)  endturn = 1;
     }
     for (i=0; i<6; i++) {
-      if (i < endturn) {
-        if (heading >  360.0) heading -= 360.0;
-        if (heading < -360.0) heading += 360.0;
-        ns = (int16_t) roundf(4.0 * aspeed * cos_approx(heading));
-        ew = (int16_t) roundf(4.0 * aspeed * sin_approx(heading));
-        heading += dir_chg;
-      }
-      fop->air_ns[i] = ns;
-      fop->air_ew[i] = ew;
+        if (i < endturn) {
+            if (heading >  360.0) heading -= 360.0;
+            if (heading < -360.0) heading += 360.0;
+            ns = (int16_t) roundf(4.0 * aspeed * cos_approx(heading));
+            ew = (int16_t) roundf(4.0 * aspeed * sin_approx(heading));
+            heading += dir_chg;
+        }
+        fop->air_ns[i] = ns;
+        fop->air_ew[i] = ew;
+        // also fill in fla[] for air_relay - but simplify: ignore wind & exact timing
+        if (i < 4) {
+            fop->fla_ns[i] = ns;
+            fop->fla_ew[i] = ew;
+        }
     }
 
     if (report) report_that_projection(fop, 4);

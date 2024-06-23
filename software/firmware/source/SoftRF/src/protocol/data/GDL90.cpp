@@ -25,6 +25,7 @@
 
 #include "../../system/SoC.h"
 #include "GDL90.h"
+#include "../../driver/Baro.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/EEPROM.h"
 #include "../../driver/WiFi.h"
@@ -572,8 +573,10 @@ void process_traffic_message(char* buf)
   uint8_t misc = (((uint8_t)buf[11]) & 0x0F);
   fo.altitude = ((float) (25*ialt - 1000)) * (1.0 / _GPS_FEET_PER_METER);
   // this is pressure altitude, try and correct
-  if (ThisAircraft.pressure_altitude != 0.0)
-      fo.altitude += ThisAircraft.altitude - ThisAircraft.pressure_altitude;
+  if (baro_chip != NULL)
+      fo.altitude += ThisAircraft.baro_alt_diff;
+  else
+      fo.altitude += average_baro_alt_diff;
   if (fabs(fo.altitude - ThisAircraft.altitude) > 2000)  // meters
       return;
   fo.airborne = ((misc & 0x08) != 0);
@@ -602,6 +605,11 @@ Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
 
   fo.protocol = RF_PROTOCOL_GDL90;  // not an RF protocol, but that is the data source
   fo.timestamp = ThisAircraft.timestamp;
+  fo.gnsstime_ms = millis();
+  fo.addr_type = ADDR_TYPE_ICAO;
+  fo.airborne = 1;
+  fo.circling = 0;
+
   AddTraffic(&fo);
 }
 

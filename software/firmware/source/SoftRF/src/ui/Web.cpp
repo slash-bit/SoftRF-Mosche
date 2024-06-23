@@ -962,15 +962,31 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>Internal ADS-B Receiver</th>\
+<td align=right>\
+<select name='rx1090'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>GNS5892</option>\
+</tr>\
+</tr>\
+<tr>\
 <th align=left>GDL90 Input</th>\
 <td align=right>\
 <select name='gdl90_in'>\
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Serial</option>\
-<option %s value='%d'>UDP</option>"),
-  (settings->gdl90_in == DEST_NONE ? "selected" : ""), DEST_NONE,
-  (settings->gdl90_in == DEST_UART ? "selected" : ""), DEST_UART,
-  (settings->gdl90_in == DEST_UDP  ? "selected" : ""), DEST_UDP);
+<option %s value='%d'>Serial2</option>\
+<option %s value='%d'>UDP</option>\
+<option %s value='%d'>Bluetooth</option>\
+<option %s value='%d'>TCP</option>"),
+  (settings->rx1090 == ADSB_RX_NONE    ? "selected" : ""), ADSB_RX_NONE,
+  (settings->rx1090 == ADSB_RX_GNS5892 ? "selected" : ""), ADSB_RX_GNS5892,
+  (settings->gdl90_in == DEST_NONE  ? "selected" : ""), DEST_NONE,
+  (settings->gdl90_in == DEST_UART  ? "selected" : ""), DEST_UART,
+  (settings->gdl90_in == DEST_UART2 ? "selected" : ""), DEST_UART2,
+  (settings->gdl90_in == DEST_UDP   ? "selected" : ""), DEST_UDP,
+  (settings->gdl90_in == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
+  (settings->gdl90_in == DEST_TCP       ? "selected" : ""), DEST_TCP);
 
   len = strlen(offset);
   offset += len;
@@ -979,30 +995,10 @@ void handleSettings() {
     }
   }
 
-  /* SoC specific*/
-  if (SoC->id == SOC_ESP32) {
-    if (is_prime_mk2) {
-      snprintf_P ( offset, size,
-        PSTR("<option %s value='%d'>Serial 2</option>"),
-        (settings->gdl90_in == DEST_UART2 ? "selected" : ""), DEST_UART2);
-      len = strlen(offset);
-      offset += len;
-      size -= len;
-    }
-    snprintf_P ( offset, size,
-       PSTR("\
-<option %s value='%d'>Bluetooth</option>\
-<option %s value='%d'>TCP</option>"),
-     (settings->gdl90_in == DEST_BLUETOOTH ? "selected" : ""), DEST_BLUETOOTH,
-     (settings->gdl90_in == DEST_TCP       ? "selected" : ""), DEST_TCP);
-    len = strlen(offset);
-    offset += len;
-    size -= len;
-  }
-
   /* common */
   snprintf_P ( offset, size,
     PSTR("\
+</tr>\
 <tr>\
 <th align=left>GDL90 output</th>\
 <td align=right>\
@@ -1496,6 +1492,8 @@ void handleInput() {
       settings->invert2 = server.arg(i).toInt();
     } else if (server.argName(i).equals("alt_udp")) {
       settings->alt_udp = server.arg(i).toInt();
+    } else if (server.argName(i).equals("rx1090")) {
+      settings->rx1090 = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90_in")) {
       settings->gdl90_in = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
@@ -1603,6 +1601,20 @@ void handleInput() {
 
   /* enforce some hardware restrictions */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      if (settings->rx1090 != ADSB_RX_NONE)
+          // dedicate Serial2 to the ADS-B receiver module
+          settings->baudrate2 = BAUD_DEFAULT;       // will actually use 921600
+          settings->invert2 = false;
+          if (settings->nmea_out  == DEST_UART2)
+              settings->nmea_out   = DEST_NONE;
+          if (settings->nmea_out2 == DEST_UART2)
+              settings->nmea_out2  = DEST_NONE;
+          if (settings->gdl90     == DEST_UART2)
+              settings->gdl90      = DEST_NONE;
+          if (settings->gdl90_in  == DEST_UART2)
+              settings->gdl90_in   = DEST_NONE;
+          if (settings->d1090     == DEST_UART2)
+              settings->d1090      = DEST_NONE;
       if (settings->voice == VOICE_EXT)
           settings->volume = BUZZER_OFF;  // free up pins 14 & 15 for I2S use
   } else {
@@ -1665,6 +1677,7 @@ PSTR("<html>\
 <tr><th align=left>NMEA2 Sensors</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 External</th><td align=right>%s</td></tr>\
+<tr><th align=left>ADS-B Receiver</th><td align=right>%d</td></tr>\
 <tr><th align=left>GDL90 in</th><td align=right>%d</td></tr>\
 <tr><th align=left>GDL90 out</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
@@ -1697,7 +1710,7 @@ PSTR("<html>\
     settings->nmea_out2,
     BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p), BOOL_STR(settings->nmea2_l),
     BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d), BOOL_STR(settings->nmea2_e),
-    settings->gdl90_in, settings->gdl90, settings->d1090,
+    settings->rx1090, settings->gdl90_in, settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
     settings->power_save, settings->power_external,
     settings->freq_corr, settings->logalarms, settings->ppswire, settings->debug_flags,
@@ -1839,7 +1852,7 @@ void Web_setup()
  <hr>\
  <table width=100%%>\
   <tr>\
-    <td align=left>\
+    <td align=center>\
 <form method='POST' action='/update' enctype='multipart/form-data' id='upload_form'>\
     <input type='file' name='update'>\
     <input type='submit' value='Update'>\
@@ -1847,6 +1860,7 @@ void Web_setup()
     </td>\
   </tr>\
  </table>\
+ <h3 align=center>Be patient...</h3>\
 </body>\
 </html>")
     );

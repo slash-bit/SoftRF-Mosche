@@ -25,6 +25,9 @@
 #include "../../system/SoC.h"
 #endif /* __cplusplus */
 
+#define GNS5892_BAUDRATE        921600
+#define GNS5892_INPUT_BUF_SIZE    1000
+
 #define NMEA_BUFFER_SIZE    128
 #define NMEA_CALLSIGN_SIZE  (3 /* prefix */ + 1 /* _ */ + 6 /* ICAO */ + 1 /* EOL */)
 
@@ -58,6 +61,7 @@ extern uint8_t NMEA_Source;
 extern char NMEABuffer[NMEA_BUFFER_SIZE];
 extern char GPGGA_Copy[NMEA_BUFFER_SIZE];
 extern bool has_serial2;
+extern bool rx1090found;
 extern bool NMEA_bridge_sent;
 
 #if defined(USE_NMEA_CFG)

@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated June 17, 2024 to fit software version MB125
+This version last updated June 22, 2024 to fit software version MB130
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -233,7 +233,9 @@ Aux Serial Port Logic: "Normal" to connect to TTL serial devices or a chip that 
 
 UDP Port for NMEA output: can choose 10111 instead of the default 10110.
 
-GDL90 input: this is for importing data from an ADS-B receiver, else leave Off.  GDL90 uses UDP port 4000, while NMEA uses 10110.  Cannot use the same port for both input and output.
+Internal ADS-B Receiver: here can activate use of a GNS5892 ADS-B receiver module if installed. See the section below about connecting an ADS-B receiver.
+
+GDL90 input: this is for importing data from an external ADS-B receiver, else leave Off.  GDL90 uses UDP port 4000, while NMEA uses 10110.  Cannot use the same port for both input and output.
 
 GDL90 output: this is for a different local data transfer protocol, usually leave Off.  If used, probably should not also choose the same destination (e.g., UDP) as an NMEA output destination.
 
@@ -355,7 +357,11 @@ for an example protection circuit.
 
 Connecting an ADS-B receiver
 
-This version of SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format, and integrate it into its internal table of tracked traffic.  This is only partially tested at this point.  In practice the input port can only be serial, WiFi/UDP, or WiFi/TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  Traffic more than 15 nm away or more than 2000 meters above or below is ignored.  NMEA messages are not sent to the GDL90-input source.
+SoftRF can accept traffic data from an external device (typically an ADS-B receiver) in GDL90 format, and integrate it into its internal table of tracked traffic.  In practice the input port can only be serial, WiFi/UDP, or WiFi/TCP.  Not Bluetooth, because both SoftRF and the ADS-B receiver probably expect a phone on the other end of the BT connection, and choose the master/slave role for that, thus they won't connect to each other.  Only GDL90 other-ship traffic messages are processed, all other message types are ignored.  Traffic more than 15 nm away or more than 2000 meters above or below is ignored.  NMEA messages are not sent to the GDL90-input source.
+
+Alternatively, from version MB130, SoftRF can use a hardwired GNS5892R ADS-B receiver module, which is small enough to fit inside the same case as a T-Beam.  See wiring diagram here:
+https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/GNS5892_wiring.jpg
+The antenna can be a vertical wire, about 65 mm long.  Or can install a short coaxial cable from the module to an added jack on the case (e.g., SMA) to which one can then connect a short whip antenna, either tuned to 1090 MHz or even one that is designed for a different frequency in the 800-1200 MHz range.  The ADS-B signals are transmitted by transponders at high power, about 1000 times stronger than FLARM signals, thus are easy to receive at the intended range (anything more than 15 nautical miles away - or more than 2000 meters higher - is ignored by the software anyway).  When installed, the GNS5892 takes up the auxilliary serial port, making it unavailable for any other use.  The auxilliary serial port will appear as "disabled" in its baud-rate setting, but will actually be active at 921600 baud - keep those wires short.
 
 
 Connecting to XCvario

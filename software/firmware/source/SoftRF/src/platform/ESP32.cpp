@@ -159,7 +159,7 @@ static portMUX_TYPE GNSS_PPS_mutex = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE PMU_mutex      = portMUX_INITIALIZER_UNLOCKED;
 volatile bool PMU_Irq = false;
 
-static bool GPIO_21_22_are_busy = false;
+//static bool GPIO_21_22_are_busy = false;
 
 static union {
   uint8_t efuse_mac[6];
@@ -600,22 +600,25 @@ static void ESP32_setup()
         // DCDC1 1500~3400mV, IMAX=2A
         //PMU->setDC1Voltage(3300); // ESP32,  AXP2101 power-on value: 3300
         PMU->setPowerChannelVoltage(XPOWERS_DCDC1, 3300);
+        // PMU->enablePowerOutput(XPOWERS_DCDC1);
 
         // ALDO 500~3500mV, 100mV/step, IMAX=300mA
         //PMU->setButtonBatteryChargeVoltage(3100); // GNSS battery
 
         //PMU->setALDO2Voltage(3300); // LoRa, AXP2101 power-on value: 2800
         //PMU->setALDO3Voltage(3300); // GPS,  AXP2101 power-on value: 3300
-        PMU->setPowerChannelVoltage(XPOWERS_LDO2, 3300);
-        PMU->setPowerChannelVoltage(XPOWERS_LDO3, 3300);
 
         // PMU->enableDC1();
-        //PMU->enableButtonBatteryCharge();
+        //PMU->enableButtonBatteryCharge();    // <<< this syntax not available via this API
 
-        //PMU->enableALDO2();
+        PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300); // LoRa, AXP2101 power-on value: 2800
+        PMU->enablePowerOutput(XPOWERS_ALDO2);
+
+        PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300); // GPS,  AXP2101 power-on value: 3300
+        PMU->enablePowerOutput(XPOWERS_ALDO3);
+
+        //PMU->enableALDO2();    // <<< this syntax not available via this API
         //PMU->enableALDO3();
-        PMU->enablePowerOutput(XPOWERS_LDO2);
-        PMU->enablePowerOutput(XPOWERS_LDO3);
 
         PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 
@@ -1415,8 +1418,8 @@ static void ESP32_fini(int reason)
 
       //PMU->disableALDO2();
       //PMU->disableALDO3();
-      PMU->disablePowerOutput(XPOWERS_LDO2);
-      PMU->disablePowerOutput(XPOWERS_LDO3);
+      PMU->disablePowerOutput(XPOWERS_ALDO2);
+      PMU->disablePowerOutput(XPOWERS_ALDO3);
 
       delay(20);
 

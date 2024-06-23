@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB125"
+#define SOFTRF_FIRMWARE_VERSION "MB130"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -140,6 +140,7 @@ typedef struct UFO {
     float     altitude;      // meters
     float     geoid_separation; /* meters */
     float     pressure_altitude;
+    float     baro_alt_diff;    // only from ADS-B <<< check units & sign
     float     course;     /* CoG */   // degrees
     float     heading;    /* where the nose points = course - wind drift */
     float     speed;      /* ground speed in knots */
@@ -153,7 +154,7 @@ typedef struct UFO {
     float     prevheading;    /* previous heading */
 /*  float     prevspeed;  */  /* previous speed */
     float     prevaltitude;   /* previous altitude */
-    float     distance;
+    float     distance;       // meters
     float     bearing;
     float     turnrate;       // ground reference
     float     alt_diff;

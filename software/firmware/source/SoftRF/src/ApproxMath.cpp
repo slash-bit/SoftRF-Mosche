@@ -1,6 +1,6 @@
 /*
  * ApproxMath.cpp
- * Copyright (C) 2022 Moshe Braner
+ * Copyright (C) 2022,2024 Moshe Braner
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "TrafficHelper.h"
+#include <math.h>
 #include "ApproxMath.h"
 
 /* For the purposes used here, trig functions don't need much precision */
@@ -24,7 +24,7 @@
 
 /* helper function, only valid for positive arguments      */
 /* quadratic fit on 0-45 range, results within +-0.25 deg  */
-float atan_positive(float ns, float ew)
+static float atan_positive(float ns, float ew)
 {
   float t;
   if (ew < ns) {
@@ -52,6 +52,40 @@ float atan2_approx(float ns, float ew)
   } else {  /* if (ew==0) */
     if (ns >= 0.0) return 0.0;
     return 180.0;
+  }
+}
+
+// even faster integer version (but cannot avoid one integer division)
+// - accurate to within about 1 degree
+
+static int32_t iatan_positive(int32_t ns, int32_t ew)
+{
+    if (ew > ns)
+        return (90 - iatan_positive(ew, ns));
+    uint32_t t;
+    if (ew < 0x000FFFFF) {
+      t = (((uint32_t)ew) << 8);
+      t /= (uint32_t)ns;              // 0..256 range since ew <= ns
+    } else {
+      t = (((uint32_t)ns) >> 8);
+      t = (uint32_t)ew / t;
+    }
+    return (int32_t)((45*t + ((t*(256-t))>>4) + 128)>>8);
+}
+
+int32_t iatan2_approx(int32_t ns, int32_t ew)
+{
+  if (ew > 0) {
+    if (ns > 0) return iatan_positive(ns,ew);
+    if (ns < 0) return 180 - iatan_positive(-ns,ew);
+    /* if (ns==0) */ return 90;
+  } else if (ew < 0) {
+    if (ns > 0) return 360 - iatan_positive(ns,-ew);
+    if (ns < 0) return 180 + iatan_positive(-ns,-ew);
+    /* if (ns==0) */ return 270;
+  } else {  /* if (ew==0) */
+    if (ns >= 0) return 0;
+    return 180;
   }
 }
 
@@ -88,7 +122,7 @@ float cos_approx(float degs)
  * Approximate sqrt(x^2+y^2):
  * 
  * Based on: https://www.flipcode.com/archives/Fast_Approximate_Distance_Functions.shtml
- * with one added "iteration".
+ * with one added "iteration" (at a cost of a float division).
  * 
  * Maximum error < 0.07%, average error about 0.03%.
  */
@@ -112,11 +146,102 @@ float approxHypotenuse(float x, float y)
    }
 }
 
+
+// faster integer version (including "iteration"):
+//   - faster because integer division instead of float
+//   - accuracy about +- 0.05%, similar to float version
+uint32_t iapproxHypotenuse1( int32_t x, int32_t y )
+{
+   uint32_t imin, imax, approx;
+   if (x == 0)
+     return y;
+   else if (y == 0)
+     return x;
+   if ( x < 0 ) x = -x;
+   if ( y < 0 ) y = -y;
+   if ( x < y ) {
+      imin = x;
+      imax = y;
+   } else {
+      imin = y;
+      imax = x;
+   }
+   if (imax < (1<<15)) {
+       if ( imax < ( imin << 4 ))
+           approx = ( imax * (1007-40) ) + ( imin * 441 );
+       else
+           approx = ( imax * 1007 ) + ( imin * 441 );
+       approx = (( approx + 512 ) >> 10 );   // now in same scale as inputs
+       return (((approx + (imin*imin+imax*imax)/approx) + 1) >> 1);
+   } else if (imax < (1<<19)) {
+       imin   = (( imin   + (1 << 3) ) >> 4 );
+       imax   = (( imax   + (1 << 3) ) >> 4 );
+       if ( imax < ( imin << 4 ))
+           approx = ( imax * (1007-40) ) + ( imin * 441 );
+       else
+           approx = ( imax * 1007 ) + ( imin * 441 );
+       approx = (( approx + 512 ) >> 10 );
+       return ((approx + (imin*imin+imax*imax)/approx) << 3);
+   } else if (imax < (1<<23)) {
+       imin   = (( imin   + (1 << 7) ) >> 8 );
+       imax   = (( imax   + (1 << 7) ) >> 8 );
+       if ( imax < ( imin << 4 ))
+           approx = ( imax * (1007-40) ) + ( imin * 441 );
+       else
+           approx = ( imax * 1007 ) + ( imin * 441 );
+       approx = (( approx + 512 ) >> 10 );
+       return ((approx + (imin*imin+imax*imax)/approx) << 7);
+   } else if (imax < (1<<27)) {
+       imin   = (( imin   + (1 << 11) ) >> 12 );
+       imax   = (( imax   + (1 << 11) ) >> 12 );
+       if ( imax < ( imin << 4 ))
+           approx = ( imax * (1007-40) ) + ( imin * 441 );
+       else
+           approx = ( imax * 1007 ) + ( imin * 441 );
+       approx = (( approx + 512 ) >> 10 );
+       return ((approx + (imin*imin+imax*imax)/approx) << 11);
+   }
+   imin   = (( imin   + (1 << 15) ) >> 16 );
+   imax   = (( imax   + (1 << 15) ) >> 16 );
+   if ( imax < ( imin << 4 ))
+       approx = ( imax * (1007-40) ) + ( imin * 441 );
+   else
+       approx = ( imax * 1007 ) + ( imin * 441 );
+   approx = (( approx + 512 ) >> 10 );
+   return ((approx + (imin*imin+imax*imax)/approx) << 15);
+}
+
+// even faster but rough integer version (the original code, without "iteration"):
+//   - only OK for x, y under about 2^20 in magnitude
+//   - accuracy about +- 4%
+uint32_t iapproxHypotenuse0( int32_t x, int32_t y )
+{
+   uint32_t imin, imax, approx;
+   if (x == 0)
+     return y;
+   else if (y == 0)
+     return x;
+   if ( x < 0 ) x = -x;
+   if ( y < 0 ) y = -y;
+   if ( x < y ) {
+      imin = x;
+      imax = y;
+   } else {
+      imin = y;
+      imax = x;
+   }
+   approx = ( imax * 1007 ) + ( imin * 441 );
+   if ( imax < ( imin << 4 ))
+      approx -= ( imax * 40 );
+   // add 512 for proper rounding
+   return (( approx + 512 ) >> 10 );
+}
+
 /* cos(latitude) is used to convert longitude difference into linear distance. */
 /* Once computed, accurate enough through a significant range of latitude. */
 
-static float cos_lat = 0.7;
-static float inv_cos_lat = 1.4;
+static float cos_lat = 0.7071;
+static float inv_cos_lat = 1.4142;
 
 float CosLat(float latitude)
 {

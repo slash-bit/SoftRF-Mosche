@@ -7,10 +7,11 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ### Latest additions:
 
+* vMB130: supports the GNS5892R ADS-B receiver module, on the T-Beam
 * vMB124: smaller binary, and better OLED & OTA UI, on the T-Beam
 * vMB123: supports baro sensor on the T-Echo ("Badge")
 * vMB120: supports the latest 2024 radio protocol
-* vMB114: experimental: import traffic data in GDL90 format (from ADS-B receiver)
+* vMB114: import traffic data in GDL90 format (from ADS-B receiver)
 * vMB110: added second serial port and data bridging (only on T-Beam)
 * vMB10h: added winch mode ("aircraft type") with variable reported altitude
 * vMB10f: auto turn-off Bluetooth upon web access to resolve memory limitation

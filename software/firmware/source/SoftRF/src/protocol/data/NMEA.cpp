@@ -23,6 +23,7 @@
 
 #include "NMEA.h"
 #include "GDL90.h"
+#include "GNS5892.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/RF.h"
 #include "../../system/SoC.h"
@@ -155,14 +156,14 @@ NmeaMallocedBuffer nmealib_buf;
 #endif /* USE_NMEALIB */
 
 const char *NMEA_CallSign_Prefix[] = {
-  [RF_PROTOCOL_LEGACY]    = "FL1",
+  [RF_PROTOCOL_LEGACY]    = "FLO",
   [RF_PROTOCOL_OGNTP]     = "OGN",
   [RF_PROTOCOL_P3I]       = "PAW",
   [RF_PROTOCOL_ADSB_1090] = "ADS",
   [RF_PROTOCOL_ADSB_UAT]  = "UAT",
   [RF_PROTOCOL_FANET]     = "FAN",
   [RF_PROTOCOL_GDL90]     = "GDL",   // data from external device
-  [RF_PROTOCOL_LATEST]    = "FL2",
+  [RF_PROTOCOL_LATEST]    = "FLR",
 };
 
 #define isTimeToPGRMZ() (millis() - PGRMZ_TimeMarker > 1000)
@@ -300,6 +301,7 @@ void sendPFLAV()
 // copy into plain static variables for efficiency in NMEA_Loop():
 bool is_a_prime_mk2 = false;
 bool has_serial2 = false;
+bool rx1090found = false;
 static unsigned int UDP_NMEA_Output_Port = NMEA_UDP_PORT;
 
 void NMEA_setup()
@@ -307,17 +309,21 @@ void NMEA_setup()
   if (settings->alt_udp)
     UDP_NMEA_Output_Port = NMEA_UDP_PORT2;  // or use ALT_UDP_PORT (4352)?
 
+#if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
 
     is_a_prime_mk2 = true;
 
-#if defined(ESP32)
-    // use Serial2 as an auxillary port for data bridging
+    // use Serial2 as an auxillary port for data bridging (or ADS-B data input)
     uint32_t Serial2Baud = baudrates[settings->baudrate2];
+    size_t Serial2BufSize = SerialBufSize;
+    if (settings->rx1090 == ADSB_RX_GNS5892) {
+        Serial2Baud = GNS5892_BAUDRATE;
+        Serial2BufSize = GNS5892_INPUT_BUF_SIZE;
+    }
     if (Serial2Baud != 0) {
-        Serial2.setRxBufferSize(SerialBufSize);
+        Serial2.setRxBufferSize(Serial2BufSize);
         Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
-        //Serial2.setRxBufferSize(SerialBufSize);
         has_serial2 = true;
         Serial.printf("Serial2 started at baud rate %d, logic:%d\r\n",
                Serial2Baud, settings->invert2);
@@ -325,8 +331,8 @@ void NMEA_setup()
         // note BAUD_DEFAULT here means Serial2 disabled, not 38400
         Serial.println(F("Serial2 NOT started"));
     }
-#endif
   }
+#endif
 
 #if defined(USE_NMEA_CFG)
   const char *psrf_c = "PSRFC";
@@ -674,20 +680,24 @@ void NMEA_loop()
     static char uart2_buf[128+3];
     static int uart2_n = 0;
     if (has_serial2) {
-      gdl90 = (settings->gdl90_in == DEST_UART2);
-      while (Serial.available() > 0) {
-          NMEA_Source = DEST_UART2;
-          int c = Serial.read();
-          if (gdl90)
-              GDL90_bridge_buf(c, uart2_buf, uart2_n);
-          else
-              NMEA_bridge_buf(c, uart2_buf, uart2_n);
-      }
-    }
-
-    if (NMEA_bridge_sent) {
-        yield();
-        return;           // check wireless inputs next time around
+        if (settings->rx1090 == ADSB_RX_GNS5892) {
+            // Serial2 is dedicated to the ADS-B receiver module
+            gns5892_loop();
+        } else {
+            gdl90 = (settings->gdl90_in == DEST_UART2);
+            while (Serial2.available() > 0) {
+                NMEA_Source = DEST_UART2;
+                int c = Serial2.read();
+                if (gdl90)
+                    GDL90_bridge_buf(c, uart2_buf, uart2_n);
+                else
+                    NMEA_bridge_buf(c, uart2_buf, uart2_n);
+            }
+        }
+        if (NMEA_bridge_sent) {  // also set by GDL90_bridge_buf() or gns5892_loop()
+            yield();
+            return;           // check wireless inputs next time around
+        }
     }
 
     static char bt_buf[128+3];
@@ -1052,7 +1062,7 @@ void NMEA_Export()
          data_source = fop->protocol == RF_PROTOCOL_ADSB_UAT ?
                             DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
 
-#if 0
+#if 1
          /*
           * When callsign is available - send it to a NMEA client.
           * If it is not - generate a callsign substitute,
@@ -1061,12 +1071,15 @@ void NMEA_Export()
          if (fop->callsign[0] == '\0') {
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-//            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d" PFLAA_EXT1_FMT "*"),
+//            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d,%d,%d,%d" PFLAA_EXT1_FMT "*"),
 // aircraft type is supposed to be hex:
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
+              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
               alt_diff, addr_type, id, NMEA_CallSign_Prefix[fop->protocol], id,
-              course, speed, ltrim(str_climb_rate), fop->aircraft_type
+              course, speed, ltrim(str_climb_rate), fop->aircraft_type,
+              (fop->no_track? 1 : 0),
+              (fop->protocol==RF_PROTOCOL_ADSB_1090? 1 : (fop->protocol==RF_PROTOCOL_GDL90? 1 : 0)),
+              fop->rssi
               PFLAA_EXT1_ARGS );
 
          } else {   /* there is a callsign from incoming data */
@@ -1076,10 +1089,13 @@ void NMEA_Export()
            fop->callsign[sizeof(fop->callsign)-1] = '\0';
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
+              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
               alarm_level, (int) fop->dy, (int) fop->dx,
               alt_diff, addr_type, id, fop->callsign,
-              course, speed, ltrim(str_climb_rate), fop->aircraft_type
+              course, speed, ltrim(str_climb_rate), fop->aircraft_type,
+              (fop->no_track? 1 : 0),
+              (fop->protocol==RF_PROTOCOL_ADSB_1090? 1 : (fop->protocol==RF_PROTOCOL_GDL90? 1 : 0)),
+              fop->rssi
               PFLAA_EXT1_ARGS );
          }
 #else
@@ -1160,19 +1176,24 @@ void NMEA_Export()
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
     NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 
-#if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
     static int beatcount = 0;
     if (++beatcount < 10)
         return;
     beatcount = 0;
+
+#if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSRFH,%06X,%d,%d,%d,%d,%d*"),
             ThisAircraft.addr,settings->rf_protocol,
             rx_packets_counter,tx_packets_counter,(int)(voltage*100),ESP.getFreeHeap());
-
     NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
     NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
+
+    if (settings->debug_flags & DEBUG_RESVD1) {
+        Serial.printf("ThisAircraft.baro_alt_diff = %.0f\r\n", ThisAircraft.baro_alt_diff);
+        Serial.printf("OthAcfts Avg baro_alt_diff = %.0f\r\n", average_baro_alt_diff);
+    }
 }
 
 #if defined(USE_NMEALIB)

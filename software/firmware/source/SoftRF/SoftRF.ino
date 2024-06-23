@@ -82,6 +82,7 @@
 #include "src/driver/Battery.h"
 #include "src/protocol/data/MAVLink.h"
 #include "src/protocol/data/GDL90.h"
+#include "src/protocol/data/GNS5892.h"
 #include "src/protocol/data/NMEA.h"
 #include "src/protocol/data/D1090.h"
 #include "src/system/SoC.h"
@@ -280,6 +281,9 @@ Serial.println(F("... Baro_setup() returned"));
   Web_setup();
   NMEA_setup();
 
+  if (settings->rx1090 == ADSB_RX_GNS5892)
+      gns5892_setup();
+
 #if defined(ENABLE_TTN)
   TTN_setup();
 #endif
@@ -331,86 +335,6 @@ Serial.println(F("... Baro_setup() returned"));
 //Serial.println(hw_info.revision);
 
   SetupTimeMarker = millis();
-}
-
-void loop()
-{
-  // Do common RF stuff first
-  RF_loop();
-
-  switch (settings->mode)
-  {
-#if !defined(EXCLUDE_TEST_MODE)
-  case SOFTRF_MODE_TXRX_TEST:
-    txrx_test();
-    break;
-#endif /* EXCLUDE_TEST_MODE */
-#if !defined(EXCLUDE_MAVLINK)
-  case SOFTRF_MODE_UAV:
-    uav();
-    break;
-#endif /* EXCLUDE_MAVLINK */
-#if !defined(EXCLUDE_WIFI)
-  case SOFTRF_MODE_BRIDGE:
-    bridge();
-    break;
-#endif /* EXCLUDE_WIFI */
-#if !defined(EXCLUDE_WATCHOUT_MODE)
-  case SOFTRF_MODE_WATCHOUT:
-    watchout();
-    break;
-#endif /* EXCLUDE_WATCHOUT_MODE */
-  case SOFTRF_MODE_NORMAL:
-  default:
-    normal();
-    break;
-  }
-
-  // Show status info on tiny OLED display
-  SoC->Display_loop();
-
-  // battery status LED
-  LED_loop();
-
-  // Handle DNS
-  WiFi_loop();
-
-  // Handle Web
-  Web_loop();
-
-  // Handle OTA update.
-  OTA_loop();
-
-#if LOGGER_IS_ENABLED
-  Logger_loop();
-#endif /* LOGGER_IS_ENABLED */
-
-  SoC->loop();
-
-  if (SoC->Bluetooth_ops) {
-    SoC->Bluetooth_ops->loop();
-  }
-
-  if (SoC->USB_ops) {
-    SoC->USB_ops->loop();
-  }
-
-  if (SoC->UART_ops) {
-     SoC->UART_ops->loop();
-  }
-
-  Battery_loop();
-
-  SoC->Button_loop();
-
-#if defined(TAKE_CARE_OF_MILLIS_ROLLOVER)
-  /* restart the device when uptime is more than 47 days */
-  if (millis() > (47 * 24 * 3600 * 1000UL)) {
-    SoC->reset();
-  }
-#endif /* TAKE_CARE_OF_MILLIS_ROLLOVER */
-
-  yield();
 }
 
 void shutparts()
@@ -1009,3 +933,85 @@ void txrx_test()
 }
 
 #endif /* EXCLUDE_TEST_MODE */
+
+void loop()
+{
+  // Do common RF stuff first
+  RF_loop();
+
+  switch (settings->mode)
+  {
+  case SOFTRF_MODE_NORMAL:
+    normal();
+    break;
+#if !defined(EXCLUDE_TEST_MODE)
+  case SOFTRF_MODE_TXRX_TEST:
+    txrx_test();
+    break;
+#endif /* EXCLUDE_TEST_MODE */
+#if !defined(EXCLUDE_MAVLINK)
+  case SOFTRF_MODE_UAV:
+    uav();
+    break;
+#endif /* EXCLUDE_MAVLINK */
+#if !defined(EXCLUDE_WIFI)
+  case SOFTRF_MODE_BRIDGE:
+    bridge();
+    break;
+#endif /* EXCLUDE_WIFI */
+#if !defined(EXCLUDE_WATCHOUT_MODE)
+  case SOFTRF_MODE_WATCHOUT:
+    watchout();
+    break;
+#endif /* EXCLUDE_WATCHOUT_MODE */
+  default:
+    normal();
+    break;
+  }
+
+  // Show status info on tiny OLED display
+  SoC->Display_loop();
+
+  // battery status LED
+  LED_loop();
+
+  // Handle DNS
+  WiFi_loop();
+
+  // Handle Web
+  Web_loop();
+
+  // Handle OTA update.
+  OTA_loop();
+
+#if LOGGER_IS_ENABLED
+  Logger_loop();
+#endif /* LOGGER_IS_ENABLED */
+
+  SoC->loop();
+
+  if (SoC->Bluetooth_ops) {
+    SoC->Bluetooth_ops->loop();
+  }
+
+  if (SoC->USB_ops) {
+    SoC->USB_ops->loop();
+  }
+
+  if (SoC->UART_ops) {
+     SoC->UART_ops->loop();
+  }
+
+  Battery_loop();
+
+  SoC->Button_loop();
+
+#if defined(TAKE_CARE_OF_MILLIS_ROLLOVER)
+  /* restart the device when uptime is more than 47 days */
+  if (millis() > (47 * 24 * 3600 * 1000UL)) {
+    SoC->reset();
+  }
+#endif /* TAKE_CARE_OF_MILLIS_ROLLOVER */
+
+  yield();
+}

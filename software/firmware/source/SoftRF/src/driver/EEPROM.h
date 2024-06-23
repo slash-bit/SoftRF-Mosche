@@ -85,6 +85,14 @@ enum
 
 enum
 {
+    ADSB_RX_NONE = 0,
+    ADSB_RX_GNS5892 = 1,
+    ADSB_RX_2,
+    ADSB_RX_3
+};
+
+enum
+{
 	BAUD_DEFAULT = 0,
 	BAUD_4800 = 1,
 	BAUD_9600 = 2,
@@ -137,7 +145,8 @@ typedef struct Settings {
     uint8_t  pointer:2;
     uint8_t  power_save:2;
     uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
-    uint8_t  resvd2:3;
+    uint8_t  rx1090:2;    // attached ADS-B receiver module
+    uint8_t  resvd2:1;
 
     uint8_t  resvd3;
 

@@ -67,7 +67,7 @@ enum
 
 #define TRAFFIC_ALERT_SOUND   1
 
-bool air_relay();
+bool air_relay(ufo_t *fop);
 void AddTraffic(ufo_t *fop);
 void ParseData(void);
 void Traffic_setup(void);
@@ -86,6 +86,7 @@ extern traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 extern int max_alarm_level;
 extern bool alarm_ahead;
 extern bool relay_waiting;
+extern float average_baro_alt_diff;
 
 #if defined(ESP32)
 extern File AlarmLog;

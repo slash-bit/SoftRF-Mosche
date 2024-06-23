@@ -149,6 +149,17 @@ void Buzzer_loop(void)
   if (settings->volume == BUZZER_OFF)
       return;
 
+#if 1
+  // demo each alarm sound once after booting
+  static uint8_t buzzer_demo = 0;
+  if (buzzer_demo < 3 && BuzzerTimeMarker == 0) {
+      delay(500);
+      Buzzer_Notify(buzzer_demo+2, false);
+      ++buzzer_demo;
+      return;
+  }
+#endif
+
   if (BuzzerTimeMarker != 0 && millis() > BuzzerTimeMarker) {
 
     if (BuzzerBeeps > 1) {
