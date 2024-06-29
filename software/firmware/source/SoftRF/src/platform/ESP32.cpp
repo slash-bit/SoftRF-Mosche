@@ -54,6 +54,7 @@
 #include "../system/SoC.h"
 #include "../system/Time.h"
 #include "../driver/Buzzer.h"
+#include "../driver/Strobe.h"
 #include "../driver/EEPROM.h"
 #include "../driver/RF.h"
 #include "../driver/WiFi.h"
@@ -151,6 +152,8 @@ void TFT_backlight_on()
 XPowersLibInterface *PMU = NULL;
 
 uint32_t BlueLEDTimeMarker = 5000;
+
+static bool bt_turned_off = false;
 
 static int esp32_board = ESP32_DEVKIT; /* default */
 static size_t ESP32_Min_AppPart_Size = 0;
@@ -530,6 +533,19 @@ static void ESP32_setup()
   }
 #endif
 
+  // prevent external buzzer being "on" for a while at boot
+  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN) {
+      //pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
+      //digitalWrite(SOC_GPIO_PIN_BUZZER, LOW);
+      pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
+  }
+  // similarly for strobe
+  if (STROBEPIN != SOC_UNUSED_PIN) {
+      //pinMode(STROBEPIN, OUTPUT);
+      //digitalWrite(STROBEPIN, LOW);
+      pinMode(STROBEPIN, INPUT_PULLDOWN);
+  }
+
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     esp32_board = ESP32_TTGO_T_BEAM;
 
@@ -653,7 +669,7 @@ static void ESP32_setup()
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
 
-    /* use middle button on T-Beam v1.x to turn off Bluetooth (or transmissions) */
+    /* use middle button on T-Beam v1.x to turn off transmissions in winch mode */
     if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
         if (hw_info.revision == 8 || hw_info.revision == 12) {
             middle_button_pin = (gpio_num_t) SOC_GPIO_PIN_TBEAM_V08_BUTTON;
@@ -1307,6 +1323,12 @@ static void ESP32_loop()
   default:
     break;
   }
+
+  // show a message if long-press middle button turned off Bluetooth
+  if (bt_turned_off) {
+    OLED_msg("BT", "OFF");
+    bt_turned_off = false;  // message done, but BT is still off
+  }
 }
 
 static void ESP32_fini(int reason)
@@ -1344,7 +1366,6 @@ static void ESP32_fini(int reason)
       //PMU->setChargingLedMode(XPOWERS_CHG_LED_OFF);
       PMU->setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
              // The charging indicator is controlled by the charger
-             //  - will this work on the AXP192?
 
       //PMU->disableButtonBatteryCharge();
 
@@ -1366,8 +1387,6 @@ static void ESP32_fini(int reason)
 
 #endif /* PMK2_SLEEP_MODE */
 
-      //PMU->disableALDO2();
-      //PMU->disableALDO3();
       PMU->disablePowerOutput(XPOWERS_LDO2);
       PMU->disablePowerOutput(XPOWERS_LDO3);
       PMU->disablePowerOutput(XPOWERS_DCDC2);
@@ -1416,8 +1435,6 @@ static void ESP32_fini(int reason)
 
       //PMU->disableButtonBatteryCharge();
 
-      //PMU->disableALDO2();
-      //PMU->disableALDO3();
       PMU->disablePowerOutput(XPOWERS_ALDO2);
       PMU->disablePowerOutput(XPOWERS_ALDO3);
 
@@ -2721,10 +2738,11 @@ void handleEvent2(AceButton* button, uint8_t eventType,
   if (button != &button_2)
       return;
 
-  /* Use middle button on T-Beam to turn off Bluetooth */
-  /* this can help one reach the web interface */
-  /* But in winch mode use the button to turn transmissions on/off */
-  /* Note that now any web access turns BT off, without the button */
+  // Click middle button on T-Beam to trigger alarm demo.
+  // But in winch mode the button turns transmissions on/off instead.
+  // Can also long-press to turn off Bluetooth until next boot
+  //    - this can help one reach the web interface
+  // Note that now any web access turns BT off, without the button press.
 
   switch (eventType) {
     case AceButton::kEventClicked:
@@ -2735,10 +2753,17 @@ void handleEvent2(AceButton* button, uint8_t eventType,
           } else {
               settings->txpower = RF_TX_POWER_OFF;
           }
-      } else if (settings->bluetooth != BLUETOOTH_OFF && millis() > 15000) {
+      } else if (millis() > 10000) {
+          SetupTimeMarker = millis();
+          do_alarm_demo = true;
+      }
+      break;
+    case AceButton::kEventLongPressed:
+      if (settings->bluetooth != BLUETOOTH_OFF && millis() > 15000) {
           if (SoC->Bluetooth_ops) {
               Serial.println(F("Turning off Bluetooth due to button press"));
               SoC->Bluetooth_ops->fini();
+              bt_turned_off = true;
           }
       }
       break;

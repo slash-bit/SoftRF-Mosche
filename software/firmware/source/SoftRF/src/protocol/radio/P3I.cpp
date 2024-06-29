@@ -86,14 +86,14 @@ bool p3i_decode(void *p3i_pkt, ufo_t *this_aircraft, ufo_t *fop) {
   if (fop->addr == ThisAircraft.addr)
          return true;                 /* same ID as this aircraft - ignore */
 
-  fop->addr_type = ADDR_TYPE_P3I;
+  fop->addr_type = ADDR_TYPE_ICAO;     // was ADDR_TYPE_P3I but can't report that?
   fop->timestamp = timestamp;
   fop->gnsstime_ms = millis();
 
   fop->latitude = pkt->latitude;
   fop->longitude = pkt->longitude;
   fop->altitude = (float) pkt->altitude;
-  fop->aircraft_type = pkt->aircraft;
+  fop->aircraft_type = (pkt->aircraft & 0x0F);   // higher bits signal packet is relayed
   fop->course = (float) pkt->track;
   fop->speed = (float) pkt->knots;
 

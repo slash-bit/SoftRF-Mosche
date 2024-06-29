@@ -71,6 +71,7 @@ static uint8_t ac_type_table[16] =
     AIRCRAFT_TYPE_HELICOPTER  // 0xF rotorcraft
 };
 
+uint32_t adsb_packets_counter = 0;
 
 // This code from https://github.com/watson/libmodes/
 
@@ -793,6 +794,8 @@ static bool parse_position()
     }
 
     update_traffic_position();
+
+    ++adsb_packets_counter;
 
     return true;
 }

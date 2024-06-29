@@ -103,6 +103,7 @@ void stop_bluetooth()
           Serial.println(F("Stopping Bluetooth for web access"));
           SoC->Bluetooth_ops->fini();
           BTpaused = true;
+          OLED_msg("BT", "OFF");
       }
   }
   yield();
@@ -571,6 +572,17 @@ void handleSettings() {
   (settings->pointer == DIRECTION_NORTH_UP ? "selected" : ""), DIRECTION_NORTH_UP,
   (settings->pointer == LED_OFF ? "selected" : ""), LED_OFF
   );
+
+#if 0
+<tr>\
+<th align=left>Demo Buzzer & Strobe</th>\
+<td align=right>\
+<input type='radio' name='alarm_demo' value='0' %s>Off\
+<input type='radio' name='alarm_demo' value='1' %s>On\
+</td>\
+</tr>\
+//  (!settings->alarm_demo ? "checked" : "") , (settings->alarm_demo ? "checked" : ""),
+#endif
 
   len = strlen(offset);
   offset += len;
@@ -1432,6 +1444,8 @@ void handleInput() {
       settings->volume = server.arg(i).toInt();
     } else if (server.argName(i).equals("strobe")) {
       settings->strobe = server.arg(i).toInt();
+//    } else if (server.argName(i).equals("alarm_demo")) {
+//      settings->alarm_demo = server.arg(i).toInt();
     } else if (server.argName(i).equals("pointer")) {
       settings->pointer = server.arg(i).toInt();
     } else if (server.argName(i).equals("voice")) {
@@ -1601,7 +1615,7 @@ void handleInput() {
 
   /* enforce some hardware restrictions */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-      if (settings->rx1090 != ADSB_RX_NONE)
+      if (settings->rx1090 != ADSB_RX_NONE) {
           // dedicate Serial2 to the ADS-B receiver module
           settings->baudrate2 = BAUD_DEFAULT;       // will actually use 921600
           settings->invert2 = false;
@@ -1615,15 +1629,16 @@ void handleInput() {
               settings->gdl90_in   = DEST_NONE;
           if (settings->d1090     == DEST_UART2)
               settings->d1090      = DEST_NONE;
+      }
       if (settings->voice == VOICE_EXT)
           settings->volume = BUZZER_OFF;  // free up pins 14 & 15 for I2S use
   } else {
       settings->voice = VOICE_OFF;
   }
 
-  /* if winch mode, use full transmission power? */
-  //if (settings->aircraft_type == AIRCRAFT_TYPE_WINCH && settings->txpower == RF_TX_POWER_LOW)
-  //    settings->txpower == RF_TX_POWER_FULL;
+  /* if winch mode, use full transmission power */
+  if (settings->aircraft_type == AIRCRAFT_TYPE_WINCH && settings->txpower == RF_TX_POWER_LOW)
+      settings->txpower == RF_TX_POWER_FULL;
 
   /* show new settings before rebooting */
   size_t size = 3800;

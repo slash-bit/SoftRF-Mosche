@@ -42,6 +42,8 @@ bool default_settings_used = false;
 eeprom_t eeprom_block;
 settings_t *settings;
 
+bool do_alarm_demo = false;  // besides settings->alarm_demo, activated by middle button on T-Beam
+
 uint32_t baudrates[8] = 
 {
     0,
@@ -96,6 +98,8 @@ void EEPROM_setup()
   }
 
   SoC->EEPROM_extension(cmd);
+
+  settings->alarm_demo = false;   // since it is commented out in Web.cpp
 
   Serial.println(F("Settings:"));
   show_settings_serial();
@@ -196,6 +200,7 @@ void EEPROM_defaults()
   settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
   settings->invert2    = false;
   settings->rx1090     = ADSB_RX_NONE;
+  settings->alarm_demo = false;
   settings->igc_key[0] = 0;
   settings->igc_key[1] = 0;
   settings->igc_key[2] = 0;
@@ -234,6 +239,7 @@ void show_settings_serial()
     Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
     Serial.print(F(" Volume "));Serial.println(settings->volume);
     Serial.print(F(" Strobe "));Serial.println(settings->strobe);
+    Serial.print(F(" Alarm Demo "));Serial.println(settings->alarm_demo);
     Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
     Serial.print(F(" Voice "));Serial.println(settings->voice);
     Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);

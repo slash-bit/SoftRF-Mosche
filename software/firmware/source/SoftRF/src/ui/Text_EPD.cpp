@@ -52,8 +52,10 @@ enum {
 static int view_state_curr = STATE_TVIEW_NONE;
 static int view_state_prev = STATE_TVIEW_NONE;
 
+
 static void EPD_Draw_Text()
 {
+  static int prev_j=0;
   int j=0;
   int bearing;
   char info_line [TEXT_VIEW_LINE_LENGTH];
@@ -82,8 +84,13 @@ static void EPD_Draw_Text()
     qsort(traffic_by_dist, j, sizeof(traffic_by_dist_t), traffic_cmp_by_distance);
 
     if (EPD_current > j) {
-      EPD_current = j;
+      if (prev_j > j) {
+        EPD_current = j;
+      } else {
+        EPD_current = 1;
+      }
     }
+    prev_j = j;
 
     bearing = (int) traffic_by_dist[EPD_current - 1].fop->bearing;
 

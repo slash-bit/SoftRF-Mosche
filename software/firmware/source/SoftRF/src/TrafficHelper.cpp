@@ -58,6 +58,8 @@ float average_baro_alt_diff = 0;
 
 static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
 
+static uint32_t Alarm_timer = 0;
+
 /*
  * No any alarms issued by the firmware.
  * Rely upon high-level flight management software.
@@ -115,7 +117,7 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
          adj_distance = distance;
 
   if (adj_distance < ALARM_ZONE_EXTREME)
-    --fop->alert_level;     /* may sound new alarm even if previous one was IMPORTANT */
+    --fop->alert_level;     /* may sound new alarm for same URGENT level */
   if (adj_distance < ALARM_ZONE_URGENT) {
     rval = ALARM_LEVEL_URGENT;
   } else if (adj_distance < ALARM_ZONE_IMPORTANT) {
@@ -192,9 +194,6 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 
       t = adj_distance / V_rel_magnitude;
 
-      if (t < ALARM_TIME_EXTREME)
-          --fop->alert_level;     /* may sound new alarm even if previous one was IMPORTANT */
-
       float rel_angle = fabs(V_rel_direction - fop->bearing);
 
       if (rel_angle < ALARM_VECTOR_ANGLE && V_rel_magnitude > 3 * ALARM_VECTOR_SPEED) {
@@ -243,6 +242,9 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
       }
     }
   }
+
+  if (t < ALARM_TIME_EXTREME)
+      --fop->alert_level;     /* may sound new alarm for same URGENT level */
 
   /* send data out via NMEA for debugging */
   if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_ALARM)) {
@@ -510,7 +512,7 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
       rval = ALARM_LEVEL_NONE;
 
   if (rval >= ALARM_LEVEL_LOW && mintime < ALARM_TIME_EXTREME)
-      --fop->alert_level;     /* may sound new alarm even if previous one was IMPORTANT */
+      --fop->alert_level;     /* may sound new alarm even for same URGENT level */
 
   /* send data out via NMEA for debugging */
   if (rval > ALARM_LEVEL_CLOSE || fop->distance < ALARM_ZONE_IMPORTANT) {
@@ -560,18 +562,23 @@ void Traffic_Update(ufo_t *fop)
   }
 
   if (Alarm_Level) {
-       fop->alarm_level = (*Alarm_Level)(&ThisAircraft, fop);
+      fop->alarm_level = (*Alarm_Level)(&ThisAircraft, fop);
 
-       /* if gone farther, reduce threshold for a new alert - with hysteresis. */
-       /* E.g., if alarm was for LOW, alert_level was set to IMPORTANT.        */
-       /* A new alarm alert will sound if close enough to now be URGENT.       */
-       /* Or, if now gone to CLOSE (farther than LOW), set alert_level to LOW, */
-       /* then next time reaches alarm_level IMPORTANT will give a new alert.  */
-       /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
-       /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
+      /* Sound an alarm if new alert, or got closer than previous alert,     */
+      /* or (hysteresis) got two levels farther, and then closer.            */
+      /* E.g., if alarm was for LOW, alert_level was set to LOW.             */
+      /* A new alarm alert will sound if close enough to now be IMPORTANT.   */
+      /* If gone to CLOSE, then back to LOW, still no new alarm.             */
+      /* If now gone to NONE (farther than CLOSE), set alert_level to CLOSE, */
+      /* then next time returns to alarm_level LOW will give an alert.       */
 
-       if (fop->alarm_level < fop->alert_level)       /* if just less by 1...   */
-            fop->alert_level = fop->alarm_level + 1;  /* ...then no change here */
+      if (fop->alarm_level < fop->alert_level) {    /* if just less by 1...   */
+          fop->alert_level = fop->alarm_level + 1;  /* ...then no change here */
+      }
+      if (Alarm_timer != 0 && fop->alert_level > ALARM_LEVEL_NONE && millis() > Alarm_timer) {
+          --fop->alert_level;
+          Alarm_timer = 0;
+      }
   }
 }
 
@@ -938,14 +945,13 @@ void Traffic_loop()
       }
     }
 
-    /* sound an alarm if new alert, or got two levels closer than previous  */
-    /* alert, or hysteresis: got two levels farther, and then closer.       */
-    /* E.g., if alarm was for LOW, alert_level was set to IMPORTANT.        */
-    /* A new alarm alert will sound if close enough to now be URGENT.       */
-    /* Or, if now gone to CLOSE (farther than LOW), set alert_level to LOW, */
-    /* then next time reaches alarm_level IMPORTANT will give a new alert.  */
-    /* Or, if now gone to NONE (farther than CLOSE), set alert_level to     */
-    /* CLOSE, then next time returns to alarm_level LOW will give an alert. */
+    /* Sound an alarm if new alert, or got closer than previous alert,     */
+    /* or (hysteresis) got two levels farther, and then closer.            */
+    /* E.g., if alarm was for LOW, alert_level was set to LOW.             */
+    /* A new alarm alert will sound if close enough to now be IMPORTANT.   */
+    /* If gone to CLOSE, then back to LOW, still no new alarm.             */
+    /* If now gone to NONE (farther than CLOSE), set alert_level to CLOSE, */
+    /* then next time returns to alarm_level LOW will give an alert.       */
 
     if (sound_alarm_level > ALARM_LEVEL_CLOSE) {
       // use alarmcount to modify the sounds
@@ -969,7 +975,11 @@ void Traffic_loop()
       if (mfop != NULL) {
         // if (notified)
         {
-          mfop->alert_level = mfop->alarm_level + 1;
+          mfop->alert_level = mfop->alarm_level;   // was + 1;
+          // warn again if alarm level gets higher than current one
+          // also warn again for same level after 9 seconds
+          if (Alarm_timer == 0)
+              Alarm_timer = millis() + 9000;    // when may warn again about this aircraft
           mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
         }
 #if defined(ESP32)

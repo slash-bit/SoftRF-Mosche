@@ -30,6 +30,7 @@
 // which does #include "../../SoftRF.h"
 #include "../../driver/WiFi.h"
 #include "../../driver/EEPROM.h"
+#include "../../driver/RF.h"
 #include "../../driver/Battery.h"
 #include "../../driver/Baro.h"
 #include "../../driver/Bluetooth.h"
@@ -1022,6 +1023,8 @@ void NMEA_Export()
 
       for (int i=0; i < total_objects && i < MAX_NMEA_OBJECTS; i++) {
 
+         // note that MAX_NMEA_OBJECTS (6) < MAX_TRACKING_OBJECTS (8)
+
          uint8_t addr_type = fop->addr_type > ADDR_TYPE_ANONYMOUS ?
                                   ADDR_TYPE_ANONYMOUS : fop->addr_type;
 
@@ -1035,9 +1038,10 @@ void NMEA_Export()
            addr_type = ADDR_TYPE_ANONYMOUS;
          }
 
-         /* may want to skip the HP object if there are many to report */
-         /* since it will be in the PFLAU sentence */
-         if (total_objects < MAX_NMEA_OBJECTS || fop->addr != HP_addr) {
+         // may want to skip the HP object if there are many to report
+         // since it will be in the PFLAU sentence - but XCsoar etc
+         // seem to ignore the PFLAU, so report the HP object both ways
+         //if (total_objects < MAX_NMEA_OBJECTS || fop->addr != HP_addr) {
 
          alt_diff = (int) (fop->alt_diff);  /* sent to NMEA */
 
@@ -1110,7 +1114,7 @@ void NMEA_Export()
          NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
 
-        }  /* done skipping the HP object */
+        //}  /* done skipping the HP object */
 
         if (fop->next >= MAX_TRACKING_OBJECTS)  break;    /* belt and suspenders */
 

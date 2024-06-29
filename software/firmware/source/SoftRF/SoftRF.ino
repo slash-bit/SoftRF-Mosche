@@ -139,6 +139,8 @@ void setup()
 
   hw_info.soc = SoC_setup(); // Has to be very first procedure in the execution order
 
+  // ESP32_setup() now initializes the buzzer and strobe pins to avoid early output
+
   resetInfo = (rst_info *) SoC->getResetInfoPtr();
 
   Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
@@ -170,6 +172,11 @@ void setup()
   Serial.println(SoC->getResetInfo()); Serial.println("");
 
   EEPROM_setup();
+
+  // can only do these after EEPROM_setup(), to know the settings,
+  // and EEPROM_setup() needs to be done after the Serial setup delays.
+  Buzzer_setup();
+  Strobe_setup();
 
   SoC->Button_setup();
 
@@ -281,8 +288,10 @@ Serial.println(F("... Baro_setup() returned"));
   Web_setup();
   NMEA_setup();
 
+#if defined(ESP32)
   if (settings->rx1090 == ADSB_RX_GNS5892)
       gns5892_setup();
+#endif
 
 #if defined(ENABLE_TTN)
   TTN_setup();
@@ -295,19 +304,12 @@ Serial.println(F("... Baro_setup() returned"));
     LED_test();
   }
 
-//Serial.println("calling Buzzer_setup()");
-  Buzzer_setup();
-//Serial.println("calling Buzzer_test()");
-  SoC->Buzzer_test(resetInfo->reason);
-
 #if !defined(EXCLUDE_VOICE)
 #if defined(ESP32)
   Voice_setup();
   Voice_test(resetInfo->reason);
 #endif
 #endif
-
-  Strobe_setup();
 
   switch (settings->mode)
   {
@@ -323,6 +325,9 @@ Serial.println(F("... Baro_setup() returned"));
     SoC->swSer_enableRx(true);
     break;
   }
+
+//Serial.println("calling Buzzer_test()");
+  SoC->Buzzer_test(resetInfo->reason);
 
   SoC->post_init();
 
@@ -427,21 +432,41 @@ void normal()
   static uint32_t nextprev_ms = 0;
 
   bool validfix = isValidFix();
+  bool newfix = false;
+
+  uint32_t gnss_age;
+  uint32_t thistime_ms;
 
   if (validfix) {
 
+    /* also store a more precise GPS time stamp (millisecond resolution):  */
+    /* - alas gnss.time returns whole seconds not centiseconds as promised */
+    gnss_age = gnss.location.age();
+    thistime_ms = millis() - gnss_age;                   /* = lastCommitTime */
+
+    newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 150   // new data arrived from GNSS
+                   && gnss_age < 3000);
+
+    static float prev_lat = 0;
+    static float prev_lon = 0;
+
     if (firstfix) {
+        prev_lat = gnss.location.lat();
+        prev_lon = gnss.location.lng();
         firstfix = false;
         SetupTimeMarker = millis();
         /* start a minute of non-airborne collision warnings */
+    } else if (newfix) {
+        if (fabs(gnss.location.lat()-ThisAircraft.latitude) > 0.15)   // looks like bad data
+            validfix = false;
+        if (fabs(gnss.location.lng()-ThisAircraft.longitude) > 0.25)
+            validfix = false;
+        prev_lat = gnss.location.lat();
+        prev_lon = gnss.location.lng();
     }
+  }
 
-    /* also store a more precise GPS time stamp (millisecond resolution):  */
-    /* - alas gnss.time returns whole seconds not centiseconds as promised */
-    uint32_t gnss_age = gnss.location.age();
-    uint32_t thistime_ms = millis() - gnss_age;                   /* = lastCommitTime */
-    bool newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 150   /* new data arrived from GNSS */
-                   && gnss_age < 3000);
+  if (validfix) {
 
     if (newfix) {
 
@@ -565,11 +590,6 @@ void normal()
     rx_success = RF_Receive();
     // if received a packet, postpone transmission until next time around the loop().
 
-    /* try and transmit, between "newfix" times, */
-    /*    since it is waiting for the time slot, */
-    /*  and also repeat to help ensure reception */
-    //static uint32_t try_tx = 0;
-    //if (millis() > try_tx) {
       if (!rx_success && RF_Transmit_Ready() && (RF_current_slot != 0 || !relay_waiting)) {
         // Don't bother with the encode() if can't transmit right now
         // Reserve slot 0 for relay message if any relaying is pending
@@ -585,13 +605,6 @@ void normal()
         }
       }
       /* - this only actually transmits when some preset random time is reached */
-      /* don't try again right away: */
-      //try_tx = millis() + 19;
-      //try_tx += (try_tx & 0x0F);
-      /* give air-relay a better chance to happen: */
-      //if (RF_current_slot == 0 && relay_waiting)
-          //try_tx += 51;
-    //}
 
   } else if (GNSSTimeMarker) {      /* not validfix but had fix before */
 

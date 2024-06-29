@@ -146,7 +146,7 @@ typedef struct Settings {
     uint8_t  power_save:2;
     uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
     uint8_t  rx1090:2;    // attached ADS-B receiver module
-    uint8_t  resvd2:1;
+    bool     alarm_demo:1;
 
     uint8_t  resvd3;
 
@@ -216,5 +216,6 @@ void show_settings_serial(void);
 extern bool default_settings_used;
 extern settings_t *settings;
 extern uint32_t baudrates[];
+extern bool do_alarm_demo;
 
 #endif /* EEPROMHELPER_H */

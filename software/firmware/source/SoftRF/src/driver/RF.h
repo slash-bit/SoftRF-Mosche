@@ -137,6 +137,8 @@ extern int8_t RF_last_rssi;
 
 extern const rf_proto_desc_t legacy_proto_desc;
 
+extern uint32_t rx_packets_counter, tx_packets_counter;
+
 /* #define TIMETEST */
 #ifdef TIMETEST
 void increment_fake_time(void);

@@ -35,8 +35,7 @@ void  Strobe_fini()        {}
 
 #include "../protocol/data/NMEA.h"
 
-static int StrobePin = SOC_UNUSED_PIN;
-uint32_t StrobeSetupMarker = 0;
+static int StrobePin = SOC_UNUSED_PIN;;
 static uint32_t StrobeTimeMarker = 0;
 static uint32_t StrobePauseMarker = 0;
 static int StrobeFlashes = 0;      /* how many flashes */
@@ -49,13 +48,21 @@ void Strobe_setup(void)
 {
   if (settings->strobe == STROBE_OFF)
       return;
-  StrobePauseMarker = StrobeSetupMarker = millis();
+  StrobePauseMarker = millis();
   StrobePin = STROBEPIN;
   if (StrobePin == SOC_UNUSED_PIN)
       return;
   pinMode(StrobePin, OUTPUT);
   StrobeState = false;
   StrobeTimeMarker = 0;
+
+  // one double flash to show it is working
+  digitalWrite(StrobePin, HIGH);
+  delay(50);
+  digitalWrite(StrobePin, LOW);
+  delay(50);
+  digitalWrite(StrobePin, HIGH);
+  delay(50);
   digitalWrite(StrobePin, LOW);
 }
 
@@ -140,16 +147,19 @@ void Strobe_loop(void)
 
     /* not currently flashing, flash again after pause */
 
-      bool self_test = (millis() - StrobeSetupMarker < 1000 * STROBE_INITIAL_RUN);
-//      if (self_test)
-//          alarm_level = ((millis() & 0x6000) == 0x6000) ? ALARM_LEVEL_LOW : ALARM_LEVEL_NONE;
-//      else
-            alarm_level = max_alarm_level;
-      if (! alarm_ahead)                    // not within +-45 degrees of our track
+      uint32_t t = millis() - SetupTimeMarker;
+      bool self_test = ((settings->alarm_demo || do_alarm_demo)
+                         && t < (1000*STROBE_INITIAL_RUN)
+                         && t > (1000*(STROBE_INITIAL_RUN-3)));
+      if (self_test)
+          alarm_level = ALARM_LEVEL_LOW;
+      else if (! alarm_ahead && settings->strobe != STROBE_ALARM)   // not within +-45 degrees of our track
           alarm_level = ALARM_LEVEL_NONE;   // strobe is facing forward, no use
+      else
+          alarm_level = max_alarm_level;
       uint32_t pause_ms = 0;
       if (self_test) {
-            pause_ms = alarm_level > ALARM_LEVEL_CLOSE ? STROBE_MS_PAUSE_ALARM : STROBE_MS_PAUSE_NOALARM;
+            pause_ms = STROBE_MS_PAUSE_ALARM;
       } else {
         if (alarm_level > ALARM_LEVEL_CLOSE) {
             pause_ms = STROBE_MS_PAUSE_ALARM;
@@ -166,8 +176,8 @@ void Strobe_loop(void)
 
 void Strobe_fini(void)
 {
-  Strobe_setup();         // turns strobe off
-  StrobePauseMarker = 0;  // prevents new flashes
+  digitalWrite(StrobePin, LOW);    // turns strobe off
+  StrobePauseMarker = 0;           // prevents new flashes
 }
 
 #endif /* EXCLUDE_STROBE */

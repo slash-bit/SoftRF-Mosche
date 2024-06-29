@@ -23,4 +23,6 @@ void play5892(void);
 void gns5892_setup(void);
 void gns5892_loop(void);
 
+extern uint32_t adsb_packets_counter;
+
 #endif /* GNS5892_H */

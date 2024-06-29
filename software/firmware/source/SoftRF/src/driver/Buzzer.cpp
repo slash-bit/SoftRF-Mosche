@@ -68,6 +68,8 @@ void Buzzer_setup(void)
       if (SOC_GPIO_PIN_BUZZER == SOC_UNUSED_PIN)
           return;
       pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
+      ext_buzzer(true);   // turn buzzer on briefly for self-test
+      delay(200);
       ext_buzzer(false);
   } else {
       int buzzer2pin = SOC_GPIO_PIN_BUZZER2;
@@ -149,17 +151,6 @@ void Buzzer_loop(void)
   if (settings->volume == BUZZER_OFF)
       return;
 
-#if 1
-  // demo each alarm sound once after booting
-  static uint8_t buzzer_demo = 0;
-  if (buzzer_demo < 3 && BuzzerTimeMarker == 0) {
-      delay(500);
-      Buzzer_Notify(buzzer_demo+2, false);
-      ++buzzer_demo;
-      return;
-  }
-#endif
-
   if (BuzzerTimeMarker != 0 && millis() > BuzzerTimeMarker) {
 
     if (BuzzerBeeps > 1) {
@@ -198,17 +189,27 @@ void Buzzer_loop(void)
     return;
   }
 
-#if 0
+#if 1
   /* strobe does a self test, do something similar with buzzer */
-  uint32_t t = millis();
-  if (t < StrobeSetupMarker + 1000 * STROBE_INITIAL_RUN) {
-      if ((t & 0x6F80) == 0x6F80 && BuzzerTimeMarker == 0) {
-          static int8_t level = ALARM_LEVEL_LOW;
-          ++level;
-          if (level > ALARM_LEVEL_URGENT)
-              level = ALARM_LEVEL_LOW;
+  if ((settings->alarm_demo || do_alarm_demo) && BuzzerTimeMarker == 0) {
+      delay(1000);
+      uint32_t t = millis() - SetupTimeMarker;
+      if (t < (1000*STROBE_INITIAL_RUN)) {
+          int8_t level = (t > (1000*(STROBE_INITIAL_RUN-3)) ? ALARM_LEVEL_URGENT :
+                          t > (1000*(STROBE_INITIAL_RUN-7)) ? ALARM_LEVEL_IMPORTANT :
+                          ALARM_LEVEL_LOW);
           Buzzer_Notify(level,(level==ALARM_LEVEL_IMPORTANT? true : false));
+      } else {
+          do_alarm_demo = false;
       }
+  }
+#else
+  // demo each alarm sound after booting
+  static uint8_t buzzer_demo = 0;
+  if (settings->alarm_demo && buzzer_demo < 3 && BuzzerTimeMarker == 0) {
+      delay(500);
+      Buzzer_Notify(buzzer_demo+2, false);
+      ++buzzer_demo;
   }
 #endif
 }

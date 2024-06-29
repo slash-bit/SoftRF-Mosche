@@ -25,6 +25,7 @@
 
 #include "../../system/SoC.h"
 #include "GDL90.h"
+#include "GNS5892.h"
 #include "../../driver/Baro.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/EEPROM.h"
@@ -609,6 +610,7 @@ Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
   fo.addr_type = ADDR_TYPE_ICAO;
   fo.airborne = 1;
   fo.circling = 0;
+  ++adsb_packets_counter;
 
   AddTraffic(&fo);
 }
