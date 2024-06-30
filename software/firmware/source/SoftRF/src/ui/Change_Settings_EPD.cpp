@@ -41,7 +41,7 @@
 
 struct set_entry
 {
-    int code;
+    const int code;
     const char *label;
 };
 
@@ -114,6 +114,33 @@ set_entry relays[] = {
   {-1, NULL}
 };
 
+set_entry idtypes[] = {
+  {ADDR_TYPE_RANDOM,    "Random"},
+  {ADDR_TYPE_ICAO,      "ICAO"},
+  {ADDR_TYPE_FLARM,     "Device"},
+  {ADDR_TYPE_ANONYMOUS, "Anonymous"},
+};
+
+set_entry hexdigits[] = {
+  {0, "0"},
+  {1, "1"},
+  {2, "2"},
+  {3, "3"},
+  {4, "4"},
+  {5, "5"},
+  {6, "6"},
+  {7, "7"},
+  {8, "8"},
+  {9, "9"},
+  {0xA, "A"},
+  {0xB, "B"},
+  {0xC, "C"},
+  {0xD, "D"},
+  {0xE, "E"},
+  {0xF, "F"},
+  {-1, NULL}
+};
+
 enum
 {
 	DECISION_CANCEL = 0,
@@ -136,6 +163,13 @@ static int alarm = 0;
 static int unit = 0;
 static int direction = 0;
 static int relay = 0;
+static int idtype = 0;
+static int id1 = 0;
+static int id2 = 0;
+static int id3 = 0;
+static int id4 = 0;
+static int id5 = 0;
+static int id6 = 0;
 
 /* search for a given code and return the index */
 int get_one_setting(int setting, set_entry *list)
@@ -166,6 +200,13 @@ page pages[] = {
   {&relay, relays, NULL, "Air", "Relay:"},
   {&unit, units, NULL, "Display", "Units:"},
   {&direction, directions, NULL, "Display", "Orientation:"},
+  {&idtype, idtypes, NULL, "Acft ID", "Type:"},
+  {&id1, hexdigits, "Acft ID", "hex digit", "#1 (X-----):"},
+  {&id2, hexdigits, "Acft ID", "hex digit", "#2 (-X----):"},
+  {&id3, hexdigits, "Acft ID", "hex digit", "#3 (--X---):"},
+  {&id4, hexdigits, "Acft ID", "hex digit", "#4 (---X--):"},
+  {&id5, hexdigits, "Acft ID", "hex digit", "#5 (----X-):"},
+  {&id6, hexdigits, "Acft ID", "hex digit", "#6 (-----X):"},
   {NULL, NULL, NULL, NULL, NULL}
 };
 
@@ -184,6 +225,14 @@ void get_settings()
     region    = get_one_setting((int) settings->band, regions);
     alarm     = get_one_setting((int) settings->alarm, alarms);
     relay     = get_one_setting((int) settings->relay, relays);
+    idtype    = get_one_setting((int) settings->id_method, idtypes);
+    uint32_t id = settings->aircraft_id;
+    id1 = ((id & 0x00F00000) >> 20);
+    id2 = ((id & 0x000F0000) >> 16);
+    id3 = ((id & 0x0000F000) >> 12);
+    id4 = ((id & 0x00000F00) >> 8);
+    id5 = ((id & 0x000000F0) >> 4);
+    id6 =  (id & 0x0000000F);
     unit      = get_one_setting((int) ui->units, units);
     direction = get_one_setting((int) ui->orientation, directions);
     decision = 0;  // cancel
@@ -198,8 +247,16 @@ void EPD_chgconf_save()
     settings->band          = regions[region].code;
     settings->alarm         = alarms[alarm].code;
     settings->relay         = relays[relay].code;
-    ui->units               = units[unit].code;
-    ui->orientation         = directions[direction].code;
+    settings->id_method     = idtypes[idtype].code;
+    uint32_t id = id6;
+    id |= (id5 << 4);
+    id |= (id4 << 8);
+    id |= (id3 << 12);
+    id |= (id2 << 16);
+    id |= (id1 << 20);
+    settings->aircraft_id = id;
+    ui->units       = units[unit].code;
+    ui->orientation = directions[direction].code;
     SoC->WDT_fini();
     if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
     EEPROM_store();
