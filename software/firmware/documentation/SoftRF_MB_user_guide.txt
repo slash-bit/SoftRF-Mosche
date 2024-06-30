@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated June 29, 2024 to fit software version MB131
+This version last updated June 30, 2024 to fit software version MB132
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -293,7 +293,8 @@ The settings accessible via this method are:
 * Relay mode: None, Landed, All.
 * Display units: Metric, Imperial, Mixed.
 * Display orientation: Track Up, North Up.
-Settings that require typing, such as the aircraft ID, are not adjustable this way, sorry.  Use a Bluetooth or USB terminal app and the HTML files mentioned above.
+* New: aircraft ID and ID type (tedious).
+Other than the aircraft ID, settings that require typing are not adjustable this way, sorry.  Use a Bluetooth or USB terminal app and the HTML files mentioned above.
 
 
 Collision alarms
