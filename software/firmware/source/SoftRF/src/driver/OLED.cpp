@@ -37,8 +37,8 @@
 
 enum
 {
+  OLED_PAGE_SETTINGS,
   OLED_PAGE_RADIO,
-  OLED_PAGE_OTHER,
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
   OLED_PAGE_BARO,
 #endif /* EXCLUDE_OLED_BARO_PAGE */
@@ -156,7 +156,7 @@ const char CDR_text[]      = "CDR FPM";
 
 static const uint8_t Dot_Tile[] = { 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x00 };
 
-static uint8_t OLED_current_page = OLED_PAGE_RADIO;
+static uint8_t OLED_current_page = OLED_PAGE_SETTINGS;
 static uint8_t page_count        = OLED_PAGE_COUNT;
 
 #if 0
@@ -264,7 +264,7 @@ byte OLED_setup() {
 
 #endif
 
-static void OLED_radio()
+static void OLED_settings()
 {
   char buf[16];
   uint32_t disp_value;
@@ -364,7 +364,7 @@ static void OLED_radio()
   }
 }
 
-static void OLED_other()
+static void OLED_radio()
 {
   char buf[16];
   uint32_t disp_value;
@@ -902,8 +902,8 @@ void OLED_loop()
 #endif /* EXCLUDE_OLED_049 */
         switch (OLED_current_page)
         {
-        case OLED_PAGE_OTHER:
-          OLED_other();
+        case OLED_PAGE_RADIO:
+          OLED_radio();
           break;
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
         case OLED_PAGE_BARO:
@@ -920,9 +920,9 @@ void OLED_loop()
           OLED_acft();
           break;
 #endif /* EXCLUDE_OLED_ACFT_PAGE */
-        case OLED_PAGE_RADIO:
+        case OLED_PAGE_SETTINGS:
         default:
-          OLED_radio();
+          OLED_settings();
           break;
         }
 

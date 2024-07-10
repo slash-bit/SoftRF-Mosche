@@ -196,6 +196,9 @@ const uint8_t setGSV[] PROGMEM = {0xF0, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01
 const uint8_t setVTG[] PROGMEM = {0xF0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 #if !defined(NMEA_TCP_SERVICE)
 const uint8_t setGSA[] PROGMEM = {0xF0, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+#else
+/* <<< what does TCP have to do with it? */
+const uint8_t setGSA[] PROGMEM = {0xF0, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 #endif
  /* CFG-PRT */
 uint8_t setBR[] = {0x01, 0x00, 0x00, 0x00, 0xD0, 0x08, 0x00, 0x00, 0x00, 0x96,
@@ -385,6 +388,8 @@ static void setup_UBX()
 
 #if !defined(NMEA_TCP_SERVICE)
 
+  /* <<< what does TCP have to do with it? */
+#if 0
   GNSS_DEBUG_PRINTLN(F("Switching off NMEA GSA: "));
 
   msglen = makeUBXCFG(0x06, 0x01, sizeof(setGSA), setGSA);
@@ -394,6 +399,7 @@ static void setup_UBX()
   if (!gnss_set_sucess) {
     GNSS_DEBUG_PRINTLN(F("WARNING: Unable to disable NMEA GSA."));
   }
+#endif
 
 #endif
 }
@@ -587,7 +593,8 @@ static bool ublox_setup()
   Serial_GNSS_Out.write("$PUBX,40,GSV,0,0,0,0*59\r\n"); delay(250);
   Serial_GNSS_Out.write("$PUBX,40,VTG,0,0,0,0*5E\r\n"); delay(250);
 #if !defined(NMEA_TCP_SERVICE)
-  Serial_GNSS_Out.write("$PUBX,40,GSA,0,0,0,0*4E\r\n"); delay(250);
+  /* <<< what does TCP have to do with it? */
+  //Serial_GNSS_Out.write("$PUBX,40,GSA,0,0,0,0*4E\r\n"); delay(250);
 #endif
 #endif
 
@@ -904,7 +911,9 @@ static bool goke_setup()
   goke_sendcmd("$PGKC242,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0*36\r\n");
 #else
   /* RMC + GGA */
-  goke_sendcmd("$PGKC242,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*37\r\n");
+//goke_sendcmd("$PGKC242,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*37\r\n");
+  /* <<< why not GSA? what does TCP have to do with it? */
+  goke_sendcmd("$PGKC242,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0*36\r\n");
 #endif
 
   if (SOC_GPIO_PIN_GNSS_PPS != SOC_UNUSED_PIN) {
@@ -993,7 +1002,9 @@ static bool at65_setup()
   Serial_GNSS_Out.write("$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0*03\r\n"); delay(250);
 #else
   /* GGA and RMC */
-  Serial_GNSS_Out.write("$PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*02\r\n"); delay(250);
+//Serial_GNSS_Out.write("$PCAS03,1,0,0,0,1,0,0,0,0,0,,,0,0*02\r\n"); delay(250);
+  /* <<< why not GSA? what does TCP have to do with it? */
+  Serial_GNSS_Out.write("$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0*03\r\n"); delay(250);
 #endif
   Serial_GNSS_Out.write("$PCAS11,6*1B\r\n"); /* Aviation < 2g */     delay(250);
 

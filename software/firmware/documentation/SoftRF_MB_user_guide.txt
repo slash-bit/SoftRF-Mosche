@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated June 30, 2024 to fit software version MB132
+This version last updated July 10, 2024 to fit software version MB133
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -141,7 +141,12 @@ Note: if the board has the "RC9" version of SoftRF, do not update the firmware v
 
 If the T-Beam board arrives with other software, e.g., "Meshtastic", or after a failed WiFi update, one may need to install SoftRF via the USB jack.  Follow the instructions here: https://github.com/lyusupov/SoftRF/blob/master/software/firmware/binaries/README.md#esp32 - substituting the  .bin file for the desired version of the software (e.g., from here: https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/binaries/ESP32/SoftRF ) instead of the original SoftRF.ino.bin file.  A ZIP file with the other 3 small .bin files needed, and more detailed instructions, is available here: 
 https://github.com/moshe-braner/SoftRF/tree/master/software/app/Flashing
-You will need a PC running Windows, that can recognize the USB interface inside the T-Beam as a virtual serial port.  The copy of Windows 10 on my laptop did that as-is.  If it does not, you need to find and install "driver" software that fits the USB hardware inside the T-Beam.  Once the T-Beam shows up as a "COM port" (e.g., COM5) on the PC's device manager that hurdle is passed.  Then you need to download and run the software (mentioned in the instructions) from Expressif, the makers of the ESP32 chips.  It is not very intuitive to use, follow the written info, including the image: you must set the memory addresses as shown.  And select the right COM port.  If it goes horribly wrong the T-Beam may appear dead (won't boot any more), but so far I've always managed to bring it back to life with repeated attempts with that utility software.  Note that anything connected to pin 2 on the T-Beam board may need to be disconnected to make firmware flashing possible.  (Or momentarily ground pin 2 via a 100-ohm resistor while the flashing tool is trying to connect.)  Sometimes a board may behave strangely (e.g., WiFi will not connect) until the flash memory is fully erased (a function available in the USB flashing tool) before re-installing the firmware.
+You will need a PC running Windows, that can recognize the USB interface inside the T-Beam as a virtual serial port.  The copy of Windows 10 on my laptop did that as-is.  If it does not, you need to find and install "driver" software that fits the USB hardware inside the T-Beam.  Once the T-Beam shows up as a "COM port" (e.g., COM5) on the PC's device manager that hurdle is passed.  Then you need to download and run the software (mentioned in the instructions) from Expressif, the makers of the ESP32 chips.  It is not very intuitive to use, follow the written info, including the image: you must set the memory addresses as shown.  And select the right COM port.  If it goes horribly wrong the T-Beam may appear dead (won't boot any more), but so far I've always managed to bring it back to life with repeated attempts with that utility software.
+
+An alternative to the Windows-based ESP tool is a web-based version available here: https://esp.huhn.me/
+Reportedly it will work with a Mac, for example.
+
+Note that anything connected to pin 2 on the T-Beam board may need to be disconnected to make firmware flashing via USB possible.  (Or momentarily ground pin 2 via a 100-ohm resistor while the flashing tool is trying to connect.)  Sometimes a board may behave strangely (e.g., WiFi will not connect) until the flash memory is fully erased (a function available in the USB flashing tool) before re-installing the firmware.
 
 The T-Echo usually includes a "bootloader" which makes it easy to update the firmware.  See the "updating the firmware" section below.
 

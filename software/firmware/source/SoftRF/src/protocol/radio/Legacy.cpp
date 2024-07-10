@@ -296,22 +296,25 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
     // discard packets that look like a decryption error
     // so far it seems that the last byte of the packet is always 0 if decrypted correctly
     // do not insist on exact timebits if relayed in original encryption
-    if (pkt->lastbyte != 0 || pkt->needs3 != 3) {
-        Serial.println("rejecting bad decrypt");
-        return false;
-    }
     unsigned int timebits = pkt->timebits;
     unsigned int localbits = (timestamp & 0x0F);
-    bool time_error = true;
-    // allow being off-by-one (but not at the rollover)
-    if (localbits == timebits)
-        time_error = false;
-    else if (localbits + 1 == timebits)
+    bool time_error = (localbits != timebits);
+    // allow being off-by-one (but not at the rollover when one is zero)
+    if (localbits + 1 == timebits)
         time_error = false;
     else if (localbits == timebits + 1)
         time_error = false;
     if (time_error) {
-        Serial.println("decryption time error");
+        if (localbits == 0) {
+            Serial.printf("decrypt time err - local rolled over early %d %d\r\n", localbits, timebits);
+        // } else if (timebits == 0) {   // meaningless, timebits was not decrypted correctly
+        } else {
+            Serial.printf("decrypt time error > 1  - not at roll over %d %d\r\n", localbits, timebits);
+        }
+        return false;
+    }
+    if (pkt->lastbyte != 0 || pkt->needs3 != 3) {
+        Serial.println("rejecting bad decrypt with OK timebits");
         return false;
     }
 
@@ -644,6 +647,25 @@ size_t latest_encode(void *pkt_buffer, ufo_t *aircraft)
 {
     latest_packet_t *pkt = (latest_packet_t *) pkt_buffer;
 
+    uint32_t timestamp = (uint32_t) RF_time;   // incremented in RF.cpp 300 ms after PPS
+
+#if 0
+    uint32_t now_ms = millis();
+    if (ref_time_ms > 0 && now_ms >= ref_time_ms + 1000) {
+      OurTime += 1;
+      ref_time_ms += 1000;
+    }
+    uint32_t timestamp = (uint32_t) OurTime;
+    if (now_ms < ref_time_ms + 300)
+        --timestamp;
+    if (timestamp != (uint32_t) RF_time) {
+Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
+        return 0;
+    }
+#endif
+
+    pkt->timebits = (timestamp & 0x0F);
+
     pkt->msg_type = 2;
 
     pkt->stealth = aircraft->stealth;
@@ -710,9 +732,6 @@ size_t latest_encode(void *pkt_buffer, ufo_t *aircraft)
     pkt->c2 = 0;
     pkt->lastbyte = 0;
     pkt->_unk1 = 0;
-
-    uint32_t timestamp = (uint32_t) RF_time;   // incremented in RF.cpp 300 ms after PPS
-    pkt->timebits = (timestamp & 0x0F);
 
     /* encrypt packet */
     uint32_t *wp = (uint32_t *) pkt_buffer;

@@ -470,12 +470,14 @@ void normal()
 
     if (newfix) {
 
+#if 0
       if (settings->rf_protocol != RF_PROTOCOL_LEGACY
        && settings->rf_protocol != RF_PROTOCOL_LATEST
        && settings->rf_protocol != RF_PROTOCOL_OGNTP)
-        ThisAircraft.timestamp = OurTime;
+        ThisAircraft.timestamp = now();     // updated by GNSSTimeSync()
       else
-        ThisAircraft.timestamp = now();
+#endif
+        ThisAircraft.timestamp = OurTime;   // updated in either Time.cpp or RF.cpp
       ThisAircraft.gnsstime_ms = thistime_ms;
 
 //Serial.printf("new GNSS fix from %d at %d, PPS was %d\r\n", thistime_ms, millis(), ref_time_ms);
