@@ -276,16 +276,18 @@ void EPD_text_loop()
 
 void EPD_text_next()
 {
-  if (EPD_current < MAX_TRACKING_OBJECTS) {
+  if (EPD_current < MAX_TRACKING_OBJECTS)
     EPD_current++;
-  }
+  else
+    EPD_current = 1;
 }
 
 void EPD_text_prev()
 {
-  if (EPD_current > 1) {
+  if (EPD_current > 1)
     EPD_current--;
-  }
+  else
+    EPD_current = MAX_TRACKING_OBJECTS;
 }
 
 #endif /* USE_EPAPER */

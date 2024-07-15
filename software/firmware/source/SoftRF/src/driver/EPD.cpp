@@ -693,43 +693,6 @@ void EPD_Up()
       EPD_radar_unzoom();
       break;
     case VIEW_MODE_TEXT:
-      EPD_text_prev();
-      break;
-    case VIEW_MODE_BARO:
-      EPD_baro_prev();
-      break;
-    case VIEW_MODE_TIME:
-      EPD_time_prev();
-      break;
-    case VIEW_MODE_IMU:
-      EPD_imu_prev();
-      break;
-    case VIEW_MODE_CONF:
-      EPD_conf_prev();
-      break;
-    case VIEW_CHANGE_SETTINGS:
-    case VIEW_SAVE_SETTINGS:
-    case VIEW_REBOOT:
-    case VIEW_DONE:
-      EPD_chgconf_prev();
-      break;
-    case VIEW_MODE_STATUS:
-//    default:
-      EPD_status_prev();
-      break;
-    }
-  }
-}
-
-void EPD_Down()
-{
-  if (hw_info.display == DISPLAY_EPD_1_54) {
-    switch (EPD_view_mode)
-    {
-    case VIEW_MODE_RADAR:
-      EPD_radar_zoom();
-      break;
-    case VIEW_MODE_TEXT:
       EPD_text_next();
       break;
     case VIEW_MODE_BARO:
@@ -749,9 +712,46 @@ void EPD_Down()
     case VIEW_REBOOT:
     case VIEW_DONE:
       EPD_chgconf_next();
+      break;
     case VIEW_MODE_STATUS:
 //    default:
       EPD_status_next();
+      break;
+    }
+  }
+}
+
+void EPD_Down()
+{
+  if (hw_info.display == DISPLAY_EPD_1_54) {
+    switch (EPD_view_mode)
+    {
+    case VIEW_MODE_RADAR:
+      EPD_radar_zoom();
+      break;
+    case VIEW_MODE_TEXT:
+      EPD_text_prev();
+      break;
+    case VIEW_MODE_BARO:
+      EPD_baro_prev();
+      break;
+    case VIEW_MODE_TIME:
+      EPD_time_prev();
+      break;
+    case VIEW_MODE_IMU:
+      EPD_imu_prev();
+      break;
+    case VIEW_MODE_CONF:
+      EPD_conf_prev();
+      break;
+    case VIEW_CHANGE_SETTINGS:
+    case VIEW_SAVE_SETTINGS:
+    case VIEW_REBOOT:
+    case VIEW_DONE:
+      EPD_chgconf_prev();
+    case VIEW_MODE_STATUS:
+//    default:
+      EPD_status_prev();
       break;
     }
   }

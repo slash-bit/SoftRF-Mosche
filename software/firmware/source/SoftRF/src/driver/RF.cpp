@@ -271,20 +271,21 @@ byte RF_setup(void)
 #endif /* USE_OGN_RF_DRIVER */
   }
 
-  /* "AUTO" freq. will set the plan upon very first valid GNSS fix */
-  if (settings->band == RF_BAND_AUTO) {
-    /* Supersede EU plan with UK when PAW is selected */
+  /* "AUTO" and "UK" freqs now mapped to EU */
+  if (settings->band == RF_BAND_AUTO)
+      settings->band == RF_BAND_EU;
+  if (settings->band == RF_BAND_UK)
+      settings->band == RF_BAND_EU;
+  /* Supersede EU plan with UK when PAW is selected */
     if (rf_chip                &&
 #if !defined(EXCLUDE_NRF905)
         rf_chip != &nrf905_ops &&
 #endif
-        settings->rf_protocol == RF_PROTOCOL_P3I) {
-      RF_FreqPlan.setPlan(RF_BAND_UK);
-    }
-  } else {
+        settings->band == RF_BAND_EU
+            && settings->rf_protocol == RF_PROTOCOL_P3I)
+      settings->band == RF_BAND_UK;
 
-    RF_FreqPlan.setPlan(settings->band);
-  }
+  RF_FreqPlan.setPlan(settings->band);
 
   if (rf_chip) {
     rf_chip->setup();

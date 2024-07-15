@@ -345,7 +345,7 @@ static void OLED_settings()
 #endif
 
   int32_t  voltage = Battery_voltage() > BATTERY_THRESHOLD_INVALID ?
-                              (int) (Battery_voltage() * 10.0) : 0;
+                              (int) (Battery_voltage() * 10.0 + 0.5) : 0;
 
   if (prev_voltage != voltage) {
     if (voltage) {
@@ -589,52 +589,66 @@ static void OLED_acft()
   static uint32_t next_ms = 0;
   if (OLED_display_titles == true && millis() < next_ms)
     return;
-  next_ms = millis() + 2000;
+  next_ms = millis() + 3000;
 
   static int prev_i = -1;
-  static int prev_j = -1;
   if (OLED_display_titles == false)
       prev_i = -1;                   // inspect Container[0] first
   if (prev_i < 0)
       OLED_display_titles = false;  // for transition from no-traffic to traffic
 
   static int prev_dist = -1;
+  static int prev_alt = 9999;
 
+  int age;
   int i = prev_i + 1;
-  int j = 0;
-  while (i != prev_i) {
-    if (i >= MAX_TRACKING_OBJECTS) {
-        if (prev_i < 0) {
-            u8x8->clear();
-            u8x8->drawString( 2, 4, "NO TRAFFIC");
-            prev_dist = -1;
-            OLED_display_titles = true;   // wait until next_ms
-            return;
-        }
-        i = 0;   // wrap around to the beginning of Container[]
-        j = 0;
-    }
-    if (i == prev_i)         // only one aircraft to show
+  if (i >= MAX_TRACKING_OBJECTS)
+      i = 0;      // wrap around to the beginning of Container[]
+  int j = i;     // remember where we started
+  bool found = false;
+  do {
+    age = OurTime - Container[i].timestamp;
+    if (Container[i].addr != 0 && age < ENTRY_EXPIRATION_TIME) {
+        // an(other) aircraft to show
+        found = true;
         break;
-    if (Container[i].addr && OurTime - Container[i].timestamp < ENTRY_EXPIRATION_TIME) {
-        ++j;
-        break;              // another aircraft to show
     }
     ++i;
+    if (i >= MAX_TRACKING_OBJECTS)
+        i = 0;   // wrap around to the beginning of Container[]
+  } while (i != j);
+
+  if (! found) {     // no aircraft to show
+      prev_i = -1;
+      u8x8->clear();
+      u8x8->drawString(2, 4, "NO TRAFFIC");
+      prev_dist = -1;
+      prev_alt = 9999;
+      OLED_display_titles = true;   // wait until next_ms
+      return;
   }
 
-  int dist;
+  int dist = (int) (Container[i].distance * 0.001);    // kilometers
+  int rel_alt = (int) (Container[i].alt_diff * 0.01);  // hundreds of meters
   char buf[16];
 
   if (OLED_display_titles) {
       if (i == prev_i) {
-          dist = (int) (Container[i].distance * 0.001);
           if (dist != prev_dist) {
-              snprintf (buf, sizeof(buf), "%d", dist);
-              u8x8->drawString(7, 5, "   ");
-              u8x8->drawString(7, 5, buf);
+              snprintf (buf, sizeof(buf), "%dkm", dist);
+              u8x8->drawString(1, 7, "     ");
+              u8x8->drawString(1, 7, buf);
               prev_dist = dist;
           }
+          if (rel_alt != prev_alt) {
+              snprintf (buf, sizeof(buf), "%s%dm", (rel_alt < 0 ? "-" : "+"), 100*abs(rel_alt));
+              u8x8->drawString(6, 7, "      ");
+              u8x8->drawString(6, 7, buf);
+              prev_alt = rel_alt;
+          }
+          snprintf (buf, sizeof(buf), "%ds", age);
+          u8x8->drawString( 13, 4, "   ");
+          u8x8->drawString( 13, 4, buf);
           return;         // nothing else needs changing in the display
       }
   }
@@ -643,34 +657,40 @@ static void OLED_acft()
 
   if (!OLED_display_titles) {
       u8x8->clear();
-      u8x8->drawString( 1, 1, "ID:");
-      u8x8->drawString( 1, 3, "TYPE:");
-      u8x8->drawString( 1, 5, "KM:");
-      u8x8->drawString( 1, 7, "PROT:");
-      u8x8->drawString( 14, 6, "#");
+      u8x8->drawString(1, 1, "ID:");
+      u8x8->drawString(1, 3, "TYPE:");
+      u8x8->drawString(1, 5, "PROT:");
+      u8x8->drawString(14, 6, "#");
+      //u8x8->drawString(1, 7, "KM:");
       prev_dist = -1;
-      prev_j = -1;
+      prev_alt = 9999;
       OLED_display_titles = true;
   }
 
-  if (j != prev_j) {
-      snprintf (buf, sizeof(buf), "%d", j);
-      u8x8->drawString( 15, 6, buf);
-      prev_j = j;
-  }
+  snprintf (buf, sizeof(buf), "%d", i);
+  u8x8->drawString( 15, 6, buf);
 
-  dist = (int) (Container[i].distance * 0.001);
+  snprintf (buf, sizeof(buf), "%ds", age);
+  u8x8->drawString( 13, 4, "   ");
+  u8x8->drawString( 13, 4, buf);
+
   if (dist != prev_dist) {
-      snprintf (buf, sizeof(buf), "%d", dist);
-      u8x8->drawString(7, 5, "   ");
-      u8x8->drawString(7, 5, buf);
+      snprintf (buf, sizeof(buf), "%dkm", dist);
+      u8x8->drawString(1, 7, "     ");
+      u8x8->drawString(1, 7, buf);
       prev_dist = dist;
+  }
+  if (rel_alt != prev_alt) {
+      snprintf (buf, sizeof(buf), "%s%dm", (rel_alt < 0 ? "-" : "+"), 100*abs(rel_alt));
+      u8x8->drawString(6, 7, "      ");
+      u8x8->drawString(6, 7, buf);
+      prev_alt = rel_alt;
   }
 
   snprintf (buf, sizeof(buf), "%06X", Container[i].addr);
   u8x8->drawString(7, 1, buf);
   u8x8->drawString(7, 3, aircraft_type_lbl[Container[i].aircraft_type]);
-  u8x8->drawString(7, 7, Protocol_ID[Container[i].protocol]);
+  u8x8->drawString(7, 5, Protocol_ID[Container[i].protocol]);
 }
 #endif /* EXCLUDE_OLED_ACFT_PAGE */
 

@@ -321,10 +321,11 @@ static void CPRRelative_precomp()
     // uint32_t cprlon    // the "fraction" times 2^17
 
     // The exact reference location is not important, just not too far away
-    // This also returns while there is no GNSS fix yet
-    if (fabs(reflat-ThisAircraft.latitude)  < 0.25
-    &&  fabs(reflon-ThisAircraft.longitude) < 0.35)
+    // - except that the early filtering of "too far" targets is based on it, not our actual location
+    if (fabs(reflat-ThisAircraft.latitude)  < 0.15
+    &&  fabs(reflon-ThisAircraft.longitude) < 0.21)    // about 9 nm
         return;
+    // - this also returns while there is no GNSS fix yet
 
     play5892();  // try and capture a #49 response
 
@@ -403,7 +404,7 @@ static void CPRRelative_setup()
     // for both odd and even, this value is conservative:
     dLatHalf = 0.5 * dLat[0];
     // first-cut range limit (along each axis):
-    maxcprdiff = 5800;   // about 16 nm
+    maxcprdiff = 9000;   // about 25nm = 9nm pre-computation threshold + 16nm pre-filtering range
     // a squared scaled version for slant distance
     maxcprdiff_sq = (maxcprdiff >> 4) * (maxcprdiff >> 4);
     
@@ -511,6 +512,7 @@ static void update_traffic_position()
     cip->dx        = fo1090.dx;
     cip->dy        = fo1090.dy;
     cip->bearing   = fo1090.bearing;
+    cip->alt_diff  = cip->altitude - ThisAircraft.altitude;
     cip->timestamp   = ThisAircraft.timestamp;
     cip->gnsstime_ms = millis();
 
@@ -750,6 +752,7 @@ static bool parse_position()
         // weed out remaining too-far using pre-computed squared-hypotenuse
         // - no need to compute the un-squared distance at this point
         // - will compute more exact distance later using hypotenus-approximation
+        // - that will also be relative to this aircraft's actual location
         abslatdiff >>= 4;
         abslondiff >>= 4;
         if (abslatdiff*abslatdiff + abslondiff*abslondiff > maxcprdiff_sq)
@@ -776,8 +779,8 @@ static bool parse_position()
     if (decodeCPRrelative() < 0)        // error decoding lat/lon
         return false;
 
-    int32_t y = (int32_t)(111300.0 * (fo1090.latitude - reflat)); // meters
-    int32_t x = (int32_t)(111300.0 * (fo1090.longitude - reflon) * CosLat(reflat));
+    int32_t y = (int32_t)(111300.0 * (fo1090.latitude - ThisAircraft.latitude));     // meters
+    int32_t x = (int32_t)(111300.0 * (fo1090.longitude - ThisAircraft.longitude) * CosLat(reflat));
     fo1090.dx = x;
     fo1090.dy = y;
     fo1090.distance = (float)iapproxHypotenuse1(x, y);
