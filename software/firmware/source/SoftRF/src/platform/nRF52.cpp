@@ -1651,8 +1651,10 @@ void handleEvent(AceButton* button, uint8_t eventType,
         digitalWrite(SOC_GPIO_PIN_EPD_BLGT,
                      digitalRead(SOC_GPIO_PIN_EPD_BLGT) == LOW);
         }
-      }  // button_1
+      } else if (button == &button_2) {
+        EPD_Down();
 #endif
+      }
       break;
 
     case AceButton::kEventLongPressed:
@@ -1703,17 +1705,23 @@ static void nRF52_Button_setup()
   ModeButtonConfig->setFeature(
                     ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
 //  ModeButtonConfig->setDebounceDelay(15);
-  ModeButtonConfig->setClickDelay(600);
-  ModeButtonConfig->setDoubleClickDelay(1500);
-  ModeButtonConfig->setLongPressDelay(2000);
+  //ModeButtonConfig->setClickDelay(600);
+  //ModeButtonConfig->setDoubleClickDelay(1500);
+  //ModeButtonConfig->setLongPressDelay(2000);
+  ModeButtonConfig->setClickDelay(300);
+  ModeButtonConfig->setDoubleClickDelay(750);
+  ModeButtonConfig->setLongPressDelay(1000);
 
   ButtonConfig* UpButtonConfig = button_2.getButtonConfig();
   UpButtonConfig->setEventHandler(handleEvent);
   UpButtonConfig->setFeature(ButtonConfig::kFeatureClick);
 //  UpButtonConfig->setDebounceDelay(15);
-  UpButtonConfig->setClickDelay(600);
-  UpButtonConfig->setDoubleClickDelay(1500);
-  UpButtonConfig->setLongPressDelay(2000);
+  //UpButtonConfig->setClickDelay(600);
+  //UpButtonConfig->setDoubleClickDelay(1500);
+  //UpButtonConfig->setLongPressDelay(2000);
+  UpButtonConfig->setClickDelay(300);
+  UpButtonConfig->setDoubleClickDelay(750);
+  UpButtonConfig->setLongPressDelay(1000);
 
 //  attachInterrupt(digitalPinToInterrupt(mode_button_pin), onModeButtonEvent, CHANGE );
   attachInterrupt(digitalPinToInterrupt(up_button_pin),   onUpButtonEvent,   CHANGE );

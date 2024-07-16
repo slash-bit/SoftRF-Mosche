@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated July 15, 2024 to fit software version MB134
+This version last updated July 16, 2024 to fit software version MB134
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -279,6 +279,7 @@ When you double-click the mode button the device normally toggles the display ba
 Touching the "touch" button will change that setting, e.g., you will see:
     Aircraft Type:
       Towplane
+Double-click the touch button to move in the opposite direction.
 A short-press of the mode button will switch to the next setting, e.g.:
     Frequency Band:
       EU
@@ -288,7 +289,7 @@ And so forth.  Note that after each "click" or "touch", it will take about 2 sec
     do next:
      cancel
   - use the touch button to select "cancel", "review", or "save" and then single-click the mode button.  Or:
-* on any of these settings pages (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or:
+* on any of the settings pages (no need to scroll through all the settings), double-click the mode button to save the new settings and reboot, or:
 * press the reset button to reboot without changing the settings.
 The settings accessible via this method are:
 * AIRCRAFT TYPE:Glider, Towplane Helicopter, Powered, Hangglider, Paraglider, Dropplane, Parachute, Balloon, UAV, Static.
