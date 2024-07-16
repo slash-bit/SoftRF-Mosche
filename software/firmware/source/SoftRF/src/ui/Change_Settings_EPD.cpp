@@ -115,10 +115,11 @@ set_entry relays[] = {
 };
 
 set_entry idtypes[] = {
-  {ADDR_TYPE_RANDOM,    "Random"},
-  {ADDR_TYPE_ICAO,      "ICAO"},
   {ADDR_TYPE_FLARM,     "Device"},
+  {ADDR_TYPE_ICAO,      "ICAO"},
   {ADDR_TYPE_ANONYMOUS, "Anonymous"},
+  {ADDR_TYPE_RANDOM,    "Random"},
+  {-1, NULL}
 };
 
 set_entry hexdigits[] = {
