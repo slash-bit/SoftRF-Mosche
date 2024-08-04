@@ -33,9 +33,11 @@
 #include "../../driver/EEPROM.h"
 #include "../../driver/RF.h"
 #include "../../driver/Battery.h"
-#include "../../driver/OLED.h"
 #include "../../driver/Baro.h"
+#if defined(ESP32)
+#include "../../driver/OLED.h"
 #include "../../driver/Strobe.h"
+#endif
 #include "../../driver/Bluetooth.h"
 #include "../../TrafficHelper.h"
 
@@ -1183,6 +1185,7 @@ void NMEA_Export()
 
     int gps_status = (ThisAircraft.airborne ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_3D_GROUND);
     int tx_status = (settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON);
+#if defined(ESP32)
     if (do_alarm_demo) {
         if ((millis() - SetupTimeMarker) < (1000*STROBE_INITIAL_RUN)) {
             gps_status = GNSS_STATUS_3D_MOVING;
@@ -1191,7 +1194,9 @@ void NMEA_Export()
             OLED_no_msg();
             do_alarm_demo = false;  // turn demo off here, in case buzzer is set to OFF
         }
-    } else {
+    } else
+#endif
+    {
         if (! has_Fix) {
             gps_status = GNSS_STATUS_NONE;
             tx_status = TX_STATUS_OFF;
