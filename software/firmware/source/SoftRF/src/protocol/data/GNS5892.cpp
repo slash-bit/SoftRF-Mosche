@@ -73,27 +73,6 @@ static uint8_t ac_type_table[16] =
 
 uint32_t adsb_packets_counter = 0;
 
-// This code from https://github.com/watson/libmodes/
-
-// Parity table for MODE S Messages.
-//
-// The table contains 112 elements, every element corresponds to a bit set in
-// the message, starting from the first bit of actual data after the preamble.
-//
-// For messages of 112 bit, the whole table is used. For messages of 56 bits
-// only the last 56 elements are used.
-// 
-// The algorithm is as simple as xoring all the elements in this table for
-// which the corresponding bit on the message is set to 1.
-// 
-// The latest 24 elements in this table are set to 0 as the checksum at the end
-// of the message should not affect the computation.
-//
-// Note: this function can be used with DF11 and DF17, other modes have the CRC
-// xored with the sender address as they are reply to interrogations, but a
-// casual listener can't split the address from the checksum.
-
-
 //
 // Compact Position Reporting decoding
 //
@@ -414,6 +393,10 @@ static void CPRRelative_setup()
 }
 
 
+// the code here repeats some things that are done in Traffic.cpp Addtraffic(),
+// would be better not to repeat, but here disjoint groups of fields are updated
+// via 3 different types of messages, complicating things.
+
 static int find_traffic_by_addr(uint32_t addr)
 {
     for (int i=0; i<MAX_TRACKING_OBJECTS; i++) {
@@ -459,10 +442,6 @@ static int add_traffic_by_dist(float distance)
 
 // fill in certain fields from each message type
 // anything not filled-in stays as all zeros
-
-// the code here repeats some things that are done in Traffic.cpp Addtraffic(),
-// would be better not to repeat, but here disjoint groups of fields are updated
-// via 3 different types of messages, complicating things.
 
 static void update_traffic_position()
 {
@@ -533,7 +512,7 @@ static void update_traffic_position()
 // (28 chars) preceded with '*' and finished by ';' + <CR><LF>
 // for example: *8D4B1621994420C18804887668F9;
 // (the shorter mode-S messages have fewer (14) chars,
-// for example: *02E198BFAF8676;
+// for example: *02E198BFAF8676;)
 // Or, in mode 2+ with an RSSI prefix:
 // starts with '+', 2 chars RSSI, rest as above:
 // for example:  +1A8DC03ABC9901939CA00706079C17;
@@ -680,13 +659,33 @@ static bool parse_identity()
 
 static bool parse_position()
 {
+    // Most receiveable signals are from farther away than we may be interested in.
+    // An efficient way to filter them out at this early stage will save a lot of CPU cycles.
+
+    // filter by altitude first, weeds out the jets at 30,000 feet
+
+    // altitude is in msg[5] & MSnibble of msg[6]
+    if (mm.type <= 18) {     // baro alt
+        mm.alt_type = 0;
+        fo1090.altitude = decode_ac12_field();
+    } else {      // GNSS alt, rare
+        mm.alt_type = 1;
+        mm.msgtype = 'G';
+        fo1090.altitude = (float)((msg[5] << 4) | ((msg[6] >> 4) & 0x0F));   // meters!
+    }
+
+    // filter by altitude, but always include "followed" aircraft
+    if (fabs(fo1090.altitude - ThisAircraft.altitude) > 2000) {
+        if (fo1090.addr != settings->follow_id)
+            return false;
+    }
+
+    // prepare to decode lat/lon
+
     mm.fflag = ((msg[6] & 0x4) >> 2);
     //tflag = msg[6] & 0x8;
     mm.cprlat = ((msg[6] & 3) << 15) | (msg[7] << 7) | (msg[8] >> 1);
     mm.cprlon = ((msg[8]&1) << 16) | (msg[9] << 8) | msg[10];
-
-    // Most receiveable signals are from farther away than we may be interested in.
-    // An efficient way to filter them out at this early stage will save a lot of CPU cycles.
 
     int32_t m = (int32_t) mm.cprlat;
     int32_t r = (int32_t) ourcprlat[mm.fflag];   // convert from unsigned to signed...
@@ -747,12 +746,13 @@ static bool parse_position()
     int32_t abslondiff = abs(cprlondiff);
     if (adjacent) {
       if (fo1090.addr != settings->follow_id) {
+        // reject some too-far traffic based on lon-diff alone
         if (abslondiff > maxcprdiff)
             return false;
         // weed out remaining too-far using pre-computed squared-hypotenuse
         // - no need to compute the un-squared distance at this point
         // - will compute more exact distance later using hypotenus-approximation
-        // - that will also be relative to this aircraft's actual location
+        //   & relative to this aircraft's actual location rather than reference
         abslatdiff >>= 4;
         abslondiff >>= 4;
         if (abslatdiff*abslatdiff + abslondiff*abslondiff > maxcprdiff_sq)
@@ -760,25 +760,12 @@ static bool parse_position()
       }
     }
 
-    // altitude is in msg[5] & MSnibble of msg[6]
-    if (mm.type <= 18) {     // baro alt
-        mm.alt_type = 0;
-        fo1090.altitude = decode_ac12_field();
-    } else {      // GNSS alt, rare
-        mm.alt_type = 1;
-        mm.msgtype = 'G';
-        fo1090.altitude = (float)((msg[5] << 4) | ((msg[6] >> 4) & 0x0F));   // meters!
-    }
-
-    // filter by altitude, but always include "followed" aircraft
-    if (fo1090.addr != settings->follow_id) {
-        if (fabs(fo1090.altitude - ThisAircraft.altitude) > 2000)
-            return false;
-    }
+    yield();
 
     if (decodeCPRrelative() < 0)        // error decoding lat/lon
         return false;
 
+    // compute more exact distance, from this aircraft's actual location
     int32_t y = (int32_t)(111300.0 * (fo1090.latitude - ThisAircraft.latitude));     // meters
     int32_t x = (int32_t)(111300.0 * (fo1090.longitude - ThisAircraft.longitude) * CosLat(reflat));
     fo1090.dx = x;
@@ -989,6 +976,8 @@ https://aviation.stackexchange.com/questions/17610/what-icao-codes-are-reserved-
         return false;
     if (fo1090.addr == settings->ignore_id)      // ID told in settings to ignore
         return false;
+
+    yield();
 
     // parsing of the 56-bit ME - just DF 17-18:
 

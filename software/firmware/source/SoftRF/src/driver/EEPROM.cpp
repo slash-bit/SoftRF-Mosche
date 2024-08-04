@@ -56,6 +56,9 @@ uint32_t baudrates[8] =
     0
 };
 
+// whether to save some settings from the previous version
+bool keepsome = false;
+
 void EEPROM_setup()
 {
   int cmd = EEPROM_EXT_LOAD;
@@ -75,6 +78,11 @@ void EEPROM_setup()
 
   settings = &eeprom_block.field.settings;
 
+//Serial.print("sizeof(eeprom_t): ");
+//Serial.println(sizeof(eeprom_t));
+//Serial.print("sizeof(eeprom_block.field.settings): ");
+//Serial.println(sizeof(eeprom_block.field.settings));
+
   if (eeprom_block.field.magic != SOFTRF_EEPROM_MAGIC) {
     Serial.println(F("WARNING! User defined settings are not initialized yet. Loading defaults..."));
 
@@ -90,8 +98,12 @@ void EEPROM_setup()
     ||  eeprom_block.field.version2 != SOFTRF_EEPROM_VERSION) {
       Serial.println(F("WARNING! Version mismatch of user defined settings. Loading defaults..."));
 
-      EEPROM_defaults();
-      cmd = EEPROM_EXT_DEFAULTS;
+        keepsome = (eeprom_block.field.version  == SOFTRF_EEPROM_VERSION - 1
+                 && eeprom_block.field.version2 == SOFTRF_EEPROM_VERSION - 1);
+        // keep some settings from the previous version
+
+        EEPROM_defaults();
+        cmd = EEPROM_EXT_DEFAULTS;
     }
     else
       Serial.println(F("Loaded existing user settings"));
@@ -113,67 +125,35 @@ void EEPROM_defaults()
   eeprom_block.field.version  = SOFTRF_EEPROM_VERSION;
   eeprom_block.field.version2 = SOFTRF_EEPROM_VERSION;
 
-  settings->mode          = SOFTRF_MODE_NORMAL;
-  settings->rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
-                              RF_PROTOCOL_FANET : RF_PROTOCOL_LATEST;
+  if (keepsome == false) {    // the following may be kept from previous version
+
+    settings->mode          = SOFTRF_MODE_NORMAL;
+    settings->rf_protocol   = hw_info.model == SOFTRF_MODEL_BRACELET ?
+                                RF_PROTOCOL_FANET : RF_PROTOCOL_LATEST;
 #if defined(DEFAULT_REGION_US)
-  settings->band          = RF_BAND_US;
+    settings->band          = RF_BAND_US;
 #else
-  settings->band          = RF_BAND_EU;
+    settings->band          = RF_BAND_EU;
 #endif
-  settings->aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
-                                              AIRCRAFT_TYPE_STATIC :
-                                              AIRCRAFT_TYPE_GLIDER;
-  settings->txpower       = RF_TX_POWER_FULL;
-  settings->bluetooth     = BLUETOOTH_OFF;
-  settings->alarm         = TRAFFIC_ALARM_LEGACY;
-
-  /* This will speed up 'factory' boot sequence on Editions other than Standalone */
-  if (hw_info.model == SOFTRF_MODEL_STANDALONE
-   || hw_info.model == SOFTRF_MODEL_PRIME) {
-    settings->volume  = BUZZER_OFF;
-    settings->strobe  = STROBE_OFF;
-    settings->pointer = DIRECTION_NORTH_UP;
-  } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    settings->volume  = BUZZER_VOLUME_FULL;
-    settings->strobe  = STROBE_OFF;    // was STROBE_ALARM
-    settings->pointer = LED_OFF;
-  } else {
-    settings->volume  = BUZZER_OFF;
-    settings->strobe  = STROBE_OFF;
-    settings->pointer = LED_OFF;
-  }
-
-  settings->voice = VOICE_OFF;
-
-  settings->relay = RELAY_OFF;   // >>> revert to RELAY_LANDED as default eventually
-
-  settings->nmea_g  = true;
-  settings->nmea_p  = false;
-  settings->nmea_l  = true;
-  settings->nmea_s  = true;
-  settings->nmea_d  = false;
-  settings->nmea_e  = false;
-
-  settings->nmea2_g = true;
-  settings->nmea2_p = false;
-  settings->nmea2_l = true;
-  settings->nmea2_s = true;
-  settings->nmea2_d = false;
-  settings->nmea2_e = false;
+    settings->aircraft_type = hw_info.model == SOFTRF_MODEL_BRACELET ?
+                                                AIRCRAFT_TYPE_STATIC :
+                                                AIRCRAFT_TYPE_GLIDER;
+    settings->id_method     = ADDR_TYPE_FLARM;
+    settings->aircraft_id   = 0;
+    settings->txpower       = RF_TX_POWER_FULL;
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
-  settings->nmea_out   = DEST_USB;
-  settings->nmea_out2  = DEST_NONE;
+    settings->nmea_out   = DEST_USB;
+    settings->nmea_out2  = DEST_NONE;
 #else
-  settings->nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
+    settings->nmea_out   = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              DEST_BLUETOOTH :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
                                              DEST_UDP :
                                           (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ?
                                              DEST_UDP :
                                            DEST_UART));
-  settings->nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
+    settings->nmea_out2  = hw_info.model == SOFTRF_MODEL_BADGE ?
                                              DEST_USB :
                                           (hw_info.model == SOFTRF_MODEL_PRIME ?
                                              DEST_UART :
@@ -182,47 +162,93 @@ void EEPROM_defaults()
                                            DEST_NONE));
 #endif
 
-  settings->gdl90_in   = DEST_NONE;
-  settings->gdl90      = DEST_NONE;
+    settings->nmea_g  = true;
+    settings->nmea_p  = false;
+    settings->nmea_l  = true;
+    settings->nmea_s  = true;
+    settings->nmea_d  = false;
+    settings->nmea_e  = false;
+
+    settings->nmea2_g = true;
+    settings->nmea2_p = false;
+    settings->nmea2_l = true;
+    settings->nmea2_s = true;
+    settings->nmea2_d = false;
+    settings->nmea2_e = false;
+
+    settings->bluetooth  = BLUETOOTH_OFF;
+    settings->alarm      = TRAFFIC_ALARM_LEGACY;
+    settings->stealth    = false;
+    settings->no_track   = false;
+
+    settings->baud_rate  = BAUD_DEFAULT;      // Serial  - meaning 38400
+    settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
+    settings->invert2    = false;
+    settings->freq_corr  = 0;
+
+    if (hw_info.model == SOFTRF_MODEL_STANDALONE
+     || hw_info.model == SOFTRF_MODEL_PRIME) {
+      settings->volume  = BUZZER_OFF;
+      settings->strobe  = STROBE_OFF;
+      settings->pointer = DIRECTION_NORTH_UP;
+    } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      settings->volume  = BUZZER_VOLUME_FULL;
+      settings->strobe  = STROBE_OFF;
+      settings->pointer = LED_OFF;
+    } else {
+      settings->volume  = BUZZER_OFF;
+      settings->strobe  = STROBE_OFF;
+      settings->pointer = LED_OFF;
+    }
+    settings->voice = VOICE_OFF;
+
+    settings->ignore_id = 0;
+    settings->follow_id = 0;
+
+    settings->tcpmode = TCP_MODE_SERVER;
+    strncpy(settings->host_ip, NMEA_TCP_IP, sizeof(settings->host_ip)-1);
+    settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
+    settings->tcpport = 0;   // 2000
+    settings->alt_udp    = false;
+
+    settings->gdl90_in   = DEST_NONE;
+    settings->gdl90      = DEST_NONE;
 #if !defined(EXCLUDE_D1090)
-  settings->d1090      = DEST_NONE;
+    settings->d1090      = DEST_NONE;
 #endif
+  }
+  // otherwise keep those settings from the previous version
+
+  // >>> the new settings, move up next time:
+
+    settings->gnss_pins = EXT_GNSS_NONE;   // whether an external GNSS module was added to a T-Beam
+    settings->ppswire   = false;       // whether T-Beam v0.7 or external GNSS has PPS wire connected
+    settings->rx1090    = ADSB_RX_NONE;
+
+    //strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
+    settings->ssid[0] = '\0';   // default is empty string - speeds up booting
+    settings->ssid[sizeof(settings->ssid)-1] = '\0';
+    //strncpy(settings->psk, MY_ACCESSPOINT_PSK, sizeof(settings->psk)-1);
+    settings->psk[0] = '\0';
+    settings->psk[sizeof(settings->psk)-1] = '\0';
+
+  // the settings below get reset:
+
+  settings->relay = RELAY_OFF;   // >>> revert to RELAY_LANDED as default eventually
+
   settings->json       = JSON_OFF;
-  settings->stealth    = false;
-  settings->no_track   = false;
   settings->power_save = hw_info.model == SOFTRF_MODEL_BRACELET ?
                                            POWER_SAVE_NORECEIVE : POWER_SAVE_NONE;
   settings->power_external = 0;
-  settings->freq_corr  = 0;
-  settings->baud_rate  = BAUD_DEFAULT;      // Serial  - meaning 38400
-  settings->altpin0    = false;
-  settings->alt_udp    = false;
-  settings->baudrate2  = BAUD_DEFAULT;      // Serial2 - meaning disabled
-  settings->invert2    = false;
-  settings->rx1090     = ADSB_RX_NONE;
-  settings->alarm_demo = false;
+  settings->altpin0     = false;
+  settings->alarm_demo  = false;
+  settings->logalarms   = false;
+  settings->debug_flags = 0;      // if and when debug output will be turned on - 0x3F for all
+
   settings->igc_key[0] = 0;
   settings->igc_key[1] = 0;
   settings->igc_key[2] = 0;
   settings->igc_key[3] = 0;
-
-  /* added to allow setting aircraft ID and also an ID to ignore */
-  settings->aircraft_id = 0;
-  settings->ignore_id = 0;
-  settings->follow_id = 0;
-  settings->id_method = ADDR_TYPE_FLARM;
-  settings->logalarms = false;
-  settings->debug_flags = 0;      // if and when debug output will be turned on - 0x3F for all
-
-  strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
-  settings->ssid[sizeof(settings->ssid)-1] = '\0';
-  strncpy(settings->psk, MY_ACCESSPOINT_PSK, sizeof(settings->psk)-1);
-  settings->psk[sizeof(settings->psk)-1] = '\0';
-  settings->tcpmode = TCP_MODE_SERVER;
-  strncpy(settings->host_ip, NMEA_TCP_IP, sizeof(settings->host_ip)-1);
-  settings->host_ip[sizeof(settings->host_ip)-1] = '\0';
-  settings->tcpport = 0;   // 2000
-  settings->ppswire = false;   /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
 }
 
 void show_settings_serial()
@@ -278,6 +304,7 @@ void show_settings_serial()
     Serial.print(F(" Power external "));Serial.println(settings->power_external);
     Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
     Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
+    Serial.print(F(" GNSS pins "));Serial.println(settings->gnss_pins);
     Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
     Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)

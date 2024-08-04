@@ -22,6 +22,8 @@
 
 #include "LED.h"
 #include "Battery.h"
+#include "EEPROM.h"
+#include "Buzzer.h"
 #include "../TrafficHelper.h"
 
 static uint32_t prev_tx_packets_counter = 0;
@@ -37,6 +39,23 @@ static unsigned long status_LED_TimeMarker = 0;
 // on a live circuit...if you must, connect GND first.
 
 void LED_setup() {
+
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if (hw_info.revision < 8) {
+      if (settings->gnss_pins == EXT_GNSS_15_14)   // pin 14 is connected to the red LED
+        return;
+      if (settings->volume != BUZZER_OFF)
+        return;
+    } else {
+      if (settings->gnss_pins == EXT_GNSS_39_4)    // pin 4 is connected to the red LED
+        return;
+      if (settings->baudrate2 != BAUD_DEFAULT)     // Serial2 is using pin 4
+        return;
+      if (settings->rx1090 != ADSB_RX_NONE)
+        return;
+    }
+  }
+
 #if !defined(EXCLUDE_LED_RING)
   if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {
     uni_begin();
@@ -49,7 +68,8 @@ void LED_setup() {
   if (status_LED != SOC_UNUSED_PIN) {
     pinMode(status_LED, OUTPUT);
     /* Indicate positive power supply */
-    digitalWrite(status_LED, LED_STATE_ON);
+    //digitalWrite(status_LED, LED_STATE_ON);
+    digitalWrite(status_LED, ((hw_info.revision < 8)? HIGH : LOW));
   }
 }
 
@@ -199,6 +219,16 @@ void LED_DisplayTraffic() {
 }
 
 void LED_loop() {
+
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if (hw_info.revision >= 8)
+      return;
+    if (settings->gnss_pins == EXT_GNSS_15_14)
+      return;    // pin 14 is connected to the LED on the v0.7
+    if (settings->volume != BUZZER_OFF)
+      return;
+  }
+
   if (status_LED != SOC_UNUSED_PIN) {
     if (Battery_voltage() > Battery_threshold() ) {
       /* Indicate positive power supply */

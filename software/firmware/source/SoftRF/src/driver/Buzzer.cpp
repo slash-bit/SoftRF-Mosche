@@ -35,6 +35,7 @@ void  Buzzer_fini()        {}
 #include "Buzzer.h"
 #include "Strobe.h"
 #include "EEPROM.h"
+#include "OLED.h"
 
 /* need this for the alarm levels enum: */
 #include "../protocol/radio/Legacy.h"
@@ -43,19 +44,29 @@ void  Buzzer_fini()        {}
 #include "../protocol/data/NMEA.h"
 
 static uint32_t BuzzerTimeMarker = 0;
-static int BuzzerBeeps = 0;     /* how many beeps */
-static int BuzzerState = 0;     /* 1 = buzzing */
-static int BuzzerToneHz = 0;    /* variable tone */
-static int BuzzerBeepMS = 0;    /* how long each beep */
-static int BuzzerPin = SOC_UNUSED_PIN;
+static uint8_t BuzzerBeeps = 0;     /* how many beeps to go */
+static uint8_t BuzzerBeep  = 0;     /* how many beeps done */
+static uint8_t BuzzerState = 0;     /* 1 = buzzing */
 static bool double_beep = false;
+static uint16_t BuzzerToneHz = 0;    /* variable tone */
+static uint16_t BuzzerBeepMS = 0;    /* how long each beep */
 
 #include <toneAC.h>
 
+static uint8_t buzzer1pin = SOC_UNUSED_PIN;
+static uint8_t buzzer2pin = SOC_UNUSED_PIN;
+
 void ext_buzzer(bool state)
 {
-  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN)
-      digitalWrite(SOC_GPIO_PIN_BUZZER, state? HIGH : LOW);
+  if (buzzer1pin != SOC_UNUSED_PIN)
+      digitalWrite(buzzer1pin, state? HIGH : LOW);
+#if 0
+if (state)
+Serial.print("buzzer on  at ");
+else
+Serial.print("buzzer off at ");
+Serial.println(millis());
+#endif
 }
 
 static int volume = 10;
@@ -64,24 +75,34 @@ void Buzzer_setup(void)
 {
   if (settings->volume == BUZZER_OFF)
       return;
+  if (settings->gnss_pins == EXT_GNSS_15_14) {
+      settings->volume = BUZZER_OFF;
+      return;
+  }
+
+  buzzer1pin = SOC_GPIO_PIN_BUZZER;
+  buzzer2pin = SOC_GPIO_PIN_BUZZER2;
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+      buzzer2pin = SOC_GPIO_PIN_VOICE;
+      // (gpio15 not available on T-Beam v0.7, use 25 instead)
+      if (settings->voice != VOICE_OFF || settings->strobe != STROBE_OFF) {
+          // voice or strobe overrides passive buzzer on v0.7
+          if (settings->volume != BUZZER_EXT) {
+              settings->volume = BUZZER_OFF;
+              return;
+          }
+      }
+  }
+
   if (settings->volume == BUZZER_EXT) {
-      if (SOC_GPIO_PIN_BUZZER == SOC_UNUSED_PIN)
+      if (buzzer1pin == SOC_UNUSED_PIN)
           return;
-      pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
+      pinMode(buzzer1pin, OUTPUT);
       ext_buzzer(true);   // turn buzzer on briefly for self-test
       delay(200);
       ext_buzzer(false);
   } else {
-      int buzzer2pin = SOC_GPIO_PIN_BUZZER2;
-      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
-          // (gpio15 not available on T-Beam v0.7)
-          if (settings->voice != VOICE_OFF) {
-              settings->volume = BUZZER_OFF;
-              return;
-          }
-          buzzer2pin = SOC_GPIO_PIN_VOICE;    // gpio 25 instead of 15
-      }
-      toneAC_setup(buzzer2pin, SOC_GPIO_PIN_BUZZER);
+      toneAC_setup(buzzer2pin, buzzer1pin);
       volume = (settings->volume == BUZZER_VOLUME_LOW ? 8 : 10);
   }
   BuzzerToneHz = 0;
@@ -134,6 +155,8 @@ bool Buzzer_Notify(int8_t alarm_level, bool multi_alarm)
     return false;
   }
 
+  BuzzerBeep = 1;  // starting the first beep
+
   if (settings->volume == BUZZER_EXT) {
     ext_buzzer(true);
   } else {
@@ -162,7 +185,7 @@ void Buzzer_loop(void)
           noToneAC();
         BuzzerState = 0;
         uint32_t gap;
-        if (double_beep && (BuzzerBeeps & 1))
+        if (double_beep && (BuzzerBeep & 1))
             gap = ALARM_MULTI_GAP_MS;   /* short break making it a double-beep */
         else
             gap = BuzzerBeepMS;         /* gap is same length as the beep */
@@ -174,6 +197,7 @@ void Buzzer_loop(void)
           toneAC(BuzzerToneHz, volume, 0, true);
         BuzzerState = 1;
         --BuzzerBeeps;
+        ++BuzzerBeep;
         BuzzerTimeMarker = millis() + BuzzerBeepMS;  /* timer of next gap */
       }
 
@@ -183,7 +207,7 @@ void Buzzer_loop(void)
         ext_buzzer(false);
       else
         noToneAC();
-      Buzzer_setup();
+      BuzzerTimeMarker = 0;
     }
 
     return;
@@ -200,6 +224,7 @@ void Buzzer_loop(void)
                           ALARM_LEVEL_LOW);
           Buzzer_Notify(level,(level==ALARM_LEVEL_IMPORTANT? true : false));
       } else {
+          OLED_no_msg();
           do_alarm_demo = false;
       }
   }

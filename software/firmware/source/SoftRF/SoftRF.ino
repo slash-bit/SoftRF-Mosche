@@ -143,7 +143,7 @@ void setup()
 
   resetInfo = (rst_info *) SoC->getResetInfoPtr();
 
-  Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
+  // Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);   // already done in SOC setup
 
 #if defined(USBD_USE_CDC) && !defined(DISABLE_GENERIC_SERIALUSB)
   /* Let host's USB and console drivers to warm-up */
@@ -175,6 +175,7 @@ void setup()
 
   // can only do these after EEPROM_setup(), to know the settings,
   // and EEPROM_setup() needs to be done after the Serial setup delays.
+
   Buzzer_setup();
   Strobe_setup();
 
@@ -183,6 +184,8 @@ void setup()
   uint32_t SerialBaud = baudrates[settings->baud_rate];
   if (SerialBaud == 0)    // BAUD_DEFAULT
     SerialBaud = SERIAL_OUT_BR;
+  //if (settings->mode == SOFTRF_MODE_GPSBRIDGE)
+  //  SerialBaud = 9600;
 #if defined(ESP32)
   if (SerialBaud != SERIAL_OUT_BR || settings->altpin0) {
     if (settings->altpin0) {
@@ -238,10 +241,12 @@ void setup()
 Serial.printf("ID_method: %d, settings_ID: %06X, used_ID: %06X\r\n",
 settings->id_method, settings->aircraft_id, ThisAircraft.addr);
 
-
   hw_info.rf = RF_setup();
 
   delay(100);
+
+  // do this before Baro_setup - Wire.begin() happens there
+  hw_info.display = SoC->Display_setup();
 
 Serial.println(F("calling Baro_setup()..."));
   hw_info.baro = Baro_setup();
@@ -250,8 +255,6 @@ Serial.println(F("... Baro_setup() returned"));
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();
 #endif /* ENABLE_AHRS */
-
-  hw_info.display = SoC->Display_setup();
 
 #if !defined(EXCLUDE_MAVLINK)
   if (settings->mode == SOFTRF_MODE_UAV) {
@@ -274,6 +277,7 @@ Serial.println(F("... Baro_setup() returned"));
   SoC->swSer_enableRx(false);
 
   LED_setup();
+
   WiFi_setup();
 
   if (SoC->USB_ops) {
@@ -451,15 +455,15 @@ void normal()
     static float prev_lon = 0;
 
     if (firstfix) {
+        SetupTimeMarker = millis();   // start a minute of non-airborne collision warnings
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
         firstfix = false;
-        SetupTimeMarker = millis();
-        /* start a minute of non-airborne collision warnings */
+        validfix = false;            // wait for next fix
     } else if (newfix) {
-        if (fabs(gnss.location.lat()-ThisAircraft.latitude) > 0.15)   // looks like bad data
+        if (fabs(gnss.location.lat()-prev_lat) > 0.15)   // looks like bad data
             validfix = false;
-        if (fabs(gnss.location.lng()-ThisAircraft.longitude) > 0.25)
+        if (fabs(gnss.location.lng()-prev_lon) > 0.25)
             validfix = false;
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
@@ -949,10 +953,24 @@ void txrx_test()
 
 #endif /* EXCLUDE_TEST_MODE */
 
+// use this mode to connect to UBlox U-Center utility software to
+// diagnose the GNSS module - should also set baud rate to 9600
+void gpsbridge()
+{
+  if (Serial.available()) {      // If anything comes in from USB,
+    Serial_GNSS_In.write(Serial.read());   // read it and send it out to the GPS.
+  }
+
+  if (Serial_GNSS_In.available()) {     // If anything comes in from the GPS,
+    Serial.write(Serial_GNSS_In.read());   // read it and send it out to USB.
+  }
+}
+
 void loop()
 {
   // Do common RF stuff first
-  RF_loop();
+  if (settings->mode != SOFTRF_MODE_GPSBRIDGE)
+    RF_loop();
 
   switch (settings->mode)
   {
@@ -979,6 +997,9 @@ void loop()
     watchout();
     break;
 #endif /* EXCLUDE_WATCHOUT_MODE */
+  case SOFTRF_MODE_GPSBRIDGE:
+    gpsbridge();
+    break;
   default:
     normal();
     break;

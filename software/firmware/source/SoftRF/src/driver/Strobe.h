@@ -41,10 +41,10 @@ void Strobe_setup(void);
 void Strobe_loop(void);
 void Strobe_fini(void);
 
-#if defined(ESP32)
-#define STROBEPIN SOC_GPIO_PIN_STROBE
-#else
-#define STROBEPIN SOC_UNUSED_PIN
-#endif
+//#if defined(ESP32)
+//#define STROBEPIN SOC_GPIO_PIN_STROBE
+//#else
+//#define STROBEPIN SOC_UNUSED_PIN
+//#endif
 
 #endif /* STROBEHELPER_H */

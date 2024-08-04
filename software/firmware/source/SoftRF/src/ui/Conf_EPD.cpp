@@ -205,12 +205,12 @@ void EPD_conf_setup() {}
 
 void EPD_conf_loop()
 {
-  if (isTimeToEPD()) {
-      EPDTimeMarker = millis();
+  //if (isTimeToEPD()) {
+  //    EPDTimeMarker = millis();
       if (conf_initialized == false || EPD_prev_view != VIEW_MODE_CONF)
           EPD_Draw_Conf();
       conf_initialized = true;
-  }
+  //}
 }
 
 void EPD_conf_next() {}

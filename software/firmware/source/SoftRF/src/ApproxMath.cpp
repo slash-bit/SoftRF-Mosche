@@ -90,10 +90,8 @@ int32_t iatan2_approx(int32_t ns, int32_t ew)
   }
 }
 
-/* Bhaskara's (7th century) approximation for the Sine and Cosine, expanded range: */
-/*   https://scholarworks.umt.edu/cgi/viewcontent.cgi?article=1313&context=tme     */
-
 /* approximate sin(), argument in degrees, meant for +-360deg range */
+/*   https://scholarworks.umt.edu/cgi/viewcontent.cgi?article=1313&context=tme     */
 float sin_approx(float degs)
 {
   bool neg;
@@ -109,7 +107,9 @@ float sin_approx(float degs)
   } else {
     prathama = degs * (180.0 - degs);
   }
-  sine = 4.0*prathama / (40500.0-prathama);
+  //sine = 4.0*prathama / (40500.0-prathama);
+  // use the other approximation in same paper to avoid the FP division:
+  sine = 3.429355e-9 * (27900.0 + prathama) * prathama;
   if (neg)  return -sine;
   return sine;
 }

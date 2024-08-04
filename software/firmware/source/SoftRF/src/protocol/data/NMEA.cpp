@@ -28,11 +28,14 @@
 #include "../../driver/RF.h"
 #include "../../system/SoC.h"
 // which does #include "../../SoftRF.h"
+#include "../../system/Time.h"
 #include "../../driver/WiFi.h"
 #include "../../driver/EEPROM.h"
 #include "../../driver/RF.h"
 #include "../../driver/Battery.h"
+#include "../../driver/OLED.h"
 #include "../../driver/Baro.h"
+#include "../../driver/Strobe.h"
 #include "../../driver/Bluetooth.h"
 #include "../../TrafficHelper.h"
 
@@ -280,22 +283,45 @@ void NMEA_add_checksum(char *buf, size_t limit)
   snprintf_P(csum_ptr, limit, PSTR("%02X\r\n"), cs);
 }
 
-// send self-test and version sentences out, imitating a FLARM
-void sendPFLAV()
+void sendPFLAJ()
 {
-  static uint32_t whensend = 28000;
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAJ,A,%d,%d,0*"),
+                 ThisAircraft.airborne, ThisAircraft.airborne);
+    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 24);
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+}
+
+// send self-test and version sentences out, imitating a FLARM
+void sendPFLAV(bool nowait)
+{
+  static uint32_t whensent = 0;
+  if (!nowait) { 
+      if (OurTime == whensent)
+          return;                 // only continue once per second
+      whensent = OurTime;
+      if (OurTime < 1000000)
+          return;
+      if ((((uint32_t) OurTime) & 0x1F) != 7)   // send once in 32 seconds
+          return;
+  }
+  uint32_t timebits = (((uint32_t) OurTime) & 0x60);
   if (settings->nmea_l || settings->nmea2_l) {
-    uint32_t millisnow = millis();
-    if (millisnow > whensend) {
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAE,A,0,0*"));
-      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 16);
+    if (nowait || timebits == 0x20) {
+      uint32_t pps = SoC->get_PPS_TimeMarker();
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAE,A,0,0%s*"),
+          (pps > 0 && millis()-pps < 2000)? ",PPS received" : "");
+      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 24);
       NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
-      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAV,A,2.4,7.20,%s-%s*"),
+    }
+    if (nowait || timebits == 0x60) {
+      snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAV,A,2.4,7.24,%s-%s*"),
                    SOFTRF_IDENT, SOFTRF_FIRMWARE_VERSION);  // our version in obstacle db text field
       NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 48);
       NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
-      whensend = millisnow + 73000;
     }
+//  if (nowait || timebits == 0x00 || timebits == 0x40) {    // every 64 seconds
+//      sendPFLAJ();
+//  }
   }
 }
 
@@ -321,16 +347,21 @@ void NMEA_setup()
     if (settings->rx1090 == ADSB_RX_GNS5892) {
         Serial2Baud = GNS5892_BAUDRATE;
         Serial2BufSize = GNS5892_INPUT_BUF_SIZE;
+        Serial.println(F("Using Serial2 for ADS-B module"));
     }
-    if (Serial2Baud != 0) {
-        Serial2.setRxBufferSize(Serial2BufSize);
-        Serial2.begin(Serial2Baud, SERIAL_8N1, Serial2RxPin, Serial2TxPin, settings->invert2);
-        has_serial2 = true;
-        Serial.printf("Serial2 started at baud rate %d, logic:%d\r\n",
-               Serial2Baud, settings->invert2);
-    } else {
+
+    if (Serial2Baud == 0 || settings->gnss_pins == EXT_GNSS_39_4) {
         // note BAUD_DEFAULT here means Serial2 disabled, not 38400
         Serial.println(F("Serial2 NOT started"));
+    } else {
+        Serial2.setRxBufferSize(Serial2BufSize);
+        uint8_t rx_pin = Serial2RxPin;   // VN
+        if (hw_info.revision < 8)
+            rx_pin = Serial0AltRxPin;    // VP
+        Serial2.begin(Serial2Baud, SERIAL_8N1, rx_pin, Serial2TxPin, settings->invert2);
+        has_serial2 = true;
+        Serial.printf("Serial2 started on pins %d,%d at baud rate %d, logic:%d\r\n",
+               rx_pin, Serial2TxPin, Serial2Baud, settings->invert2);
     }
   }
 #endif
@@ -455,7 +486,7 @@ void NMEA_setup()
   RPYL_TimeMarker = millis();
 #endif /* ENABLE_AHRS */
 
-  sendPFLAV();
+  sendPFLAV(true);
 }
 
 void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
@@ -792,7 +823,7 @@ void NMEA_loop()
 
   NMEA_Source = DEST_NONE;  // for all internal messages sent below
 
-  sendPFLAV();
+  sendPFLAV(false);
 
   if ((settings->nmea_s || settings->nmea2_s)
       && ThisAircraft.pressure_altitude != 0.0 && isTimeToPGRMZ()) {
@@ -1152,9 +1183,19 @@ void NMEA_Export()
 
     int gps_status = (ThisAircraft.airborne ? GNSS_STATUS_3D_MOVING : GNSS_STATUS_3D_GROUND);
     int tx_status = (settings->txpower == RF_TX_POWER_OFF ? TX_STATUS_OFF : TX_STATUS_ON);
-    if (! has_Fix) {
-        gps_status = GNSS_STATUS_NONE;
-        tx_status = TX_STATUS_OFF;
+    if (do_alarm_demo) {
+        if ((millis() - SetupTimeMarker) < (1000*STROBE_INITIAL_RUN)) {
+            gps_status = GNSS_STATUS_3D_MOVING;
+            HP_alarm_level = ALARM_LEVEL_IMPORTANT;
+        } else {
+            OLED_no_msg();
+            do_alarm_demo = false;  // turn demo off here, in case buzzer is set to OFF
+        }
+    } else {
+        if (! has_Fix) {
+            gps_status = GNSS_STATUS_NONE;
+            tx_status = TX_STATUS_OFF;
+        }
     }
     if (HP_addr) {
         if (HP_stealth && HP_alarm_level <= ALARM_LEVEL_CLOSE) {
@@ -1168,6 +1209,12 @@ void NMEA_Export()
                 total_objects, tx_status, gps_status,
                 power_status, HP_alarm_level, rel_bearing,
                 ALARM_TYPE_AIRCRAFT, HP_alt_diff, (int) HP_distance, HP_addr
+                PFLAU_EXT1_ARGS );
+    } else if (do_alarm_demo) {
+        // simulate an aircraft
+        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+                PSTR("$PFLAU,1,1,%d,1,%d,0,2,0,500,AAAAAA" PFLAU_EXT1_FMT "*"),
+                GNSS_STATUS_3D_MOVING, (ALARM_LEVEL_IMPORTANT - 1)
                 PFLAU_EXT1_ARGS );
     } else {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),

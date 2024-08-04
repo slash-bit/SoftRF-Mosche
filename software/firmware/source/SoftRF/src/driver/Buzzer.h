@@ -32,7 +32,7 @@
 #define ALARM_TONE_MS_LOW       700
 #define ALARM_TONE_MS_IMPORTANT 250
 #define ALARM_TONE_MS_URGENT    140
-#define ALARM_MULTI_GAP_MS 60
+#define ALARM_MULTI_GAP_MS 50
 
 enum
 {

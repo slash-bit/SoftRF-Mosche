@@ -1707,10 +1707,9 @@ static void nRF52_Button_setup()
 //  ModeButtonConfig->setDebounceDelay(15);
   //ModeButtonConfig->setClickDelay(600);
   //ModeButtonConfig->setDoubleClickDelay(1500);
-  //ModeButtonConfig->setLongPressDelay(2000);
   ModeButtonConfig->setClickDelay(300);
-  ModeButtonConfig->setDoubleClickDelay(750);
-  ModeButtonConfig->setLongPressDelay(1000);
+  ModeButtonConfig->setDoubleClickDelay(600);
+  ModeButtonConfig->setLongPressDelay(2000);
 
   ButtonConfig* UpButtonConfig = button_2.getButtonConfig();
   UpButtonConfig->setEventHandler(handleEvent);
@@ -1718,10 +1717,9 @@ static void nRF52_Button_setup()
 //  UpButtonConfig->setDebounceDelay(15);
   //UpButtonConfig->setClickDelay(600);
   //UpButtonConfig->setDoubleClickDelay(1500);
-  //UpButtonConfig->setLongPressDelay(2000);
   UpButtonConfig->setClickDelay(300);
-  UpButtonConfig->setDoubleClickDelay(750);
-  UpButtonConfig->setLongPressDelay(1000);
+  UpButtonConfig->setDoubleClickDelay(600);
+  UpButtonConfig->setLongPressDelay(2000);
 
 //  attachInterrupt(digitalPinToInterrupt(mode_button_pin), onModeButtonEvent, CHANGE );
   attachInterrupt(digitalPinToInterrupt(up_button_pin),   onUpButtonEvent,   CHANGE );

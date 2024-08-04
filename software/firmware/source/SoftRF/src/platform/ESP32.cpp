@@ -438,6 +438,8 @@ static void ESP32_setup()
   esp_partition_iterator_t it;
   const esp_partition_t *part;
 
+//ESP_LOGI(TAG, "checking partitions...");
+
   it = esp_partition_find(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
   if (it) {
     do {
@@ -456,6 +458,8 @@ static void ESP32_setup()
   if (min_app_size && (min_app_size != flash_size)) {
     ESP32_Min_AppPart_Size = min_app_size;
   }
+
+//ESP_LOGI(TAG, "checking for PSRAM...");
 
   if (psramFound()) {
 
@@ -533,27 +537,35 @@ static void ESP32_setup()
   }
 #endif
 
-  // prevent external buzzer being "on" for a while at boot
-  if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN) {
-      //pinMode(SOC_GPIO_PIN_BUZZER, OUTPUT);
-      //digitalWrite(SOC_GPIO_PIN_BUZZER, LOW);
-      pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);
-  }
-  // similarly for strobe
-  if (STROBEPIN != SOC_UNUSED_PIN) {
-      //pinMode(STROBEPIN, OUTPUT);
-      //digitalWrite(STROBEPIN, LOW);
-      pinMode(STROBEPIN, INPUT_PULLDOWN);
-  }
+//ESP_LOGI(TAG, "buzzer & strobe pins low...");
 
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     esp32_board = ESP32_TTGO_T_BEAM;
 
-    // Start up both Wires here, on fixed GPIO pins
+    // prevent external buzzer being "on" for a while at boot
+    // - do this as early as possible - even though board rev is not known yet
+    if (SOC_GPIO_PIN_BUZZER != SOC_UNUSED_PIN)
+        pinMode(SOC_GPIO_PIN_BUZZER, INPUT_PULLDOWN);    // for T-Beam v1.x
+    if (SOC_GPIO_PIN_VOICE != SOC_UNUSED_PIN)
+        pinMode(SOC_GPIO_PIN_VOICE, INPUT_PULLDOWN);     // for T-Beam v0.7
+    // similarly for strobe
+    if (SOC_GPIO_PIN_STROBE != SOC_UNUSED_PIN) {
+        //pinMode(STROBEPIN, OUTPUT);
+        //digitalWrite(STROBEPIN, LOW);
+        pinMode(SOC_GPIO_PIN_STROBE, INPUT_PULLDOWN);
+    }
+
+//ESP_LOGI(TAG, "starting wires...");
+
+    // Start up both Wires on fixed GPIO pins
     // Do not change these later (on PRIME_MK2)
     // Baro probe and OLED probe try both wires
-    Wire.begin (SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
+    // PMU probe needs Wire1
     Wire1.begin(TTGO_V2_OLED_PIN_SDA  , TTGO_V2_OLED_PIN_SCL);      // GPIO 21,22
+    //if (settings->gnss_pins != EXT_GNSS_13_2)     // <<< cannot access settings yet
+    //    Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
+
+//ESP_LOGI(TAG, "PMU probe...");
 
     has_axp = PMU_probe();
 
@@ -614,18 +626,32 @@ static void ESP32_setup()
         PMU->setVbusCurrentLimit(XPOWERS_AXP2101_VBUS_CUR_LIM_1500MA);
 
         // DCDC1 1500~3400mV, IMAX=2A
-        //PMU->setDC1Voltage(3300); // ESP32,  AXP2101 power-on value: 3300
+        PMU->setProtectedChannel(XPOWERS_DCDC1);
         PMU->setPowerChannelVoltage(XPOWERS_DCDC1, 3300);
-        // PMU->enablePowerOutput(XPOWERS_DCDC1);
+        PMU->enablePowerOutput(XPOWERS_DCDC1);
+
+        // not clear whether esp32 power source on T-Beam v1.2 is DCDC1 or DCDC3?
+        PMU->setProtectedChannel(XPOWERS_DCDC3);
+        PMU->setPowerChannelVoltage(XPOWERS_DCDC3, 3300);
+        PMU->enablePowerOutput(XPOWERS_DCDC3);
+
+        PMU->disablePowerOutput(XPOWERS_DCDC2);
+        PMU->disablePowerOutput(XPOWERS_DCDC4);
+        PMU->disablePowerOutput(XPOWERS_DCDC5);
+        PMU->disablePowerOutput(XPOWERS_ALDO4);
+        PMU->disablePowerOutput(XPOWERS_BLDO1);
+        PMU->disablePowerOutput(XPOWERS_BLDO2);
+        PMU->disablePowerOutput(XPOWERS_DLDO1);
+        PMU->disablePowerOutput(XPOWERS_DLDO2);
 
         // ALDO 500~3500mV, 100mV/step, IMAX=300mA
         //PMU->setButtonBatteryChargeVoltage(3100); // GNSS battery
 
-        //PMU->setALDO2Voltage(3300); // LoRa, AXP2101 power-on value: 2800
-        //PMU->setALDO3Voltage(3300); // GPS,  AXP2101 power-on value: 3300
-
         // PMU->enableDC1();
         //PMU->enableButtonBatteryCharge();    // <<< this syntax not available via this API
+
+        PMU->enablePowerOutput(XPOWERS_VBACKUP);
+        PMU->enablePowerOutput(XPOWERS_ALDO1);
 
         PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300); // LoRa, AXP2101 power-on value: 2800
         PMU->enablePowerOutput(XPOWERS_ALDO2);
@@ -635,6 +661,8 @@ static void ESP32_setup()
 
         //PMU->enableALDO2();    // <<< this syntax not available via this API
         //PMU->enableALDO3();
+
+        PMU->setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
 
         PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 
@@ -1019,6 +1047,8 @@ static void ESP32_setup()
 #else
   Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
 #endif /* ARDUINO_USB_CDC_ON_BOOT && (CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3) */
+
+//ESP_LOGI(TAG, "ESP32_setup() done");
 }
 
 static void ESP32_post_init()
@@ -1147,8 +1177,29 @@ static void ESP32_post_init()
     case BLUETOOTH_LE_HM10_SERIAL :  Serial.println(F("BT: LE"));    break;
     default              :  Serial.println(F("BT?"));       break;
   }
-
   Serial.println();
+
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if (settings->gnss_pins != EXT_GNSS_NONE) {
+        Serial.println(F("Using external GNSS"));
+        if (has_axp192 || has_axp2101)
+            Serial.println(F("Turning off internal GNSS"));
+        if (has_axp192)
+            PMU->disablePowerOutput(XPOWERS_LDO3);
+        else if (has_axp2101)
+            PMU->disablePowerOutput(XPOWERS_ALDO3);
+    }
+    if (settings->mode == SOFTRF_MODE_GPSBRIDGE) {
+        Serial.println(F("GPS bridge mode"));
+        if (has_axp192 || has_axp2101)
+            Serial.println(F("Turning off radio"));
+        if (has_axp192)
+            PMU->disablePowerOutput(XPOWERS_LDO2);
+        else if (has_axp2101)
+            PMU->disablePowerOutput(XPOWERS_ALDO2);
+    }
+  }
+
   Serial.flush();
 
   switch (hw_info.display)
@@ -1228,21 +1279,25 @@ static void ESP32_post_init()
 
 void blue_LED_on()
 {
+  if (PMU)
     PMU->setChargingLedMode(XPOWERS_CHG_LED_ON);
 }
 
 void blue_LED_off()
 {
+  if (PMU)
     PMU->setChargingLedMode(XPOWERS_CHG_LED_OFF);
 }
 
 void blue_LED_1hz()
 {
+  if (PMU)
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_1HZ);
 }
 
 void blue_LED_4hz()
 {
+  if (PMU)
     PMU->setChargingLedMode(XPOWERS_CHG_LED_BLINK_4HZ);
 }
 
@@ -1301,11 +1356,12 @@ static void ESP32_loop()
     //   fast blink if waiting for GNSS
     //   and turn off if not transmitting
     if (millis() > BlueLEDTimeMarker) {
+      float volts = Battery_voltage();
       if (! isValidFix()) {
         blue_LED_new_state = XPOWERS_CHG_LED_BLINK_4HZ;
       } else if (settings->txpower == RF_TX_POWER_OFF) {
         blue_LED_new_state = XPOWERS_CHG_LED_OFF;
-      } else if (Battery_voltage() < Battery_threshold()) {
+      } else if (volts > BATTERY_THRESHOLD_INVALID && volts < Battery_threshold()) {
         blue_LED_new_state = XPOWERS_CHG_LED_BLINK_1HZ;
       } else {
         blue_LED_new_state = XPOWERS_CHG_LED_ON;
@@ -1327,6 +1383,7 @@ static void ESP32_loop()
   // show a message if long-press middle button turned off Bluetooth
   if (bt_turned_off) {
     OLED_msg("BT", "OFF");
+    delay(1000);
     bt_turned_off = false;  // message done, but BT is still off
   }
 }
@@ -1993,7 +2050,36 @@ static void ESP32_swSer_begin(unsigned long baud)
     Serial.print(hw_info.revision);
     Serial.println(F(" is detected."));
 
-    if (hw_info.revision >= 8) {
+    if (settings->gnss_pins == EXT_GNSS_39_4) {
+      if (hw_info.revision < 8) {
+          Serial.println(F("Connecting to external GNSS on pins VP,4"));
+          Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
+                               Serial0AltRxPin,
+                               Serial2TxPin);
+      } else {
+          Serial.println(F("Connecting to external GNSS on pins VN,4"));
+          Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
+                               Serial2RxPin,
+                               Serial2TxPin);  // Serial1, but the pins Serial2 could have used
+      }
+    } else if (settings->gnss_pins == EXT_GNSS_13_2) {
+      Serial.println(F("Connecting to external GNSS on pins 13,2"));
+      Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
+                           SOC_GPIO_PIN_TBEAM_SDA,
+                           SOC_GPIO_PIN_TBEAM_SCL);   // the pins BMP (& OLED) could have used
+    } else if (settings->gnss_pins == EXT_GNSS_15_14) {
+      if (hw_info.revision < 8) {
+          Serial.println(F("Connecting to external GNSS on pins 25,14"));
+          Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
+                           SOC_GPIO_PIN_VOICE,
+                           SOC_GPIO_PIN_BUZZER);
+      } else {
+          Serial.println(F("Connecting to external GNSS on pins 15,14"));
+          Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
+                           SOC_GPIO_PIN_BUZZER2,
+                           SOC_GPIO_PIN_BUZZER);
+      }
+    } else if (hw_info.revision >= 8) {
       Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_TBEAM_V08_RX,
                            SOC_GPIO_PIN_TBEAM_V08_TX);
@@ -2039,7 +2125,7 @@ static void ESP32_swSer_begin(unsigned long baud)
   /* Default Rx buffer size (256 bytes) is sometimes not big enough */
   // Serial_GNSS_In.setRxBufferSize(512);
 
-  /* Need to gather some statistics on variety of flash IC usage */
+  /* Need to gather some statistics on variety of flash IC usage */  // <<< why here?
   Serial.print(F("Flash memory ID: "));
   Serial.println(ESP32_getFlashId(), HEX);
 }
@@ -2079,7 +2165,14 @@ static byte ESP32_Display_setup()
         u8x8 = &u8x8_1_3;
         rval = DISPLAY_OLED_1_3;
       }
-    } if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+
+    } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+
+        // Start up Wire here rather than in ESP32_setup since we need to look at settings
+        // OLED probe (here) and Baro probe try both wires
+        if (settings->gnss_pins != EXT_GNSS_13_2)
+            Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
+
         Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 21,22
         has_oled = (Wire1.endTransmission() == 0);
         if (has_oled) {
@@ -2087,8 +2180,10 @@ static byte ESP32_Display_setup()
           rval = DISPLAY_OLED_TTGO;
           Serial.println(F("u8x8_ttgo OLED found at pins 21,22"));
         } else {
-          Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 13,2
-          has_oled = (Wire.endTransmission() == 0);
+          if (settings->gnss_pins != EXT_GNSS_13_2) {
+            Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 13,2
+            has_oled = (Wire.endTransmission() == 0);
+          }
           if (has_oled) {
             u8x8 = &u8x8_ttgo2;
             rval = DISPLAY_OLED_TTGO;
@@ -2388,17 +2483,40 @@ static void ESP32_Display_loop()
 
 static void ESP32_Display_fini(int reason)
 {
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
-#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_LED_V11)
-    // if Serial2 used this pin, turn red LED back on to show shutdown in progress
-    if (has_serial2) {
-        has_serial2 = false;    // in NMEA.cpp
-        delay(300);
-        Serial2.end();
-        pinMode(SOC_GPIO_PIN_TBEAM_LED_V11, OUTPUT);
-        digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V11, LOW);
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    if (settings->volume != BUZZER_OFF && settings->volume != BUZZER_EXT) {
+      Buzzer_tone(640, 250);
+      Buzzer_tone(440, 250);
     }
+    if (hw_info.revision >= 8) {
+      // if Serial2 or external GNSS used this pin,
+      // turn red LED back on to show shutdown in progress
+#if (Serial2TxPin == SOC_GPIO_PIN_TBEAM_LED_V11)
+      if (has_serial2 || settings->rx1090 != ADSB_RX_NONE) {
+          has_serial2 = false;    // in NMEA.cpp
+          delay(300);
+          Serial2.end();
+      } else
 #endif
+      if (settings->gnss_pins == EXT_GNSS_39_4) {
+          Serial_GNSS_In.end();
+      }
+      delay(300);
+      pinMode(SOC_GPIO_PIN_TBEAM_LED_V11, OUTPUT);
+      digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V11, LOW);
+#if 0
+    // skip, since we removed the shutdown function from the pushbutton in v0.7
+    // and replaced it with long-press for the alarm demo (short is for pages)
+    } else if (hw_info.revision == 5) {
+      // if external GNSS used this pin, turn LED back on to show shutdown in progress
+      if (settings->gnss_pins == EXT_GNSS_15_14) {
+          Serial_GNSS_In.end();
+          delay(300);
+          pinMode(SOC_GPIO_PIN_TBEAM_LED_V05, OUTPUT);
+          digitalWrite(SOC_GPIO_PIN_TBEAM_LED_V05, HIGH);
+      }
+#endif
+    }
   }
 
   switch (hw_info.display)
@@ -2711,6 +2829,7 @@ AceButton button_2(SOC_GPIO_PIN_TBEAM_V08_BUTTON);
 
 // The event handlers for the buttons
 
+// this is for the first pushbutton on a T-Beam v0.x
 void handleEvent(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
@@ -2718,8 +2837,9 @@ void handleEvent(AceButton* button, uint8_t eventType,
       return;
 
   switch (eventType) {
-    case AceButton::kEventClicked:
     case AceButton::kEventReleased:
+      break;
+    case AceButton::kEventClicked:
 #if defined(USE_OLED)
       OLED_Next_Page();
 #endif
@@ -2727,11 +2847,26 @@ void handleEvent(AceButton* button, uint8_t eventType,
     case AceButton::kEventDoubleClicked:
       break;
     case AceButton::kEventLongPressed:
-      shutdown(SOFTRF_SHUTDOWN_BUTTON);
+      // v1.x shutdown is via PMU interrupt
+      // skip v0.7 shutdown, should use slide switch instead
+      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2  && hw_info.revision <  8) {
+          if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
+              if (settings->txpower == RF_TX_POWER_OFF) {
+                  settings->txpower = RF_TX_POWER_FULL;
+              } else {
+                  settings->txpower = RF_TX_POWER_OFF;
+              }
+          } else if (millis() > 10000) {
+              SetupTimeMarker = millis();
+              do_alarm_demo = true;
+              OLED_msg("ALARM", " DEMO");
+          }
+      }
       break;
   }
 }
 
+// this is for the middle button on a T-Beam v1.x
 void handleEvent2(AceButton* button, uint8_t eventType,
     uint8_t buttonState) {
 
@@ -2739,23 +2874,26 @@ void handleEvent2(AceButton* button, uint8_t eventType,
       return;
 
   // Click middle button on T-Beam to trigger alarm demo.
+  // (Long-press the first button on the T-Beam v0.7)
   // But in winch mode the button turns transmissions on/off instead.
-  // Can also long-press to turn off Bluetooth until next boot
+  // Can also long-press middle button to turn off Bluetooth until next boot
   //    - this can help one reach the web interface
   // Note that now any web access turns BT off, without the button press.
 
   switch (eventType) {
-    case AceButton::kEventClicked:
     case AceButton::kEventReleased:
+      break;
+    case AceButton::kEventClicked:
       if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
           if (settings->txpower == RF_TX_POWER_OFF) {
               settings->txpower = RF_TX_POWER_FULL;
           } else {
               settings->txpower = RF_TX_POWER_OFF;
           }
-      } else if (millis() > 10000) {
+      } else if (millis() > 10000 && !bt_turned_off) {
           SetupTimeMarker = millis();
           do_alarm_demo = true;
+          OLED_msg("ALARM", " DEMO");
       }
       break;
     case AceButton::kEventLongPressed:

@@ -554,9 +554,9 @@ void Traffic_Update(ufo_t *fop)
   fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(adj_alt_diff);
 
   /* follow FLARM docs: do not issue alarms about non-airborne traffic */
-  /* - except in the first minute, for testing */
+  /* (first minute exception removed) */
   if ((fop->airborne == 0 || ThisAircraft.airborne == 0)
-            && (millis() - SetupTimeMarker > 60000)) {
+            /* && (millis() - SetupTimeMarker > 60000) */ ) {
     fop->alarm_level = ALARM_LEVEL_NONE;
     return;
   }

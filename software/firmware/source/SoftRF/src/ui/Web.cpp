@@ -36,6 +36,7 @@ void Web_fini()     {}
 #include "Web.h"
 #include "../driver/EEPROM.h"
 #include "../driver/OLED.h"
+#include "../driver/GNSS.h"
 #include "../driver/Baro.h"
 #include "../driver/LED.h"
 #include "../driver/Buzzer.h"
@@ -263,7 +264,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
-  size_t size = 12900;
+  size_t size = 13100;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -298,6 +299,7 @@ void handleSettings() {
 <!-- <option %s value='%d'>Tx/Rx Test</option> -->\
 <option %s value='%d'>Bridge</option>\
 <option %s value='%d'>UAV</option>\
+<option %s value='%d'>GNSS Bridge</option>\
 </select>\
 </td>\
 </tr>"),
@@ -305,7 +307,8 @@ void handleSettings() {
   (settings->mode == SOFTRF_MODE_NORMAL ? "selected" : "") , SOFTRF_MODE_NORMAL,
   (settings->mode == SOFTRF_MODE_TXRX_TEST ? "selected" : ""), SOFTRF_MODE_TXRX_TEST,
   (settings->mode == SOFTRF_MODE_BRIDGE ? "selected" : ""), SOFTRF_MODE_BRIDGE,
-  (settings->mode == SOFTRF_MODE_UAV ? "selected" : ""), SOFTRF_MODE_UAV
+  (settings->mode == SOFTRF_MODE_UAV ? "selected" : ""), SOFTRF_MODE_UAV,
+  (settings->mode == SOFTRF_MODE_GPSBRIDGE ? "selected" : ""), SOFTRF_MODE_GPSBRIDGE
 /*  (settings->mode == SOFTRF_MODE_WATCHOUT ? "selected" : ""), SOFTRF_MODE_WATCHOUT, */
   );
 
@@ -1172,19 +1175,34 @@ void handleSettings() {
     size -= len;
   }
 
-  /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+  /* whether T-Beam has external GNSS, and PPS wire added (to GPIO37, or to "VP") */
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     snprintf_P ( offset, size,
       PSTR("\
 <tr>\
-<th align=left>PPS wire hardware mod:</th>\
+<th align=left>GNSS module:</th>\
+<td align=right>\
+<select name='gnss_pins'>\
+<option %s value='%d'>Internal</option>\
+<option %s value='%d'>on pins %s, 4</option>\
+<option %s value='%d'>on pins 13, 2</option>\
+<option %s value='%d'>on pins %d, 14</option>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>Added PPS wire:</th>\
 <td align=right>\
 <input type='radio' name='ppswire' value='0' %s>Absent\
 <input type='radio' name='ppswire' value='1' %s>Present\
 </td>\
 </tr>"),
+  (settings->gnss_pins==EXT_GNSS_NONE  ? "selected" : ""), EXT_GNSS_NONE,
+  (settings->gnss_pins==EXT_GNSS_39_4  ? "selected" : ""), EXT_GNSS_39_4,
+        (hw_info.revision < 8 ? "VP" : "VN"),
+  (settings->gnss_pins==EXT_GNSS_13_2  ? "selected" : ""), EXT_GNSS_13_2,
+  (settings->gnss_pins==EXT_GNSS_15_14 ? "selected" : ""), EXT_GNSS_15_14,
+        (hw_info.revision < 8 ? 25 : 15),
   (!settings->ppswire ? "checked" : "") , (settings->ppswire ? "checked" : ""));
-
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -1287,7 +1305,7 @@ void handleRoot() {
   char str_alt[16];
   char str_Vcc[8];
 
-  char *Root_temp = (char *) malloc(2900);
+  char *Root_temp = (char *) malloc(3300);
   if (Root_temp == NULL) {
     Serial.println(F(">>> not enough RAM"));
     return;
@@ -1346,6 +1364,7 @@ void handleRoot() {
   <tr><th align=left>Latitude</th><td align=right>%s</td></tr>\
   <tr><th align=left>Longitude</th><td align=right>%s</td></tr>\
   <tr><td align=left><b>Altitude</b>&nbsp;&nbsp;(above MSL)</td><td align=right>%s</td></tr>\
+  %s\
  </table>\
  <hr>\
  <table width=100%%>\
@@ -1390,8 +1409,12 @@ void handleRoot() {
     low_voltage ? "red" : "green", str_Vcc,
     tx_packets_counter, rx_packets_counter,
     timestamp, sats, str_lat, str_lon, str_alt,
+    ((hw_info.model == SOFTRF_MODEL_PRIME_MK2) ?
+         "<tr><td><input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'></td></tr>"
+          : ""),
     num_wav_files
   );
+  Serial.print(F("Status page size: ")); Serial.println(strlen(Root_temp));
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
   server.sendHeader(String(F("Pragma")), String(F("no-cache")));
@@ -1399,6 +1422,7 @@ void handleRoot() {
   server.send ( 200, "text/html", Root_temp );
   SoC->swSer_enableRx(true);
   free(Root_temp);
+  Serial.println(F("Files in SPIFFS:"));
   if (!SPIFFS.begin(true)) {
       Serial.println(F("Failed to start SPIFFS"));
       return;
@@ -1408,7 +1432,6 @@ void handleRoot() {
       Serial.println(F("Cannot open SPIFFS root"));
       return;
   }
-  Serial.println(F("Files in SPIFFS:"));
   File file = root.openNextFile();
   while(file){
       Serial.print("... ");
@@ -1540,6 +1563,8 @@ void handleInput() {
     } else if (server.argName(i).equals("alarmlog")) {
       server.arg(i).toCharArray(idbuf, sizeof(idbuf));
       settings->logalarms = strtoul(idbuf, NULL, 16);
+    } else if (server.argName(i).equals("gnss_pins")) {
+      settings->gnss_pins = server.arg(i).toInt();
     } else if (server.argName(i).equals("ppswire")) {
       settings->ppswire = server.arg(i).toInt();
     } else if (server.argName(i).equals("debug_flags")) {
@@ -1613,8 +1638,48 @@ void handleInput() {
 #endif
   Serial.print(F("Bluetooth (adjusted) = ")); Serial.println(settings->bluetooth);
 
-  /* enforce some hardware restrictions */
+  /* enforce some hardware limitations (not enough GPIO pins) */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      if (hw_info.revision < 8) {
+          if (settings->voice == VOICE_EXT) {
+              // pin 14 not available, cannot do external I2S
+              settings->voice = VOICE_OFF;
+          }
+          if (settings->baudrate2 != BAUD_DEFAULT) {
+              // aux serial uses VP, cannot use it for main serial rx
+              settings->altpin0 = false;
+              if (settings->gnss_pins == EXT_GNSS_15_14)
+                  settings->ppswire = false;
+          }
+          if (settings->gnss_pins == EXT_GNSS_39_4) {
+              // GNSS uses VP, cannot use it for main serial rx
+              settings->altpin0 = false;
+              if (settings->voice != VOICE_OFF || settings->strobe != STROBE_OFF)
+                  settings->ppswire = false;
+          }
+          if (settings->gnss_pins == EXT_GNSS_15_14) {
+              // pin 25 is used for GNSS (rather than 15)
+              settings->voice = VOICE_OFF;
+              settings->strobe = STROBE_OFF;
+          }
+          if (settings->rx1090 != ADSB_RX_NONE) {
+              // ADS-B uses VP, cannot use it for main serial rx
+              settings->altpin0 = false;
+          }
+      }
+      if (settings->gnss_pins == EXT_GNSS_39_4) {
+          settings->baudrate2 = BAUD_DEFAULT;       // meaning disabled
+          settings->rx1090    = ADSB_RX_NONE;
+      }
+      if (settings->gnss_pins == EXT_GNSS_15_14) {
+          settings->volume = BUZZER_OFF;
+          if (settings->voice == VOICE_EXT)
+              settings->voice = VOICE_OFF;
+      }
+      if (settings->gnss_pins != EXT_GNSS_NONE) {
+          if (settings->ppswire)
+              settings->altpin0 = false;
+      }
       if (settings->rx1090 != ADSB_RX_NONE) {
           // dedicate Serial2 to the ADS-B receiver module
           settings->baudrate2 = BAUD_DEFAULT;       // will actually use 921600
@@ -1703,6 +1768,7 @@ PSTR("<html>\
 <tr><th align=left>Power external</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
 <tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
+<tr><th align=left>Ext GNSS</th><td align=right>%d</td></tr>\
 <tr><th align=left>PPS wire</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
@@ -1727,8 +1793,8 @@ PSTR("<html>\
     BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d), BOOL_STR(settings->nmea2_e),
     settings->rx1090, settings->gdl90_in, settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-    settings->power_save, settings->power_external,
-    settings->freq_corr, settings->logalarms, settings->ppswire, settings->debug_flags,
+    settings->power_save, settings->power_external, settings->freq_corr, settings->logalarms,
+    settings->gnss_pins, settings->ppswire, settings->debug_flags,
   //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
     (settings->igc_key[0]? 0x88888888 : 0),
     (settings->igc_key[1]? 0x88888888 : 0),
@@ -1811,6 +1877,17 @@ void Web_setup()
   } );
 
 #if defined(ESP32)
+
+  server.on( "/gps_reset", []() {
+    Serial.println(F("Factory Reset GNSS..."));
+    reset_gnss();
+    server.send(200, textplain, "GNSS reset, rebooting...");
+    delay(4000);
+    Serial.println(F("Rebooting..."));
+    delay(2000);
+    reboot();
+  } );
+
   server.on ( "/wavupload", []() {
     serve_P_html(upload_html);
   } );

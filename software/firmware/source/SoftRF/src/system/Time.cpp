@@ -185,10 +185,10 @@ void Time_setup()
 void Time_loop()
 {
     uint32_t now_ms = millis();
+    static uint32_t last_loop = 0;
 
 #if 0
     // gather some data on how often the main loop() goes around
-    static uint32_t last_loop = 0;
     static uint32_t counter = 0;
     static int min_loop = 9999;
     static int max_loop = 0;
@@ -211,8 +211,11 @@ void Time_loop()
     } else {
         initial_time = now_ms;
     }
-    last_loop = now_ms;
 #endif
+
+    if (now_ms - last_loop < 30)
+        return;
+    last_loop = now_ms;
 
     if (settings->rf_protocol != RF_PROTOCOL_LEGACY
      && settings->rf_protocol != RF_PROTOCOL_LATEST
@@ -244,6 +247,12 @@ void Time_loop()
             if (last_Commit_Time - lasttime_ms > 150) {     /* new data arrived from GNSS */
                 newfix = true;
                 lasttime_ms = last_Commit_Time;
+                //if (settings->debug_flags & DEBUG_FAKEFIX) {
+                //    Serial.print("New fix at: ");
+                //    Serial.print(now_ms - pps_btime_ms);                   
+                //    Serial.print(" ms after PPS at: ");
+                //    Serial.println(pps_btime_ms);
+                //}
             }
         }
     }

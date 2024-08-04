@@ -448,7 +448,9 @@ void this_airborne()
 
     }
 
+    bool airborne_changed = false;
     if (ThisAircraft.airborne==0 && airborne>0) {
+      airborne_changed = true;
       AirborneTime = RF_time;
 #if defined(ESP32)
       // restart alarm log on first takeoff after boot
@@ -473,6 +475,7 @@ void this_airborne()
       }
 #endif
     } else if (ThisAircraft.airborne==1 && airborne<=0) {
+      airborne_changed = true;
       AirborneTime = 0;
 #if defined(ESP32)
       // close the alarm log after landing
@@ -482,6 +485,11 @@ void this_airborne()
     }
 
     ThisAircraft.airborne = (airborne > 0)? 1 : 0;
+
+    if (airborne_changed) {
+      if (settings->nmea_l || settings->nmea2_l)
+        sendPFLAJ();
+    }
 
     if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
       if (airborne != was_airborne) {

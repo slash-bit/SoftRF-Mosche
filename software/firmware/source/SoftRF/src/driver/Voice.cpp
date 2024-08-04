@@ -322,6 +322,13 @@ void Voice_setup(void)
   if (settings->voice == VOICE_OFF)
       return;
 
+  if (settings->gnss_pins == EXT_GNSS_15_14) {
+      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+          settings->voice = VOICE_OFF;   // on v0.7 will use pin 25 for input from GNSS
+          return;
+      }
+  }
+
   if (settings->voice == VOICE_EXT) {
       Buzzer_fini();
       settings->volume = BUZZER_OFF;   // free up pins 14 & 15

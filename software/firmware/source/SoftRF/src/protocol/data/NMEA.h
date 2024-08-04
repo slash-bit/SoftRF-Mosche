@@ -53,6 +53,8 @@ void NMEA_Outs(bool, bool, const char *, size_t, bool);
 void NMEA_GGA(void);
 void NMEA_add_checksum(char *, size_t);
 
+void sendPFLAJ();
+
 int WiFi_transmit_TCP(const char *buf, size_t size);
 
 char *bytes2Hex(byte *, size_t);

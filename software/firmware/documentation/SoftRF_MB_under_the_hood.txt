@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated July 10, 2024 to fit software version MB133
+This version last updated August 2, 2024 to fit software version MB138
 
 
 PART 1: USER GUIDE - see separate document
@@ -204,6 +204,10 @@ Added a check for received data in the main loop just *before* transmission.  Th
 Efforts to reduce the binary size
 
 Since the flash space on the T-Beam is almost full, as is RAM used, before adding new features to SoftRF it would help if the memory space used is reduced.  In version 124 the PMU chips (AXP192 and AXP2101) in the T-Beam (versions 1.1 and 1.2) are handled by the same library, XpowersLib.  Also, the "jquery" script (used to show percent progress during OTA firmware update) was removed.  These changes reduced the binary size by 60 KB.
+
+Adding a GNSS module
+
+Since the internal GNSS module on the T-Beam is connected via one of the UARTs built into the ESP32, connecting an external one is simply a matter of intializing the UART with different I/O pins.  Same for the PPS wire.  The available pins are limited, so need to compromise on which features are desired.
 
 Adding an ADS-B receiver module
 

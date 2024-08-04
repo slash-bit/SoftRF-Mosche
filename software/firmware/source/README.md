@@ -1,12 +1,16 @@
 # SoftRF firmware build instructions
 
+### Note:
+
+This version of SoftRF is currently only compiled for [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source#esp32) (T-Beam) and [nRF52840](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source#nrf52840) (T-Echo).  The information on this page about other hardware is only for potential future reference.
+
 * [NodeMCU](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#nodemcu)<br>
-* [ESP32](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#esp32)<br>
+* [ESP32](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source#esp32)<br>
 * [Raspberry Pi](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#raspberry-pi)<br>
 * [CC13XX](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#cc13xx)<br>
 * [STM32](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#stm32)<br>
 * [ASR650x](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#asr650x)<br>
-* [nRF52840](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source#nrf52840)<br>
+* [nRF52840](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source#nrf52840)<br>
 
 <br>
 
@@ -40,8 +44,8 @@
 
 ## ESP32
 
-1. Follow [these official instructions](https://github.com/espressif/arduino-esp32/blob/master/docs/arduino-ide/boards_manager.md)
-  to install Arduino IDE and [latest **stable** Arduino ESP32 Core](https://github.com/espressif/arduino-esp32/releases/tag/1.0.5) (1.0.5)
+1. Follow [these official instructions](https://github.com/espressif/arduino-esp32/blob/master/docs/en/installing.rst)
+  to install Arduino IDE and [the appropriate Arduino ESP32 Core](https://github.com/espressif/arduino-esp32/releases/tag/2.0.3) (2.0.3)
 2. Become familiar with IDE and **DoIt ESP32 DevKit** by building and uploading of a basic **Blink** sketch:<br>
 ```
 int ledPin = 2; // use pin 14 for TTGO T-Beam rev.05 or higher   
@@ -67,8 +71,8 @@ void loop()
 5. create **Arduino** sub-directory
 6. transfer full content of **SoftRF** and **libraries** GitHub folders into the sub-directory:
 
-    [SoftRF](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source/SoftRF) &nbsp;&nbsp;**-->** ``<My Documents>``/Arduino/SoftRF <br>
-    [libraries](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source/libraries) **-->** ``<My Documents>``/Arduino/libraries <br>
+    [SoftRF](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source/SoftRF) &nbsp;&nbsp;**-->** ``<My Documents>``/Arduino/SoftRF <br>
+    [libraries](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source/libraries) **-->** ``<My Documents>``/Arduino/libraries <br>
 
 7. start **Arduino** application again
 8. open **SoftRF** sketch from _File_ -> _Open_ menu
@@ -77,7 +81,7 @@ void loop()
 11. Select _Tools_ -> _Flash_ _Size_ ->  _4MB_
 12. Select _Tools_ -> _Partition_ _Scheme_ ->  _Minimal_ _SPIFFS_
 13. Select _Tools_ -> _Flash_ _Frequency_ ->  _80MHz_
-14. Select _Tools_ -> _CPU_ _Frequency_ ->  _80MHz_
+14. Select _Tools_ -> _CPU_ _Frequency_ ->  _160MHz_
 15. Select _Tools_ -> _PSRAM_ ->  _Enabled_
 16. _Sketch_ -> _Upload_
 
@@ -232,13 +236,13 @@ You will need to have an ST-LINK/V2 USB adapter connected in order to put the fi
 ## nRF52840
 
 1. Follow [these official instructions](https://github.com/adafruit/Adafruit_nRF52_Arduino#recommended-adafruit-nrf52-bsp-via-the-arduino-board-manager)
-  to install Arduino IDE and [latest **stable** Arduino Core for Adafruit Bluefruit nRF52 Boards](https://github.com/adafruit/Adafruit_nRF52_Arduino/releases/tag/1.1.0) (1.1.0)
+  to install Arduino IDE (I use version 1.8.16) and [Arduino Core for Adafruit Bluefruit nRF52 Boards](https://github.com/adafruit/Adafruit_nRF52_Arduino/releases/tag/1.2.0) (I use version 1.2.0)
 2. open ``<My Documents>`` (Windows) or ``<Home>`` (Linux) directory
 3. create **Arduino** sub-directory
 4. transfer full content of **SoftRF** and **libraries** GitHub folders into the sub-directory:
 
-    [SoftRF](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source/SoftRF) &nbsp;&nbsp;**-->** ``<My Documents>``/Arduino/SoftRF <br>
-    [libraries](https://github.com/lyusupov/SoftRF/tree/master/software/firmware/source/libraries) **-->** ``<My Documents>``/Arduino/libraries <br>
+    [SoftRF](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source/SoftRF) &nbsp;&nbsp;**-->** ``<My Documents>``/Arduino/SoftRF <br>
+    [libraries](https://github.com/moshe-braner/SoftRF/tree/master/software/firmware/source/libraries) **-->** ``<My Documents>``/Arduino/libraries <br>
 
 5. start **Arduino** application
 6. open **SoftRF** sketch from _File_ -> _Open_ menu

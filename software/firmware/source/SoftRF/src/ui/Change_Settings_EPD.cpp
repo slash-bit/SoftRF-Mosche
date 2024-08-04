@@ -214,6 +214,7 @@ page pages[] = {
 int curpage = 0;
 
 static bool chgconf_initialized = false;
+static bool chgconf_changed = false;
 
 void get_settings()
 {
@@ -237,6 +238,7 @@ void get_settings()
     decision = 0;  // cancel
     curpage = 1;   // actypes
     chgconf_initialized = true;
+    chgconf_changed = true;
 }
 
 void EPD_chgconf_save()
@@ -284,6 +286,7 @@ void EPD_chgconf_page()
     ++curpage;
     if (pages[curpage].indexvar == NULL)
         curpage = 0;
+    chgconf_changed = true;
 //Serial.print("curpage: ");
 //Serial.println(curpage);
 }
@@ -300,6 +303,7 @@ void EPD_chgconf_next()
     if (pages[curpage].options[i].code < 0)
         i = 0;
     *(pages[curpage].indexvar) = i;
+    chgconf_changed = true;
 //Serial.print("index: ");
 //Serial.println(i);
 }
@@ -314,6 +318,7 @@ void EPD_chgconf_prev()
             ++i;
     }
     *(pages[curpage].indexvar) = i-1;
+    chgconf_changed = true;
 }
 
 static void EPD_Draw_chgconf()
@@ -389,12 +394,16 @@ static void EPD_Draw_chgconf()
 
 void EPD_chgconf_loop()
 {
-  if (isTimeToEPD()) {
-      EPDTimeMarker = millis();
+  //if (isTimeToEPD()) {
+  //    EPDTimeMarker = millis();
+
 
       if (EPD_view_mode == VIEW_CHANGE_SETTINGS) {
           get_settings();
-          EPD_Draw_chgconf();
+          if (chgconf_changed) {
+              EPD_Draw_chgconf();
+              chgconf_changed = false;
+          }
 
       } else if (EPD_view_mode == VIEW_SAVE_SETTINGS) {
           Serial.println("SAVING SETTINGS...");
@@ -409,7 +418,7 @@ void EPD_chgconf_loop()
           reboot();
           Serial.println(F("This will never be printed."));
       }
-  }
+  //}
 }
 
 #endif /* USE_EPAPER */

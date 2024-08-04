@@ -272,29 +272,31 @@ void WiFi_setup()
     delay(10);
   }
 
-  // use SSID and PSK from settings
-  station_ssid = settings->ssid;
-  station_psk  = settings->psk;
+  if (settings->ssid[0] != '\0') {
 
-  // ... Compare file config with sdk config.
-  if (WiFi.SSID() != station_ssid || WiFi.psk() != station_psk)
-  {
-    //Serial.println(F("WiFi config changed."));
+    // use SSID and PSK from settings
 
-    // ... Try to connect to WiFi station.
-    WiFi.begin(station_ssid.c_str(), station_psk.c_str());
+    station_ssid = settings->ssid;
+    station_psk  = settings->psk;
 
-    // ... Print new SSID
-    Serial.print(F("new SSID: "));
-    Serial.println(WiFi.SSID());
+    // ... Compare file config with sdk config.
+    if (WiFi.SSID() != station_ssid || WiFi.psk() != station_psk)
+    {
+      //Serial.println(F("WiFi config changed."));
+      // ... Try to connect to WiFi station.
+      WiFi.begin(station_ssid.c_str(), station_psk.c_str());
+      // ... Print new SSID
+      Serial.print(F("new SSID: "));
+      Serial.println(WiFi.SSID());
+      // ... Uncomment this for debugging output.
+      //WiFi.printDiag(Serial);
+    } else {
+      // ... Begin with sdk config.
+      WiFi.begin();
+    }
 
-    // ... Uncomment this for debugging output.
-    //WiFi.printDiag(Serial);
-  }
-  else
-  {
-    // ... Begin with sdk config.
-    WiFi.begin();
+  } else {   // empty SSID from settings
+      WiFi.begin();
   }
 
   // Set Hostname.
@@ -307,17 +309,21 @@ void WiFi_setup()
   // Print hostname.
   Serial.println("Hostname: " + host_name);
 
-  Serial.println(F("Wait for WiFi connection."));
+  if (settings->ssid[0] != '\0') {
 
-  // ... Give ESP 10 seconds to connect to station.
-  unsigned long startTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)
-  {
-    Serial.write('.');
-    //Serial.print(WiFi.status());
-    delay(500);
+      Serial.println(F("Wait for WiFi connection."));
+
+      // ... Give ESP 10 seconds to connect to station.
+      unsigned long startTime = millis();
+      while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)
+      {
+        Serial.write('.');
+        //Serial.print(WiFi.status());
+        delay(500);
+      }
+      Serial.println();
+
   }
-  Serial.println();
 
   // Check connection
   if(WiFi.status() == WL_CONNECTED)

@@ -44,7 +44,7 @@
 #endif /* EXCLUDE_EEPROM */
 
 #define SOFTRF_EEPROM_MAGIC   0xBABADEDA
-#define SOFTRF_EEPROM_VERSION 0xACAC0B0C
+#define SOFTRF_EEPROM_VERSION 0xACAC0B0D
 
 enum
 {
@@ -117,26 +117,37 @@ enum
 	RELAY_ONLY
 };
 
-typedef struct Settings {
-    uint8_t  mode:4;
-    uint8_t  rf_protocol:4;
-    uint8_t  band:4;
-    uint8_t  txpower:2;
-    uint8_t  volume:2;
-    uint8_t  aircraft_type;
-    uint8_t  led_num;
+enum
+{
+	EXT_GNSS_NONE=0,
+	EXT_GNSS_39_4,
+	EXT_GNSS_13_2,
+	EXT_GNSS_15_14
+};
 
-    bool     nmea_g:1;
+typedef struct __attribute__((packed)) Settings {
+
+    uint8_t  mode:4;            // do not move
+    uint8_t  rf_protocol:4;     // do not move
+    uint8_t  band:4;            // do not move
+    uint8_t  txpower:2;         // do not move
+    uint8_t  volume:2;
+    uint8_t  aircraft_type;     // do not move
+
+//    uint8_t  led_num;   - not used
+    uint8_t  resvd2;
+
+    bool     nmea_g:1;       // do not move
     bool     nmea_p:1;
     bool     nmea_l:1;
     bool     nmea_s:1;
     bool     nmea_d:1;
-    uint8_t  nmea_out:3;
+    uint8_t  nmea_out:3;     // do not move
 
-    uint8_t  bluetooth:3; /* ESP32 built-in Bluetooth */
-    uint8_t  alarm:3;
-    bool     stealth:1;
-    bool     no_track:1;
+    uint8_t  bluetooth:3; // ESP32 built-in Bluetooth  // do not move
+    uint8_t  alarm:3;        // do not move
+    bool     stealth:1;      // do not move
+    bool     no_track:1;     // do not move
 
     uint8_t  gdl90:3;    // output destination
     uint8_t  d1090:3;
@@ -145,19 +156,20 @@ typedef struct Settings {
     uint8_t  pointer:2;
     uint8_t  power_save:2;
     uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
-    uint8_t  rx1090:2;    // attached ADS-B receiver module
+    uint8_t  rx1090:2;    // attached ADS-B receiver module    // do not move
     bool     alarm_demo:1;
 
-    uint8_t  resvd3;
+    uint8_t  gnss_pins:2;    // external GNSS added to T-Beam  // do not move
+    uint8_t  resvd3:6;
 
-    int8_t   freq_corr; /* +/-, kHz */
+    int8_t   freq_corr; /* +/-, kHz */   // do not move
     uint8_t  relay:2;
     uint8_t  gdl90_in:3;    // data from this port will be interpreted as GDL90
     uint8_t  alt_udp:1;     // if 1 then use 10111 instead of 10110
     bool     nmea_e:1;
     bool     nmea2_e:1;     // whether to send bridged data
-    uint8_t  baud_rate:3;   /* for serial UART0 */
-    uint8_t  baudrate2:3;   /* for aux UART2 */
+    uint8_t  baud_rate:3;   // for serial UART0    // do not move
+    uint8_t  baudrate2:3;   // for aux UART2       // do not move
     bool     invert2:1;     // whether to invert the logic levels on UART2
     bool     altpin0:1;     // whether to use a different pin for UART0 RX
 
@@ -165,30 +177,30 @@ typedef struct Settings {
     uint32_t igc_key[4];
 
     /* added to allow setting aircraft ID and also an ID to ignore */
-    uint32_t aircraft_id:24;
-    uint8_t  id_method:2;     /* whether to use device ID, ICAO ID, or random */
+    uint32_t aircraft_id:24;  // do not move
+    uint8_t  id_method:2;     // device ID, ICAO ID, or random    // do not move
     uint8_t  debug_flags:6;   /* each bit activates output of some debug info */
-    uint32_t ignore_id:24;
+    uint32_t ignore_id:24;    // do not move
     uint8_t  strobe:2;
     bool    logalarms:1;
     uint8_t  voice:2;
-    uint8_t  tcpport:1;       /* 0=2000, 1=8880 */
-    uint8_t  tcpmode:1;
-    bool     ppswire:1;       /* whether T-Beam v0.7 has wire added from PPS to GPIO37 */
-    uint32_t follow_id:24;
+    uint8_t  tcpport:1;       // 0=2000, 1=8880   // do not move
+    uint8_t  tcpmode:1;       // do not move
+    bool     ppswire:1;       // whether PPS wire added  // do not move
+    uint32_t follow_id:24;    // do not move
 
-    bool     nmea2_g:1;
+    bool     nmea2_g:1;       // do not move
     bool     nmea2_p:1;
     bool     nmea2_l:1;
     bool     nmea2_s:1;
     bool     nmea2_d:1;
-    uint8_t  nmea_out2:3;     /* second NMEA output route */
+    uint8_t  nmea_out2:3;     // second NMEA output route    // do not move
 
-    char    ssid[19];
+    char    ssid[19];         // do not move
     char    psk[17];
     char    host_ip[16];
 
-} __attribute__((packed)) settings_t;
+} settings_t;
 
 typedef struct EEPROM_S {
     uint32_t  magic;

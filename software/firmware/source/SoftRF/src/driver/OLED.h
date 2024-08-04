@@ -35,7 +35,7 @@ void OLED_info2(void);
 void OLED_info3(int, char *, char *, char *);
 void OLED_Next_Page(void);
 void OLED_msg(const char *msg1, const char *msg2);
-
+void OLED_no_msg(void);
 
 extern const char *ISO3166_CC[];
 extern const char SoftRF_text1[];

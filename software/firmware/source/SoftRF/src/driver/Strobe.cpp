@@ -26,6 +26,7 @@ void  Strobe_fini()        {}
 #else
 
 #include "Strobe.h"
+#include "Buzzer.h"
 #include "EEPROM.h"
 #include "../TrafficHelper.h"
 
@@ -46,12 +47,28 @@ static int alarm_level = ALARM_LEVEL_NONE;
 
 void Strobe_setup(void)
 {
+#if defined(ESP32)
   if (settings->strobe == STROBE_OFF)
       return;
   StrobePauseMarker = millis();
-  StrobePin = STROBEPIN;
+  StrobePin = SOC_GPIO_PIN_STROBE;
+  if (settings->voice != VOICE_OFF && settings->gnss_pins != EXT_GNSS_15_14) {
+      if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
+          // (gpio15 not available on T-Beam v0.7)
+          settings->strobe = STROBE_OFF;
+          settings->volume = BUZZER_OFF;
+          return;
+      }
+      StrobePin = SOC_GPIO_PIN_BUZZER2;   // use pin 15 instead
+      if (settings->volume != BUZZER_EXT)
+          settings->volume = BUZZER_OFF;
+  }
   if (StrobePin == SOC_UNUSED_PIN)
       return;
+#else
+  settings->strobe = STROBE_OFF;
+  return;
+#endif
   pinMode(StrobePin, OUTPUT);
   StrobeState = false;
   StrobeTimeMarker = 0;

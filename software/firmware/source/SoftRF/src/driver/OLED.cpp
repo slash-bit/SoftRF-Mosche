@@ -158,111 +158,10 @@ static const uint8_t Dot_Tile[] = { 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x
 
 static uint8_t OLED_current_page = OLED_PAGE_SETTINGS;
 static uint8_t page_count        = OLED_PAGE_COUNT;
+static bool showing_message = false;
 
-#if 0
+//byte OLED_setup()
 // done in ESP32.cpp ESP32_Display_setup() instead
-
-byte OLED_setup() {
-
-  byte rval = DISPLAY_NONE;
-  bool oled_probe = false;
-
-  /* SSD1306 I2C OLED probing */
-  Wire.begin();
-  Wire.beginTransmission(SSD1306_OLED_I2C_ADDR);
-  oled_probe = (Wire.endTransmission() == 0);
-  if (oled_probe) {
-    u8x8 = &u8x8_i2c;
-#if defined(CONFIG_IDF_TARGET_ESP32)
-    //u8x8_SetPin(u8x8, U8X8_PIN_I2C_CLOCK, SOC_GPIO_PIN_TBEAM_SCL);
-    //u8x8_SetPin(u8x8, U8X8_PIN_I2C_DATA,  SOC_GPIO_PIN_TBEAM_SDA);
-  } else {
-      Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
-      oled_probe = (Wire1.endTransmission() == 0);
-      if (oled_probe) {
-        u8x8 = &u8x8_i2c2;
-        //u8x8_SetPin(u8x8, U8X8_PIN_I2C_CLOCK, TTGO_V2_OLED_PIN_SCL);
-        //u8x8_SetPin(u8x8, U8X8_PIN_I2C_DATA,  TTGO_V2_OLED_PIN_SDA);
-      }
-  }
-#endif
-
-  if (oled_probe) {
-    rval = (hw_info.model == SOFTRF_MODEL_MINI     ? DISPLAY_OLED_HELTEC :
-            hw_info.model == SOFTRF_MODEL_BRACELET ? DISPLAY_OLED_0_49   :
-            DISPLAY_OLED_TTGO);
-  }
-
-  if (u8x8) {
-    u8x8->begin();
-    u8x8->setFont(u8x8_font_chroma48medium8_r);
-
-    switch (rval)
-    {
-#if !defined(EXCLUDE_OLED_049)
-    case DISPLAY_OLED_0_49:
-
-      u8x8->setContrast(255);
-
-      u8x8->draw2x2Glyph(4,  4, SoftRF_text3[0]);
-      u8x8->draw2x2Glyph(6,  4, SoftRF_text3[1]);
-      u8x8->draw2x2Glyph(8,  4, SoftRF_text3[2]);
-      u8x8->draw2x2Glyph(10, 4, SoftRF_text3[3]);
-      u8x8->draw2x2Glyph(6,  6, SoftRF_text3[4]);
-      u8x8->draw2x2Glyph(8,  6, SoftRF_text3[5]);
-
-      delay(2000);
-
-      u8x8->clear();
-      u8x8->draw2x2String( 5, 5, SoftRF_text2);
-
-      delay(2000);
-
-      u8x8->clear();
-      u8x8->draw2x2Glyph(4,  4, SoftRF_text1[0]);
-      u8x8->draw2x2Glyph(6,  4, SoftRF_text1[1]);
-      u8x8->draw2x2Glyph(8,  4, SoftRF_text1[2]);
-      u8x8->draw2x2Glyph(10, 4, SoftRF_text1[3]);
-      u8x8->draw2x2Glyph(6,  6, SoftRF_text1[4]);
-      u8x8->draw2x2Glyph(8,  6, SoftRF_text1[5]);
-
-      OLED_current_page = OLED_049_PAGE_SATS_TX;
-      page_count        = OLED_049_PAGE_COUNT;
-      break;
-#endif /* EXCLUDE_OLED_049 */
-    case DISPLAY_OLED_TTGO:
-    case DISPLAY_OLED_HELTEC:
-    case DISPLAY_OLED_1_3:
-    default:
-      uint8_t shift_y = (hw_info.model == SOFTRF_MODEL_DONGLE ? 1 : 0);
-
-      if (shift_y) {
-        u8x8->draw2x2String( 2, 2 - shift_y, SoftRF_text1);
-        u8x8->drawString   ( 6, 3, SoftRF_text2);
-        u8x8->draw2x2String( 2, 4, SoftRF_text3);
-        u8x8->drawString   ( 2, 6 + shift_y, SOFTRF_FIRMWARE_VERSION);
-        //u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
-        u8x8->drawString   (10, 6 + shift_y, default_settings_used? DFLT_text : USER_text);
-
-      } else {
-        u8x8->draw2x2String( 2, 2, SoftRF_text1);
-        u8x8->drawString( 1, 4, "ver");
-        u8x8->draw2x2String( 5, 4, SOFTRF_FIRMWARE_VERSION);
-        u8x8->draw2x2String( 1, 6, default_settings_used? DFLT_text : USER_text);
-        u8x8->drawString( 8, 6, "stg");
-
-      }
-
-      break;
-    }
-  }
-
-  OLEDTimeMarker = millis();
-
-  return rval;
-}
-
-#endif
 
 static void OLED_settings()
 {
@@ -913,6 +812,9 @@ void OLED_049_func()
 
 void OLED_loop()
 {
+  if (showing_message)
+      return;
+
   if (u8x8) {
     if (isTimeToOLED()) {
 #if !defined(EXCLUDE_OLED_049)
@@ -1000,7 +902,14 @@ void OLED_msg(const char *msg1, const char *msg2)
         u8x8->draw2x2String(1, 4, msg2);
       break;
     }
+    showing_message = true;
   }
+}
+
+void OLED_no_msg()
+{
+    showing_message = false;
+    OLED_display_titles = false;   // redraw same page from before message
 }
 
 void OLED_info1()
@@ -1139,6 +1048,14 @@ void OLED_info3(int acfts, char *reg, char *mam, char *cn)
 void OLED_Next_Page()
 {
   if (u8x8) {
+
+    if (showing_message) {
+        //Serial.println("leaving OLED message mode");
+        showing_message = false;       // escape message mode
+        OLED_display_titles = false;   // redraw same page from before message
+        return;
+    }
+
     OLED_current_page = (OLED_current_page + 1) % page_count;
 
 #if !defined(EXCLUDE_OLED_BARO_PAGE)

@@ -19,6 +19,7 @@
 #include "../system/SoC.h"
 
 #include "Baro.h"
+#include "EEPROM.h"
 
 // including BMP180 & MPL3115A2 still hangs at probe() even with ESP32 Core 2.0.3
 // #define EXCLUDE_BMP280
@@ -74,17 +75,23 @@ static int avg_ndx = 0;
 
 static bool bmp180_probe()
 {
-//  return bmp180.begin();
-  bmp180.setWire(&Wire);
-  if (bmp180.begin())
-      return true;
 #if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      if (settings->gnss_pins != EXT_GNSS_13_2) {
+          bmp180.setWire(&Wire);
+          if (bmp180.begin())
+              return true;
+      }
       bmp180.setWire(&Wire1);
       if (bmp180.begin())
           return true;
-  }
+  } else
 #endif
+  {
+      bmp180.setWire(&Wire);
+      if (bmp180.begin())
+          return true;
+  }
   return false;
 }
 
@@ -140,22 +147,31 @@ static bool bmp280_probe()
 // is there a problem with probing both Wires on oldest T-Beams?
 //    if (hw_info.revision == 2)
 //      return false;
-  bmp280.setWire(&Wire);
-  if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
-  if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
-  if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
-  if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
 #if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-      Serial.println(F("BMP280 not found on pins 2,13..."));
-      Serial.println(F("probing BMP280 on pins 21,22..."));
-      bmp280.setWire(&Wire1);
+    if (settings->gnss_pins != EXT_GNSS_13_2) {
+      bmp280.setWire(&Wire);
       if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
       if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
       if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
       if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
-  }
+    }
+    Serial.println(F("BMP280 not found on pins 2,13..."));
+    Serial.println(F("probing BMP280 on pins 21,22..."));
+    bmp280.setWire(&Wire1);
+    if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+  } else
 #endif
+  {
+    bmp280.setWire(&Wire);
+    if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
+    if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+  }
   return false;
 }
 
@@ -207,10 +223,15 @@ barochip_ops_t bmp280_ops = {
 static bool mpl3115a2_probe()
 {
 //  return mpl3115a2.begin();
-  if (mpl3115a2.begin(&Wire))
-    return true;
 #if defined(ESP32)
+  if (settings->gnss_pins != EXT_GNSS_13_2) {
+    if (mpl3115a2.begin(&Wire))
+      return true;
+  }
   if (mpl3115a2.begin(&Wire1))
+    return true;
+#else
+  if (mpl3115a2.begin(&Wire))
     return true;
 #endif
   return false;
