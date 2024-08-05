@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated August 3, 2024 to fit software version MB138
+This version last updated August 3, 2024 to fit software version MB139
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -95,9 +95,9 @@ A better antenna than the tiny whip that is included with these boards may be he
 
 Even when using an antenna with a cable, the T-Beam needs to be mounted with its antenna connector facing up, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one attaches an external GNSS antenna via the UFL connector on the board - that can improve GNSS signal reception (especially if that antenna is larger and includes a built-in LNA).  For example:  https://www.data-alliance.net/antenna-gps-lna-embedded-u-fl-sma/ (choose the 25x25mm version with 4-inch cable and U.FL connector).
 
-SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  It may take as long as 30 minutes to obtain a "fix" after a cold start.  The exact time may not be known for a few more minutes, since the leap-second information is not transmitted by the satellites very often.  That may lead to lack of communications, or wrong positions being reported by OGN stations.  After that operation should be normal.
+SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  It may take anywhere from a minute to 30 minutes to obtain a "fix" after a cold start.  The exact time may not be known for up to 12 more minutes, since the leap-second information is not transmitted by the satellites very often.  That may lead to lack of communications, or wrong positions being reported by OGN stations.  For that reason SoftRF queries the GNSS module (if it is a Ublox or AT65 type) whether the leap seconds are known, and does not transmit until they are.  (In some situations it may transmit briefly until it learns that the leap seconds are not known.)  During this time the GNSS red LED will blink once per seconds (meaning it knows the position) but the T-Beam's blue LED will blink 4 times per second (meaning it knows that the time is not known precisely enough to transmit).  After that operation should be normal (the blue LED will stay on and transmissions will happen).
 
-The stock gps antenna is poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.  Some units seem slower than others to get a fix, and some seem to get slower after some use.  In version MB136, on the T-Beam only, added a button in the web interface (see below) to factory-reset the GNSS module settings and then cold-start it.  The first fix following that will be slow, but this may restore more rapid fix acquisition afterwards.
+The stock gps antenna is poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.  Some units seem slower than others to get a fix, and some seem to get slower after some use.  On the T-Beam only, there is now a button in the web interface (see below) to factory-reset the GNSS module settings and then cold-start it (and reboot the T-Beam).  The first fix following that will be slow, but this may restore more rapid fix acquisition afterwards.
 
 Another alternative to the built-in GNSS module is to add an external one.  See the section about connecting other hardware.
 

@@ -50,7 +50,9 @@
 #define GNSS_FLUSH()        Serial_GNSS_Out.flush()
 #endif
 
-bool is_prime_mk2 = false;
+bool gnss_needs_reset = false;
+
+static bool is_prime_mk2 = false;
 
 unsigned long GNSSTimeSyncMarker = 0;
 volatile unsigned long PPS_TimeMarker = 0;
@@ -577,95 +579,94 @@ static int ubloxProcessData(unsigned char data) {
 
 /* ------ END -----------  https://github.com/Black-Thunder/FPV-Tracker */
 
-static byte ublox_version() {
-  byte rval = GNSS_MODULE_NMEA;
+static bool ublox_query(uint8_t requestedClass, uint8_t requestedID, uint16_t timelimit)
+{
   unsigned long startTime = millis();
 
-Serial.println("ublox_version()...");
+Serial.println("ublox_query()...");
 
+  uint8_t msglen = makeUBXCFG(requestedClass, requestedID, 0, NULL);
   while (Serial_GNSS_In.available() > 0) { Serial_GNSS_In.read(); }
+  sendUBX(GNSSbuf, msglen);
   yield();
 
-  uint8_t msglen = makeUBXCFG(0x0A, 0x04, 0, NULL); // MON-VER
-  sendUBX(GNSSbuf, msglen);
-
   int count = 1;
-//Serial.println("... waiting for response");
 
   // Get the message back from the GPS
   GNSS_DEBUG_PRINT(F(" * Reading response: "));
 
   uint32_t waittime = (millis() - startTime);
 
-  while (waittime < 3000 ) {
+  while (waittime < (uint32_t) timelimit ) {
 
     if ((waittime & 0x3F) == 0)  yield();
     if ((waittime > 1000 && count==1) || (waittime > 2000 && count==2)) {
 Serial.println("... re-sending UBX command");
-      uint8_t msglen = makeUBXCFG(0x0A, 0x04, 0, NULL); // MON-VER
+      uint8_t msglen = makeUBXCFG(requestedClass, requestedID, 0, NULL); // MON-VER
+      while (Serial_GNSS_In.available() > 0) { Serial_GNSS_In.read(); }
       sendUBX(GNSSbuf, msglen);
       ++count;
+      yield();
     }
 
-    if (waittime > 2900) {
+    if (waittime > timelimit-100) {
       Serial.println("... time out");
       break;
     }
 
     if (Serial_GNSS_In.available()) {
-        unsigned char c = Serial_GNSS_In.read();
-        int ret = 0;
 
+      unsigned char c = Serial_GNSS_In.read();
       GNSS_DEBUG_PRINT(c, HEX);
-      ret = ubloxProcessData(c);
 
-      // Upon a successfully parsed sentence, do the version detection
-      if (ret) {
-
-//Serial.println("... ubloxProcessData() returned true");
-
-        if (ubloxClass == 0x0A) { // MON
-          if (ubloxId == 0x04) {  // VER
-
-            // UBX-MON-VER data description
-            // uBlox 6  - page 166 : https://www.u-blox.com/sites/default/files/products/documents/u-blox6_ReceiverDescrProtSpec_%28GPS.G6-SW-10018%29_Public.pdf
-            // uBlox 7  - page 153 : https://www.u-blox.com/sites/default/files/products/documents/u-blox7-V14_ReceiverDescriptionProtocolSpec_%28GPS.G7-SW-12001%29_Public.pdf
-            // uBlox M8 - page 300 : https://www.u-blox.com/sites/default/files/products/documents/u-blox8-M8_ReceiverDescrProtSpec_%28UBX-13003221%29_Public.pdf
-
-            Serial.print(F("INFO: UBLOX GNSS module HW version: "));
-            Serial.println((char *) &GNSSbuf[30]);
-
-            Serial.print(F("INFO: UBLOX GNSS module FW version: "));
-            Serial.println((char *) &GNSSbuf[0]);
-
-#ifdef DO_GNSS_DEBUG
-            for(unsigned i = 30 + 10; i < GNSS_cnt; i+=30) {
-              Serial.print(F("INFO: GNSS module extension: "));
-              Serial.println((char *) &GNSSbuf[i]);
-            }
-#endif
-
-            if (GNSSbuf[33] == '4')
-              rval = GNSS_MODULE_U6;
-            else if (GNSSbuf[33] == '7')
-              rval = GNSS_MODULE_U7;
-            else if (GNSSbuf[33] == '8')
-              rval = GNSS_MODULE_U8;
-            else if (GNSSbuf[32] == '1' && GNSSbuf[33] == '9')
-              rval = GNSS_MODULE_U9;
-            else if (GNSSbuf[33] == 'A')
-              rval = GNSS_MODULE_U10;
-
-            break;
-          }
-        }
+      if (ubloxProcessData(c)) {
+        if (ubloxClass == requestedClass && ubloxId == requestedID)
+            return true;
       }
     }
 
     waittime = (millis() - startTime);
   }
 
-  return rval;
+  return false;
+}
+
+static byte ublox_version()
+{
+    byte rval = GNSS_MODULE_NMEA;
+    if (ublox_query(0x0A, 0x04, 3000) == false) // MON-VER
+        return rval;
+
+            // UBX-MON-VER data description
+            // uBlox 6  - page 166 : https://www.u-blox.com/sites/default/files/products/documents/u-blox6_ReceiverDescrProtSpec_%28GPS.G6-SW-10018%29_Public.pdf
+            // uBlox 7  - page 153 : https://www.u-blox.com/sites/default/files/products/documents/u-blox7-V14_ReceiverDescriptionProtocolSpec_%28GPS.G7-SW-12001%29_Public.pdf
+            // uBlox M8 - page 300 : https://www.u-blox.com/sites/default/files/products/documents/u-blox8-M8_ReceiverDescrProtSpec_%28UBX-13003221%29_Public.pdf
+
+    Serial.print(F("INFO: UBLOX GNSS module HW version: "));
+    Serial.println((char *) &GNSSbuf[30]);
+
+    Serial.print(F("INFO: UBLOX GNSS module FW version: "));
+    Serial.println((char *) &GNSSbuf[0]);
+
+#ifdef DO_GNSS_DEBUG
+    for(unsigned i = 30 + 10; i < GNSS_cnt; i+=30) {
+      Serial.print(F("INFO: GNSS module extension: "));
+      Serial.println((char *) &GNSSbuf[i]);
+    }
+#endif
+
+    if (GNSSbuf[33] == '4')
+      rval = GNSS_MODULE_U6;
+    else if (GNSSbuf[33] == '7')
+      rval = GNSS_MODULE_U7;
+    else if (GNSSbuf[33] == '8')
+      rval = GNSS_MODULE_U8;
+    else if (GNSSbuf[32] == '1' && GNSSbuf[33] == '9')
+      rval = GNSS_MODULE_U9;
+    else if (GNSSbuf[33] == 'A')
+      rval = GNSS_MODULE_U10;
+
+    return rval;
 }
 
 static gnss_id_t ublox_probe()
@@ -878,7 +879,7 @@ static bool ublox_factory_reset()
   return true;
 }
 
-void reset_gnss()
+static void reset_gnss()
 {
     if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
         hw_info.model == SOFTRF_MODEL_PRIME_MK3) {
@@ -1288,10 +1289,51 @@ const gnss_chip_ops_t at65_ops = {
 
 static bool GNSS_fix_cache = false;
 
+static bool leap_seconds_valid()
+{
+    static uint8_t leap_valid = 2;  // means not known whether valid
+    if (GNSS_fix_cache) {           // wait until there is a fix
+      switch (hw_info.gnss) {
+        case GNSS_MODULE_U6:
+        case GNSS_MODULE_U7:
+        case GNSS_MODULE_U8:
+        case GNSS_MODULE_U9:
+        case GNSS_MODULE_U10:
+        case GNSS_MODULE_AT65:
+            static uint32_t next_check = 0;
+            static int checks_count = 0;
+            if (next_check==0 || (leap_valid!=1 && checks_count < 18 && millis()>next_check)) {
+                if (ublox_query(0x01, 0x20, 2000) == true) {    // NAV-TIMEGPS
+                    if ((GNSSbuf[11] & 0x04) == 0) {
+                        leap_valid = 0;    // known invalid
+                        Serial.println("UBX says leap seconds not known yet");
+                    } else {
+                        leap_valid = 1;    // known valid, no need to ask again
+                        Serial.println("UBX says leap seconds known");
+                    }
+                } // else (query failed) no change in leap_valid
+                next_check = millis() + 43000;
+                ++checks_count;
+                if (checks_count >= 18) {
+                    leap_valid = 2;    // in case it never works
+                    checks_count = 0;  // keep trying but resume transmissions
+                }
+            }
+            break;
+        default:
+            leap_valid = 1;  // on other models assume valid
+            break;
+      }
+    }
+    return (leap_valid != 0);   // if not known invalid, assume valid
+}
+
 bool isValidGNSSFix()
 {
   if (settings->debug_flags & DEBUG_FAKEFIX)
       return true;   // for testing
+  if (! leap_seconds_valid())
+      return false;
   return GNSS_fix_cache;
 }
 
@@ -1417,6 +1459,15 @@ byte GNSS_setup() {
 
 void GNSS_loop()
 {
+  if (gnss_needs_reset) {
+      gnss_needs_reset = false;
+      reset_gnss();
+      delay(2000);
+      Serial.println("Rebooting...");
+      delay(2000);
+      reboot();
+  }
+
   PickGNSSFix();
 
   /*

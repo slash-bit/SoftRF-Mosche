@@ -351,6 +351,7 @@ void shutparts()
 #if !defined(SERIAL_FLUSH)
 #define SERIAL_FLUSH()       Serial.flush()
 #endif
+  SoC->WDT_fini();
   SERIAL_FLUSH();
   SoC->swSer_enableRx(false);
 #if 0
@@ -383,7 +384,6 @@ void shutparts()
   Web_fini();
   NMEA_fini();
   WiFi_fini();
-  SoC->WDT_fini();
   if (SoC->Bluetooth_ops)
      SoC->Bluetooth_ops->fini();
   if (SoC->USB_ops)

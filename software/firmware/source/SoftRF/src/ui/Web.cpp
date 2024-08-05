@@ -1880,12 +1880,12 @@ void Web_setup()
 
   server.on( "/gps_reset", []() {
     Serial.println(F("Factory Reset GNSS..."));
-    reset_gnss();
-    server.send(200, textplain, "GNSS reset, rebooting...");
-    delay(4000);
-    Serial.println(F("Rebooting..."));
-    delay(2000);
-    reboot();
+    gnss_needs_reset = true;
+    server.send(200, textplain, "Factory reset & cold-start GNSS...");
+    //delay(4000);
+    //Serial.println(F("Rebooting..."));
+    //delay(2000);
+    //reboot();
   } );
 
   server.on ( "/wavupload", []() {
