@@ -149,12 +149,20 @@ static bool bmp280_probe()
 //      return false;
 #if defined(ESP32)
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    if (settings->gnss_pins != EXT_GNSS_13_2) {
-      bmp280.setWire(&Wire);
-      if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  return true;
-      if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  return true;
-      if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  return true;
-      if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  return true;
+    bmp280.setWire(&Wire);
+    bool found = false;
+    if (bmp280.begin(BMP280_ADDRESS,     BMP280_CHIPID))  found = true;
+    else if (bmp280.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID))  found = true;
+    else if (bmp280.begin(BMP280_ADDRESS,     BME280_CHIPID))  found = true;
+    else if (bmp280.begin(BMP280_ADDRESS_ALT, BME280_CHIPID))  found = true;
+    if (found) {
+        //ESP32_pin_unreserve(SOC_GPIO_PIN_TBEAM_SDA);
+        //ESP32_pin_unreserve(SOC_GPIO_PIN_TBEAM_SCL);
+        if (ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SDA, false, "BMP"))  // also used by OLED
+            ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SDA, true, "BMP");
+        if (ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SCL, false, "BMP"))
+            ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SCL, true, "BMP");
+        return true;
     }
     Serial.println(F("BMP280 not found on pins 2,13..."));
     Serial.println(F("probing BMP280 on pins 21,22..."));

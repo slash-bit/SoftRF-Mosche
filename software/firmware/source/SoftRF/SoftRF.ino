@@ -71,6 +71,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "src/system/SoC.h"
 #include "src/system/OTA.h"
 #include "src/system/Time.h"
 #include "src/driver/LED.h"
@@ -80,12 +81,13 @@
 #include "src/driver/Strobe.h"
 #include "src/driver/EEPROM.h"
 #include "src/driver/Battery.h"
+#include "src/driver/SDcard.h"
 #include "src/protocol/data/MAVLink.h"
 #include "src/protocol/data/GDL90.h"
 #include "src/protocol/data/GNS5892.h"
 #include "src/protocol/data/NMEA.h"
+#include "src/protocol/data/IGC.h"
 #include "src/protocol/data/D1090.h"
-#include "src/system/SoC.h"
 #include "src/driver/WiFi.h"
 #include "src/ui/Web.h"
 #include "src/driver/Baro.h"
@@ -110,8 +112,9 @@
 #define DEBUG 0
 #define DEBUG_TIMING 0
 
-#define isTimeToDisplay() (millis() - LEDTimeMarker     > 1000)
-#define isTimeToExport()  (millis() - ExportTimeMarker  > 1000)
+#define isTimeToDisplay() (millis() > LEDTimeMarker    + 1000)
+#define isTimeToExport()  (millis() > ExportTimeMarker + 1000)
+#define isTimeToIGC()     (millis() > IGCTimeMarker    + (FLIGHT_LOG_INTERVAL*1000))
 
 ufo_t ThisAircraft;
 
@@ -132,6 +135,7 @@ uint32_t LEDTimeMarker = 0;
 uint32_t ExportTimeMarker = 0;
 uint32_t GNSSTimeMarker = 0;
 uint32_t SetupTimeMarker = 0;
+uint32_t IGCTimeMarker = 0;
 
 void setup()
 {
@@ -158,6 +162,7 @@ void setup()
 
   Serial.println();
   Serial.print(F(SOFTRF_IDENT));
+  Serial.print(" ");
   Serial.print(SoC->name);
   Serial.print(F(" FW.REV: " SOFTRF_FIRMWARE_VERSION " DEV.ID: "));
   Serial.println(String(SoC->getChipId(), HEX));
@@ -171,15 +176,10 @@ void setup()
   Serial.print(F("Free heap size: ")); Serial.println(SoC->getFreeHeap());
   Serial.println(SoC->getResetInfo()); Serial.println("");
 
+  // EEPROM_setup() needs to be done after Serial is working
   EEPROM_setup();
 
-  // can only do these after EEPROM_setup(), to know the settings,
-  // and EEPROM_setup() needs to be done after the Serial setup delays.
-
-  Buzzer_setup();
-  Strobe_setup();
-
-  SoC->Button_setup();
+  // can only do the setup()s below after EEPROM_setup(), to know the settings,
 
   uint32_t SerialBaud = baudrates[settings->baud_rate];
   if (SerialBaud == 0)    // BAUD_DEFAULT
@@ -189,8 +189,12 @@ void setup()
 #if defined(ESP32)
   if (SerialBaud != SERIAL_OUT_BR || settings->altpin0) {
     if (settings->altpin0) {
-      Serial.print("Switching RX pin to ");
-      Serial.println(Serial0AltRxPin);
+      if (ESP32_pin_reserved(Serial0AltRxPin, false, "Alt RX")) {
+          settings->altpin0 = false;
+      } else {
+          Serial.print("Switching RX pin to ");
+          Serial.println(Serial0AltRxPin);
+      }
     }
     if (SerialBaud != SERIAL_OUT_BR) {
       Serial.print("Switching baud rate to ");
@@ -226,6 +230,8 @@ void setup()
     ThisAircraft.addr = settings->aircraft_id;
   } else {
     uint32_t id = SoC->getChipId() & 0x00FFFFFF;
+#if 0
+    // already done in SoC->getChipId():
     /* remap address to avoid overlapping with congested FLARM range */
     if (id >= 0x00DD0000 && id <= 0x00DFFFFF) {
       id += 0x00100000;
@@ -236,21 +242,38 @@ void setup()
     } else if ((id & 0x00FF0000) == 0x005B0000 || (id & 0x00FF0000) == 0x00110000) {
       id += 0x00010000;
     }
+#endif
     ThisAircraft.addr = id;
   }
-Serial.printf("ID_method: %d, settings_ID: %06X, used_ID: %06X\r\n",
+Serial.printf("\r\nID_method: %d, settings_ID: %06X, used_ID: %06X\r\n\r\n",
 settings->id_method, settings->aircraft_id, ThisAircraft.addr);
 
-  hw_info.rf = RF_setup();
-
-  delay(100);
+  SoC->Button_setup();
 
   // do this before Baro_setup - Wire.begin() happens there
   hw_info.display = SoC->Display_setup();
 
 Serial.println(F("calling Baro_setup()..."));
+  // do this before SD_setup since this tickles pins 13,2
   hw_info.baro = Baro_setup();
 Serial.println(F("... Baro_setup() returned"));
+
+#if defined(USE_SD_CARD)
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+    // do this before RF_setup() to make sure that:
+    // - SD card get started without interference
+    // - radio chip sets SPI the way it wants it
+    SD_setup();
+    delay(200);
+    FlightLog_setup();
+  }
+#endif
+
+  hw_info.rf = RF_setup();
+  delay(100);
+
+  Buzzer_setup();
+  Strobe_setup();
 
 #if defined(ENABLE_AHRS)
   hw_info.imu = AHRS_setup();
@@ -276,8 +299,6 @@ Serial.println(F("... Baro_setup() returned"));
 
   SoC->swSer_enableRx(false);
 
-  LED_setup();
-
   WiFi_setup();
 
   if (SoC->USB_ops) {
@@ -296,6 +317,8 @@ Serial.println(F("... Baro_setup() returned"));
   if (settings->rx1090 == ADSB_RX_GNS5892)
       gns5892_setup();
 #endif
+
+  LED_setup();   // moved here to allow Serial2 to grab pin 4
 
 #if defined(ENABLE_TTN)
   TTN_setup();
@@ -333,6 +356,10 @@ Serial.println(F("... Baro_setup() returned"));
 //Serial.println("calling Buzzer_test()");
   SoC->Buzzer_test(resetInfo->reason);
 
+#if defined(USE_SD_CARD)
+  MD5_test();
+#endif
+
   SoC->post_init();
 
   SoC->WDT_setup();
@@ -348,10 +375,17 @@ Serial.println(F("... Baro_setup() returned"));
 
 void shutparts()
 {
+#if defined(USE_SD_CARD)
+  closeSDlog();
+  closeFlightLog();
+#endif
+#if defined(ESP32)
+  if (AlarmLogOpen)
+    AlarmLog.close();
+#endif
 #if !defined(SERIAL_FLUSH)
 #define SERIAL_FLUSH()       Serial.flush()
 #endif
-  SoC->WDT_fini();
   SERIAL_FLUSH();
   SoC->swSer_enableRx(false);
 #if 0
@@ -384,6 +418,7 @@ void shutparts()
   Web_fini();
   NMEA_fini();
   WiFi_fini();
+  SoC->WDT_fini();
   if (SoC->Bluetooth_ops)
      SoC->Bluetooth_ops->fini();
   if (SoC->USB_ops)
@@ -448,14 +483,14 @@ void normal()
     gnss_age = gnss.location.age();
     thistime_ms = millis() - gnss_age;                   /* = lastCommitTime */
 
-    newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 150   // new data arrived from GNSS
+    newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 400   // new data arrived from GNSS
                    && gnss_age < 3000);
 
     static float prev_lat = 0;
     static float prev_lon = 0;
 
     if (firstfix) {
-        SetupTimeMarker = millis();   // start a minute of non-airborne collision warnings
+        SetupTimeMarker = millis();
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
         firstfix = false;
@@ -600,7 +635,7 @@ void normal()
         // Don't bother with the encode() if can't transmit right now
         // Reserve slot 0 for relay message if any relaying is pending
         //   (this only happens once in 5 or more seconds)
-        if (settings->relay != RELAY_ONLY) {
+        if (settings->relay != RELAY_ONLY && leap_seconds_valid()) {
           size_t s = RF_Encode(&ThisAircraft);  // returns 0 if implausible data
           if (s != 0) {
             RF_Transmit(s, true);
@@ -677,6 +712,18 @@ void normal()
     }
     ExportTimeMarker = millis();
   }
+
+#if defined(ESP32)
+#if defined(USE_SD_CARD)
+  if (settings->logflight != FLIGHT_LOG_NONE) {
+    if (isTimeToIGC()) {
+      if (validfix)
+          logFlightPosition();
+      IGCTimeMarker = millis();
+    }
+  }
+#endif
+#endif
 
   // Handle Air Connect
   NMEA_loop();

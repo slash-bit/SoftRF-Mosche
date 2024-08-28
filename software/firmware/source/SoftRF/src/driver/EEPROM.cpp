@@ -188,15 +188,15 @@ void EEPROM_defaults()
 
     if (hw_info.model == SOFTRF_MODEL_STANDALONE
      || hw_info.model == SOFTRF_MODEL_PRIME) {
-      settings->volume  = BUZZER_OFF;
+      //settings->volume  = BUZZER_OFF;
       settings->strobe  = STROBE_OFF;
       settings->pointer = DIRECTION_NORTH_UP;
     } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-      settings->volume  = BUZZER_VOLUME_FULL;
+      //settings->volume  = BUZZER_VOLUME_FULL;
       settings->strobe  = STROBE_OFF;
       settings->pointer = LED_OFF;
     } else {
-      settings->volume  = BUZZER_OFF;
+      //settings->volume  = BUZZER_OFF;
       settings->strobe  = STROBE_OFF;
       settings->pointer = LED_OFF;
     }
@@ -219,10 +219,22 @@ void EEPROM_defaults()
   }
   // otherwise keep those settings from the previous version
 
+  // move volume back above next time
+    if (hw_info.model == SOFTRF_MODEL_STANDALONE
+     || hw_info.model == SOFTRF_MODEL_PRIME) {
+      settings->volume  = BUZZER_OFF;
+    } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+      settings->volume  = BUZZER_VOLUME_FULL;
+    } else {
+      settings->volume  = BUZZER_OFF;
+    }
+
   // >>> the new settings, move up next time:
 
     settings->gnss_pins = EXT_GNSS_NONE;   // whether an external GNSS module was added to a T-Beam
     settings->ppswire   = false;       // whether T-Beam v0.7 or external GNSS has PPS wire connected
+    settings->sd_card   = SD_CARD_NONE;
+    settings->logflight = FLIGHT_LOG_NONE;
     settings->rx1090    = ADSB_RX_NONE;
 
     //strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
@@ -265,7 +277,7 @@ void show_settings_serial()
     Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
     Serial.print(F(" Volume "));Serial.println(settings->volume);
     Serial.print(F(" Strobe "));Serial.println(settings->strobe);
-    Serial.print(F(" Alarm Demo "));Serial.println(settings->alarm_demo);
+    //Serial.print(F(" Alarm Demo "));Serial.println(settings->alarm_demo);
     Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
     Serial.print(F(" Voice "));Serial.println(settings->voice);
     Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
@@ -306,6 +318,8 @@ void show_settings_serial()
     Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
     Serial.print(F(" GNSS pins "));Serial.println(settings->gnss_pins);
     Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
+    Serial.print(F(" SD card adapter "));Serial.println(settings->sd_card);
+    Serial.print(F(" Log flight "));Serial.println(settings->logflight);
     Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)
     if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {

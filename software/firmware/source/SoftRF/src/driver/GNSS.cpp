@@ -54,7 +54,7 @@ bool gnss_needs_reset = false;
 
 static bool is_prime_mk2 = false;
 
-unsigned long GNSSTimeSyncMarker = 0;
+uint32_t GNSSTimeSyncMarker = 0;
 volatile unsigned long PPS_TimeMarker = 0;
 
 #if defined(ESP32)
@@ -74,6 +74,12 @@ static uint8_t get_pps_pin()
                     // if VP is used for aux serial, use pin 25 for PPS if possible
                     if (settings->gnss_pins == EXT_GNSS_13_2)
                         return SOC_GPIO_PIN_VOICE;
+                    return SOC_UNUSED_PIN;
+                }
+            } else {   // hw_info.revision >= 8
+                if (settings->sd_card == SD_CARD_13_VP) {
+                    if (settings->voice == VOICE_OFF && settings->strobe == STROBE_OFF)
+                        return SOC_GPIO_PIN_VOICE;   // pin 25 for PPS
                     return SOC_UNUSED_PIN;
                 }
             }
@@ -1253,6 +1259,7 @@ static bool at65_setup()
       Serial_GNSS_Out.write("$PCAS04,7*1E\r\n"); /* GPS + GLONASS + BEIDOU */
   else
       Serial_GNSS_Out.write("$PCAS04,5*1C\r\n"); /* GPS + GLONASS */     
+    //Serial_GNSS_Out.write("$PCAS04,7*1E\r\n"); /* GPS + GLONASS + BEIDOU */
   delay(250);
 #if defined(NMEA_TCP_SERVICE)
   /* GGA,RMC and GSA */
@@ -1289,20 +1296,25 @@ const gnss_chip_ops_t at65_ops = {
 
 static bool GNSS_fix_cache = false;
 
-static bool leap_seconds_valid()
+bool leap_seconds_valid()
 {
     static uint8_t leap_valid = 2;  // means not known whether valid
-    if (GNSS_fix_cache) {           // wait until there is a fix
-      switch (hw_info.gnss) {
+    // could start = 0 but risk 13 minutes of no-transmit if no response
+    // - usually gets set to 0 in first check below (if no leap seconds)
+    //    - before even the first fix, so no bad transmissions happen
+
+    // this is only called if GNSS_fix_cache == true
+    switch (hw_info.gnss) {
+#if !defined(EXCLUDE_GNSS_UBLOX)
         case GNSS_MODULE_U6:
         case GNSS_MODULE_U7:
         case GNSS_MODULE_U8:
         case GNSS_MODULE_U9:
         case GNSS_MODULE_U10:
-        case GNSS_MODULE_AT65:
             static uint32_t next_check = 0;
-            static int checks_count = 0;
-            if (next_check==0 || (leap_valid!=1 && checks_count < 18 && millis()>next_check)) {
+            static uint8_t checks_count = 0;
+            static uint8_t max_checks = 18;   // 13 minutes
+            if (leap_valid!=1 && checks_count<max_checks && (checks_count==0 || millis()>next_check)) {
                 if (ublox_query(0x01, 0x20, 2000) == true) {    // NAV-TIMEGPS
                     if ((GNSSbuf[11] & 0x04) == 0) {
                         leap_valid = 0;    // known invalid
@@ -1311,19 +1323,23 @@ static bool leap_seconds_valid()
                         leap_valid = 1;    // known valid, no need to ask again
                         Serial.println("UBX says leap seconds known");
                     }
-                } // else (query failed) no change in leap_valid
+                } else {
+                    // (query failed) - no change in leap_valid
+                    Serial.println("No response to UBX leap seconds query");
+                }
                 next_check = millis() + 43000;
                 ++checks_count;
                 if (checks_count >= 18) {
-                    leap_valid = 2;    // in case it never works
-                    checks_count = 0;  // keep trying but resume transmissions
+                    leap_valid = 2;     // in case it never works - resume transmissions
+                    max_checks = 36;    // keep trying for up to 13 more minutes
                 }
             }
             break;
+#endif
+        case GNSS_MODULE_AT65:
         default:
-            leap_valid = 1;  // on other models assume valid
+            return true;    // on other models assume valid
             break;
-      }
     }
     return (leap_valid != 0);   // if not known invalid, assume valid
 }
@@ -1332,9 +1348,10 @@ bool isValidGNSSFix()
 {
   if (settings->debug_flags & DEBUG_FAKEFIX)
       return true;   // for testing
-  if (! leap_seconds_valid())
+  if (! GNSS_fix_cache)
       return false;
-  return GNSS_fix_cache;
+  return true;
+  //return leap_seconds_valid();
 }
 
 byte GNSS_setup() {
@@ -1432,16 +1449,21 @@ byte GNSS_setup() {
   if (gnss_chip) gnss_chip->setup();
 
   uint8_t pps_pin = get_pps_pin();
-  if (pps_pin != SOC_UNUSED_PIN) {
-    pinMode(pps_pin, INPUT_PULLDOWN);
-#if !defined(NOT_AN_INTERRUPT)
-    attachInterrupt(digitalPinToInterrupt(pps_pin), SoC->GNSS_PPS_handler, RISING);
-#else
-    int interrupt_num = digitalPinToInterrupt(pps_pin);
-    if (interrupt_num != NOT_AN_INTERRUPT) {
-      attachInterrupt(interrupt_num, SoC->GNSS_PPS_handler, RISING);
-    }
+  if (pps_pin != SOC_UNUSED_PIN
+#if defined(ESP32)
+   && ESP32_pin_reserved(pps_pin, false, "GNSS PPS") == false
 #endif
+   ) {
+      pinMode(pps_pin, INPUT_PULLDOWN);
+#if !defined(NOT_AN_INTERRUPT)
+      attachInterrupt(digitalPinToInterrupt(pps_pin), SoC->GNSS_PPS_handler, RISING);
+#else
+      int interrupt_num = digitalPinToInterrupt(pps_pin);
+      if (interrupt_num != NOT_AN_INTERRUPT)
+        attachInterrupt(interrupt_num, SoC->GNSS_PPS_handler, RISING);
+#endif
+  } else {
+      settings->ppswire = false;
   }
 
 #if defined(USE_NMEALIB)
@@ -1459,6 +1481,7 @@ byte GNSS_setup() {
 
 void GNSS_loop()
 {
+#if defined(ESP32)
   if (gnss_needs_reset) {
       gnss_needs_reset = false;
       reset_gnss();
@@ -1467,6 +1490,7 @@ void GNSS_loop()
       delay(2000);
       reboot();
   }
+#endif
 
   PickGNSSFix();
 
@@ -1542,8 +1566,9 @@ bool Try_GNSS_sentence() {
         for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // jump over CS and *
           if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
             size_t write_size = GNSS_cnt - ndx + 1;   // includes * and CS
+          char *gb = (char *) &GNSSbuf[ndx];
 #if 0
-          if (!strncmp((char *) &GNSSbuf[ndx+3], "GGA,", strlen("GGA,"))) {
+          if (!strncmp(gb+3, "GGA,", strlen("GGA,"))) {
             GGA_Stop_Time_Marker = millis();
 
             Serial.print("GGA Start: ");
@@ -1559,7 +1584,7 @@ bool Try_GNSS_sentence() {
              * Work around issue with "always 0.0,M" GGA geoid separation value
              * given by some Chinese GNSS chipsets
              */
-            bool is_gga = (write_size>7 && !strncmp((char *) &GNSSbuf[ndx+3], "GGA,", 4));
+            bool is_gga = (write_size>7 && !strncmp(gb+3, "GGA,", 4));
 #if defined(USE_NMEALIB)
             if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && is_gga
                   && gnss.separation.meters() == 0.0) {
@@ -1571,9 +1596,10 @@ bool Try_GNSS_sentence() {
 #endif
             {
               if (is_gga) {
-                strncpy(GPGGA_Copy, (char*) &GNSSbuf[ndx], write_size);  // for traffic alarm logging
+                strncpy(GPGGA_Copy, gb, write_size);  // for traffic alarm logging
+                GPGGA_Copy[write_size] = '\0';
               }
-              NMEA_Outs(settings->nmea_g, settings->nmea2_g, (char *) &GNSSbuf[ndx], write_size, true);
+              NMEA_Outs(settings->nmea_g, settings->nmea2_g, gb, write_size, true);
             }
             return true;
           }
@@ -1589,7 +1615,7 @@ void PickGNSSFix()
 
   if (is_prime_mk2) {
 
-    // only use the internal GNSS, leave other ports alone for data bridging
+    // only use the internal (or add-on serial) GNSS, leave other ports alone for data bridging
     while (true) {
       if (Serial_GNSS_In.available() > 0) {
        c = Serial_GNSS_In.read();

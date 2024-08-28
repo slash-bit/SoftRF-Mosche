@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated August 3, 2024 to fit software version MB139
+This version last updated August 28, 2024 to fit software version MB140
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -38,7 +38,7 @@ My version can now receive and transmit in the new FLARM protocol (V7) that went
 
 What can the mainline version of SoftRF do that my version cannot?
 
-The main branch of SoftRF offers compiled binaries for a wide variety of hardware platforms.  My version has only been compiled for ESP32-based (T-Beam) and NRF52-based (T-Echo) hardware so far.  It can in theory be compiled for other hardware, but that is not a quick and easy thing to do.  I have concentrated on the "T-Beam" hardware because I believe it is the best choice at this time: is includes all the components one might want, integrated into a single board, including a holder for a 18650 size lithium cell, charger circuit, GNSS module, an ISM-band radio, and a WiFi and Bluetooth capable CPU with nonvolatile flash memory.  The only thing missing is an SD card slot, which could have helped with software updates and also allowed operation as an (inofficial) flight recorder.
+The main branch of SoftRF offers compiled binaries for a wide variety of hardware platforms.  My version has only been compiled for ESP32-based (T-Beam) and NRF52-based (T-Echo) hardware so far.  It can in theory be compiled for other hardware, but that is not a quick and easy thing to do.  I have concentrated on the "T-Beam" hardware because I believe it is the best choice at this time: is includes all the components one might want, integrated into a single board, including a holder for a 18650 size lithium cell, charger circuit, GNSS module, an ISM-band radio, and a WiFi and Bluetooth capable CPU with nonvolatile flash memory.  Even an SD card slot can now be added to the T-Beam.
 
 
 HISTORY
@@ -148,8 +148,7 @@ If the T-Beam board arrives with other software, e.g., "Meshtastic", or after a 
 https://github.com/moshe-braner/SoftRF/tree/master/software/app/Flashing
 You will need a PC running Windows, that can recognize the USB interface inside the T-Beam as a virtual serial port.  The copy of Windows 10 on my laptop did that as-is.  If it does not, you need to find and install "driver" software that fits the USB hardware inside the T-Beam.  Once the T-Beam shows up as a "COM port" (e.g., COM5) on the PC's device manager that hurdle is passed.  Then you need to download and run the software (mentioned in the instructions) from Expressif, the makers of the ESP32 chips.  It is not very intuitive to use, follow the written info, including the image: you must set the memory addresses as shown.  And select the right COM port.  If it goes horribly wrong the T-Beam may appear dead (won't boot any more), but so far I've always managed to bring it back to life with repeated attempts with that utility software.
 
-An alternative to the Windows-based ESP tool is a web-based version available here: https://esp.huhn.me/
-Reportedly it will work with a Mac, for example.
+An alternative to the Windows-based ESP tool is a web-based tool available here: https://esp.huhn.me/ - works with Chrome, Edge or Opera browsers.  Reportedly it will work with a Mac, for example.  Or this tool, offered by the makers of the ESP32:  https://espressif.github.io/esp-launchpad/ - only works on the Chrome browser.
 
 Note that anything connected to pin 2 on the T-Beam board may need to be disconnected to make firmware flashing via USB possible.  (Or momentarily ground pin 2 via a 100-ohm resistor while the flashing tool is trying to connect.)  Sometimes a board may behave strangely (e.g., WiFi will not connect) until the flash memory is fully erased (a function available in the USB flashing tool) before re-installing the firmware.
 
@@ -267,6 +266,10 @@ GNSS module: the default is the internal GNSS.  If an external one is connected,
 
 Added PPS wire: normally leave as "absent".  The "present" option serves two purpose:  If an external GNSS module is connected, including a wire bringing the PPS signal to the T-Beam's VP pin, this setting tells SoftRF to use that connection for more precise timing.  And if the internal GNSS is used on a T-Beam v0.7, which unlike v1.x does not come with the PPS connection built in, this setting tells SoftRF that a modification has been done to add that missing connection.
 
+SD card adapter: If such an adapter is added to a T-Beam (see How to connect external devices section below), change this setting from "none" to the one that lists the pins used for the connection.
+
+Flight logging: If an SD card adapter is attached, this setting gives the options to write data to a flight log.  See the section about "connecting an SD card adapter".
+
 Alarms Log: If enabled, every time a traffic alarm is issued (whether audible or not), a line of text is written into the alarmlog.txt file. This line includes the date, time, lat/lon, alarm level (1-3), aircraft ID, relative bearing, and horizontal and vertical separation (in meters).  If you want to download this data, use the web interface and click the "Alarm Log: [Download]" button at the bottom of the status page.  The existing file is normally appended to.  If space in the flash file system is low, the log file is erased and a new one created when SoftRF is first airborne following a power-up or reboot.  You can also do that manually by clicking the "Alarm Log: [Clear]" button on the status page.
 
 IGC encryption key:  Only shown if SoftRF is set to use the OGNTP protocol. The key is divided into 4 sections, each is 8 hexadecimal digits.  For each section separately, if it's zero, it is shown as "00000000", otherwise as "88888888", masking the true key.  If left as "88888888" then the current key is left intact.  Overwrite with something else to change it.  If set to all zeros then no encryption is done.
@@ -380,6 +383,38 @@ The module needs two pins on the T-Beam for serial connections.  There are 3 cho
 Connect the module's ground wire to a ground pin on the T-Beam, VCC wire to a "3.3V" pin, the module's TX wire to the chosen RX pin ("VN", "13" or "15"), the module's RX wire to the chosen TX pin ("4", "2" or "14").  Optionally, but helpfully, connect the module's PPS wire to the "VP" pin - and in the settings select PPS wire "present" - this precludes use of the "alternative" RX pin for the main serial port.  (Note: on the old T-Beam v0.7 the "VN" pin is not usable, and 15 is not available - connect the GNSS using 13,2 or 25,14 with PPS on VP, or use the "VP" pin for input from GNSS, 4 for output, and optionally connect PPS to pin 25.)  See wiring diagrams for these 3 options, e.g., T-beam_wiring_ext_GNSS_VN_4.jpg - in the documentation folder.  (These diagrams are for the T-Beam v1.x.)
 
 Some combinations of external connections are not possible due to the limited number of available I/O pins on the T-Beam board.  See the table Interacting_Options (.xlsx and .pdf) - in the documentation folder https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
+
+
+Connecting an SD card adapter
+
+Finally, an micro-SD card adapter can also be connected to the T-Beam.  SD adapters connect via "SPI".  This requires 4 GPIO pins (plus power and ground) and thus is likely get in the way of connecting other devices.  See the "Interacting_Options" file (above) for the matrix of interactions.  See below for types of adapters and the needed modifications.
+
+Once the adapter is connected, prepare a micro-SD card.  The card must be 32 GB or smaller (1GB is plenty), formatted FAT32.  To reduce the wear on the SD card from re-writing the same sectors, it is best to format with a small "allocation size" of 1024 bytes (or 512 or 2048).  Create two folders at the top level: "firmware" and "logs".  In the "firmware" folder you can put a firmware update file (renamed the generic name SoftRF.bin), and then when SoftRF boots it will update the firmware - and delete that file.  In the "logs" folder put a small text file called IGC_CONF.TXT holding 4 pieces of data, one per line: pilot name, aircraft type (model), aircraft registration ID, and contest (tail) ID.  When SoftRf will create IGC flight log files, this information will be embedded into those files.  Example such file contents:
+
+Chuck Yeager
+ASW20
+N1234
+CY
+
+Once the card is installed, you will normally not need to physically access it (other than for firmware updates, but those can normally be done via wifi instead).  The web interface allows you to list the flight logs (which are kept in the "logs" folder), download the latest flight log or any file in the list, and to clear the flight logs to keep the list uncluttered. (Clearing moves them to a subfolder, click "empty trash" to delete.)  To upload an updated IGC_CONF.TXT to the SD card through the web interface, enter the URL 192.168.1.1/logupload and then select the file and click "upload".
+
+Flight logging can be done in two different modes.  In the "airborne" mode the file is started when a takeoff is detected, and finalized upon landing - a new file is created upon the next takeoff.  In the "always" mode data is collected continuously into one file.  If the T-Beam is shut down via the pushbutton (on v1.x boards - or if the alarm-demo is activated on a v0.7 board via long-press of the button), or if any of the related web-interface buttons are clicked, the flight log (if still active) will be finalized.  If the power supply is simply disconnected, the flight log will be valid, but missing the last few minutes of data.
+
+The flight log files are secured and will be accepted as valid on Weglide and OLC.  But they are not IGC-certified, so cannot be used for badges and records.
+
+Types of SD card adapters
+
+There are two types of SD card adapters available: buffered and unbuffered.  The unbuffered ones connect the SD card pins directly to the ESP32 pins.  This exposes the ESP32 pins to static electricity and other hazards.  If the SD card and adapter are inside the T-Beam case and the SD card rarely removed (and not while the T-Beam is running) that is reasonably safe.  Here is an example unbuffered card (despite the mention of buffering in the description):
+    https://www.amazon.com/UMLIFE-Interface-Conversion-Compatible-Raspberry/dp/B0989SM146
+It is very small and can be glued (metal shield to metal shield) to the GNSS module on the T-Beam.  But the SD card slot should face up, or the SD card may work its way out of the adapter due to vibrations.  Be sure to put the SD card into the adapter before deciding where it will be mounted - the card sticks out of the unbuffered adapter farther than you may expect.  If the edge of the card is close to the lid of the case, that will prevent it coming out of the slot.  When I tried it, the SD card CS line connected to Pin 0 of the ESP32 prevented the ESP32 from booting when power was supplied (although it booted if the reset button was then pressed).  The solution was to add a diode in the CS line, cathode towards Pin 0.  See the photo "unbuffered_SD_attached.jpg" in the documentation folder.  I used a 1N4148 silicon diode.  A Schottky diode may solve the problem more reliably.  May need to also add a pull-up resistor (about 22K) between the 3.3V and CS pins on the adapter.  What works may depend on the specific SD card.  Another possible solution is a resistor (about 3K) between Pin 0 and Pin 4.  The goal is to prevent Pin 0 from being held low while booting.
+
+The buffered adapters have an interface chip in-between the SD card and the ESP32.  Here is an example buffered card:
+    https://www.amazon.com/HiLetgo-Adater-Interface-Conversion-Arduino/dp/B07BJ2P6X6
+These are larger, but have a nice deeper push-to-release SD card holder.  The buffered ones also typically have a voltage regulating chip reducing the 5V supply voltage to 3.3V.  On the T-Beam, a 5V supply is not necessarily available.  The pin labeled "5V" is really the battery voltage, about 3.7, when running on battery power.  Unless the T-Beam is always running on 5V USB power, you will need to modify the adapter to bypass that regulator, connecting the power from a "3.3V" pin on the T-Beam directly to the buffer chip on the adapter.  See the image file "SD_adapter_bypass_regulator.jpg" in the documentation folder.  (Instead of removing the regulator, it is easier to cut off its three pins.)
+
+One connection choice for an SD card adapter only needs one additional pin (pin 0, which is not used by any of the other connection features).  This is achieved by sharing the other pins (same SPI bus) as the radio (LORA) module.  To do this, one must carefully solder wires to the pins of the radio chip itself.  See the image file "LORA_SPI_pins.jpg" in the documentation folder for which pin is which.  Besides the MOSI, MISO and SCK pins, the SD adapter also needs the SS (CS) pin connected to "pin 0" on the T-Beam.  It also needs ground and 3.3V power connection, these can be connected to a ground pin (8) and the Vcc pin (12) of the radio module as seen in the image.
+
+There is a catch though: the MISO pin of the SD adapter must not interfere with the radio when the SD card is not being accessed and the radio is.  With an unbuffered adapter that is not a problem.  In the buffered adapters there are two chips commonly used.  The Adafruit adapters with the 4050 chip have the MISO pin (feeding data from the card to the ESP32) directly connected, not through the 4050 chip, so it is not fully buffered, but OK for this use.  The 74HC125 chip in the other adapters is a tri-state chip that can leave its outputs disconnected.  Alas the commonly available adapters have the wires controlling this permanently grounded, thus the outputs are never disconnected.  To use such an adapter on the LORA pins it must be modified.  Either connect the EN pin of the MISO buffer to the CS pin (hard to do since the chip wires are very small), as seen in the image "SD_card_adapter_modified_schematic.jpg".  Or, disconnect the MISO pin on the ESP32 side from the 125 chip, and connect it directly to the SD card (similar to the design of the 4050-based cards).  If you don't understand these hints, or don't want the hassle of doing these modifications, use an unbuffered adapter.  It fits more easily inside the case anyway.
 
 
 Data Bridging

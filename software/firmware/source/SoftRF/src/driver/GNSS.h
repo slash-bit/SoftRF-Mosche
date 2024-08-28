@@ -67,11 +67,13 @@ void GNSS_fini       (void);
 void GNSSTimeSync    (void);
 void PickGNSSFix     (void);
 int LookupSeparation (float, float);
+bool leap_seconds_valid(void);
 
 extern const gnss_chip_ops_t *gnss_chip;  // added
 extern TinyGPSPlus gnss;
 extern volatile unsigned long PPS_TimeMarker;
 extern const char *GNSS_name[];
 extern bool gnss_needs_reset;
+extern uint32_t GNSSTimeSyncMarker;
 
 #endif /* GNSSHELPER_H */

@@ -138,7 +138,7 @@ extern Adafruit_NeoPixel strip;
                                   SOC_GPIO_PIN_TBEAM_LED_V02 :          \
                                   (hw_info.revision == 5 ?              \
                                     SOC_GPIO_PIN_TBEAM_LED_V05 :        \
-                                    ((hw_info.revision == 11 || hw_info.revision == 12) ?   \
+                                    ((hw_info.revision == 8 || hw_info.revision == 12) ?   \
                                       SOC_GPIO_PIN_TBEAM_LED_V11 :      \
                                       SOC_UNUSED_PIN))))
 
@@ -481,6 +481,8 @@ struct rst_info {
 #endif /* USE_USB_HOST */
 #endif /* CONFIG_IDF_TARGET_ESP32S2 */
 
+#define USE_SD_CARD
+
 #define POWER_SAVING_WIFI_TIMEOUT 600000UL /* 10 minutes */
 
 //#define PMK2_SLEEP_MODE 1    // 0.6 mA : esp_deep_sleep_start()
@@ -497,11 +499,16 @@ struct rst_info {
 
 /* these functions should be reached via SoC_Ops instead, */
 /* as done in astir13 fork */
+bool ESP32_pin_reserved(uint8_t pin, bool shared, const char *label);
+void ESP32_pin_unreserve(uint8_t pin);
 bool ESP32_onExternalPower();
 void blue_LED_on();
 void blue_LED_off();
 void blue_LED_1hz();
 void blue_LED_4hz();
+
+// for experiment
+//extern bool button_pressed;
 
 #endif /* PLATFORM_ESP32_H */
 

@@ -64,7 +64,9 @@
 #include "../driver/Battery.h"
 #include "../driver/OLED.h"
 #include "../driver/GNSS.h"
+#include "../driver/SDcard.h"
 #include "../protocol/data/NMEA.h"
+#include "../protocol/data/IGC.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
 
@@ -162,8 +164,6 @@ static portMUX_TYPE GNSS_PPS_mutex = portMUX_INITIALIZER_UNLOCKED;
 static portMUX_TYPE PMU_mutex      = portMUX_INITIALIZER_UNLOCKED;
 volatile bool PMU_Irq = false;
 
-//static bool GPIO_21_22_are_busy = false;
-
 static union {
   uint8_t efuse_mac[6];
   uint64_t chipmacid;
@@ -194,6 +194,7 @@ SPIClass uSD_SPI(HSPI);
 SdFat    uSD(&uSD_SPI);
 
 static bool uSD_is_mounted = false;
+bool button_pressed = false;
 
 Adafruit_FlashTransport_ESP32 HWFlashTransport;
 Adafruit_SPIFlash QSPIFlash(&HWFlashTransport);
@@ -347,7 +348,50 @@ static uint32_t ESP32_getFlashId()
 #define TAG "MAC"
 #endif
 
-int Wire_Trans_rval;
+
+// GPIO Pin Reservation System
+// Rreturns false (and reserves the pin) if OK, returns true if pin not available
+// Called with null label before Serial is started
+static uint64_t pinmap = 0;
+bool ESP32_pin_reserved(uint8_t pin, bool shared, const char *label)
+{
+    if (pin == SOC_UNUSED_PIN)
+        return false;
+    if (shared) {
+        if (label)  Serial.printf("%s sharing pin %d\r\n", label, pin);   // just for info
+        return false;
+    }
+    uint64_t pinmask = ((uint64_t)1 << pin);
+    if (pinmap & pinmask) {
+        if (label)  Serial.printf("Pin %d already used, not available for %s\r\n", pin, label);
+        return true;
+    }
+    pinmap |= pinmask;
+    if (label)  Serial.printf("Pin %d now reserved for %s\r\n", pin, label);
+    return false;
+}
+#if 0
+void ESP32_pin_unreserve(uint8_t pin)
+{
+    uint64_t pinmask = ((uint64_t)1 << pin);
+    pinmap &= (~pinmask);
+    Serial.printf("Pin %d now un-reserved\r\n", pin);
+}
+#endif
+void list_reserved_pins()
+{
+    Serial.print("Pins reserved so far:");
+    for (int pin=0; pin<64; pin++) {
+        uint64_t pinmask = ((uint64_t)1 << pin);
+        if (pinmap & pinmask) {
+            Serial.print(" ");
+            Serial.print(pin);
+        }
+    }
+    Serial.println("");
+}
+
+//int Wire_Trans_rval;  // not used, remove
 
 gpio_num_t middle_button_pin = (gpio_num_t) SOC_UNUSED_PIN;
 
@@ -562,6 +606,8 @@ static void ESP32_setup()
     // Baro probe and OLED probe try both wires
     // PMU probe needs Wire1
     Wire1.begin(TTGO_V2_OLED_PIN_SDA  , TTGO_V2_OLED_PIN_SCL);      // GPIO 21,22
+    ESP32_pin_reserved(TTGO_V2_OLED_PIN_SDA, false, (const char *) NULL);
+    ESP32_pin_reserved(TTGO_V2_OLED_PIN_SCL, false, (const char *) NULL);
     //if (settings->gnss_pins != EXT_GNSS_13_2)     // <<< cannot access settings yet
     //    Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
 
@@ -692,7 +738,27 @@ static void ESP32_setup()
         hw_info.revision = 2;
         if (RF_SX12XX_RST_is_connected)
           hw_info.revision = 5;
+
+        // see if restarting Wire1 will help OLED probe on no-PMU board:
+        WIRE_FINI(Wire1);
+        Wire1.begin(TTGO_V2_OLED_PIN_SDA, TTGO_V2_OLED_PIN_SCL);
+        // >>> exercise the I2C bus
+        Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
+        Wire1.endTransmission();
     }
+
+#if 0
+// for experiment:
+Serial.println(">>> press button for 2s now to ______");
+delay(1500);
+if (has_axp) {
+pinMode(SOC_GPIO_PIN_TBEAM_V08_BUTTON, INPUT);
+if (digitalRead(SOC_GPIO_PIN_TBEAM_V08_BUTTON) == LOW)  button_pressed = true;
+} else {
+pinMode(SOC_GPIO_PIN_TBEAM_V05_BUTTON, INPUT);
+if (digitalRead(SOC_GPIO_PIN_TBEAM_V05_BUTTON) == LOW)  button_pressed = true;
+}
+#endif
 
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
@@ -703,6 +769,10 @@ static void ESP32_setup()
             middle_button_pin = (gpio_num_t) SOC_GPIO_PIN_TBEAM_V08_BUTTON;
             pinMode(middle_button_pin, INPUT);
             //gpio_pullup_en(middle_button_pin);
+            // reservation done in button_setup():
+            //ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_V08_BUTTON, false, (const char *) NULL);
+        //} else {   // v0.7
+            //ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_V05_BUTTON, false, (const char *) NULL);
         }
     }
 
@@ -1357,7 +1427,7 @@ static void ESP32_loop()
     //   and turn off if not transmitting
     if (millis() > BlueLEDTimeMarker) {
       float volts = Battery_voltage();
-      if (! isValidFix()) {
+      if (! isValidFix() || ! leap_seconds_valid()) {
         blue_LED_new_state = XPOWERS_CHG_LED_BLINK_4HZ;
       } else if (settings->txpower == RF_TX_POWER_OFF) {
         blue_LED_new_state = XPOWERS_CHG_LED_OFF;
@@ -1529,10 +1599,13 @@ static void ESP32_reset()
 static uint32_t ESP32_getChipId()
 {
 #if !defined(SOFTRF_ADDRESS)
-  uint32_t id = (uint32_t) efuse_mac[5]        | ((uint32_t) efuse_mac[4] << 8) | \
-               ((uint32_t) efuse_mac[3] << 16) | ((uint32_t) efuse_mac[2] << 24);
-
-  return DevID_Mapper(id);
+  static uint32_t id = 0;
+  if (id == 0) {
+      id = (uint32_t) efuse_mac[5]        | ((uint32_t) efuse_mac[4] << 8) | \
+          ((uint32_t) efuse_mac[3] << 16) | ((uint32_t) efuse_mac[2] << 24);
+      id = DevID_Mapper(id);
+  }
+  return id;
 #else
   return (SOFTRF_ADDRESS & 0xFFFFFFFFU );
 #endif /* SOFTRF_ADDRESS */
@@ -2038,6 +2111,10 @@ static void ESP32_SPI_begin()
     default:
       SPI.begin(SOC_GPIO_PIN_SCK,  SOC_GPIO_PIN_MISO,
                 SOC_GPIO_PIN_MOSI, SOC_GPIO_PIN_SS);
+      ESP32_pin_reserved(SOC_GPIO_PIN_SCK,  false, (const char *) NULL);
+      ESP32_pin_reserved(SOC_GPIO_PIN_MISO, false, (const char *) NULL);
+      ESP32_pin_reserved(SOC_GPIO_PIN_MOSI, false, (const char *) NULL);
+      ESP32_pin_reserved(SOC_GPIO_PIN_SS,   false, (const char *) NULL);
       break;
   }
 }
@@ -2052,38 +2129,50 @@ static void ESP32_swSer_begin(unsigned long baud)
 
     if (settings->gnss_pins == EXT_GNSS_39_4) {
       if (hw_info.revision < 8) {
+          if (ESP32_pin_reserved(Serial0AltRxPin, false, "EXT GNSS RX")) return;
+          if (ESP32_pin_reserved(Serial2TxPin,    false, "EXT GNSS TX")) return;
           Serial.println(F("Connecting to external GNSS on pins VP,4"));
           Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                                Serial0AltRxPin,
                                Serial2TxPin);
       } else {
+          if (ESP32_pin_reserved(Serial2RxPin, false, "EXT GNSS RX")) return;
+          if (ESP32_pin_reserved(Serial2TxPin, false, "EXT GNSS TX")) return;
           Serial.println(F("Connecting to external GNSS on pins VN,4"));
           Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                                Serial2RxPin,
                                Serial2TxPin);  // Serial1, but the pins Serial2 could have used
       }
     } else if (settings->gnss_pins == EXT_GNSS_13_2) {
+      if (ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SDA, false, "EXT GNSS RX")) return;
+      if (ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SCL, false, "EXT GNSS TX")) return;
       Serial.println(F("Connecting to external GNSS on pins 13,2"));
       Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_TBEAM_SDA,
                            SOC_GPIO_PIN_TBEAM_SCL);   // the pins BMP (& OLED) could have used
     } else if (settings->gnss_pins == EXT_GNSS_15_14) {
       if (hw_info.revision < 8) {
+          if (ESP32_pin_reserved(SOC_GPIO_PIN_VOICE,  false, "EXT GNSS RX")) return;
+          if (ESP32_pin_reserved(SOC_GPIO_PIN_BUZZER, false, "EXT GNSS TX")) return;
           Serial.println(F("Connecting to external GNSS on pins 25,14"));
           Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_VOICE,
                            SOC_GPIO_PIN_BUZZER);
       } else {
+          if (ESP32_pin_reserved(SOC_GPIO_PIN_BUZZER2, false, "EXT GNSS RX")) return;
+          if (ESP32_pin_reserved(SOC_GPIO_PIN_BUZZER,  false, "EXT GNSS TX")) return;
           Serial.println(F("Connecting to external GNSS on pins 15,14"));
           Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_BUZZER2,
                            SOC_GPIO_PIN_BUZZER);
       }
     } else if (hw_info.revision >= 8) {
+      Serial.println(F("Connecting to internal GNSS"));
       Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_TBEAM_V08_RX,
                            SOC_GPIO_PIN_TBEAM_V08_TX);
     } else {
+      Serial.println(F("Connecting to internal GNSS"));
       Serial_GNSS_In.begin(baud, SERIAL_IN_BITS,
                            SOC_GPIO_PIN_TBEAM_V05_RX,
                            SOC_GPIO_PIN_TBEAM_V05_TX);
@@ -2166,12 +2255,13 @@ static byte ESP32_Display_setup()
         rval = DISPLAY_OLED_1_3;
       }
 
-    } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */) {
+    } else if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
 
         // Start up Wire here rather than in ESP32_setup since we need to look at settings
         // OLED probe (here) and Baro probe try both wires
-        if (settings->gnss_pins != EXT_GNSS_13_2)
-            Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
+        ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SDA, true, "Wire");  // allow re-use of these pins later
+        ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SCL, true, "Wire");
+        Wire.begin(SOC_GPIO_PIN_TBEAM_SDA, SOC_GPIO_PIN_TBEAM_SCL);    // GPIO 13,2
 
         Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);      // GPIO 21,22
         has_oled = (Wire1.endTransmission() == 0);
@@ -2188,16 +2278,21 @@ static byte ESP32_Display_setup()
             u8x8 = &u8x8_ttgo2;
             rval = DISPLAY_OLED_TTGO;
             Serial.println(F("u8x8_ttgo OLED found at pins 2,13"));
+            ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SDA, false, "OLED");   // but may be shared with BMP
+            ESP32_pin_reserved(SOC_GPIO_PIN_TBEAM_SCL, false, "OLED");
           } else {
-            Wire1.begin(HELTEC_OLED_PIN_SDA , HELTEC_OLED_PIN_SCL);
-            Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
-            has_oled = (Wire1.endTransmission() == 0);
-            if (has_oled) {
-              u8x8 = &u8x8_heltec;
-              esp32_board = ESP32_HELTEC_OLED;
-              rval = DISPLAY_OLED_HELTEC;
-            }
+            Serial.println(F("OLED not found at pins 21,22 nor 2,13"));
           }
+        }
+
+    } else {
+        Wire1.begin(HELTEC_OLED_PIN_SDA, HELTEC_OLED_PIN_SCL);
+        Wire1.beginTransmission(SSD1306_OLED_I2C_ADDR);
+        has_oled = (Wire1.endTransmission() == 0);
+        if (has_oled) {
+          u8x8 = &u8x8_heltec;
+          esp32_board = ESP32_HELTEC_OLED;
+          rval = DISPLAY_OLED_HELTEC;
         }
 
     }  // end if (PRIME_MK2)
@@ -2633,9 +2728,13 @@ static void ESP32_Battery_setup()
     /* TBD */
   } else {
 #if defined(CONFIG_IDF_TARGET_ESP32)
-    calibrate_voltage(hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
-                     (esp32_board == ESP32_TTGO_V2_OLED && hw_info.revision == 16) ?
-                      ADC1_GPIO35_CHANNEL : ADC1_GPIO36_CHANNEL);
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
+            (esp32_board == ESP32_TTGO_V2_OLED && hw_info.revision == 16)) {
+        if (ESP32_pin_reserved(35, false, "Battery ADC")) return;
+        calibrate_voltage(ADC1_GPIO35_CHANNEL);
+    } else {
+        calibrate_voltage(ADC1_GPIO36_CHANNEL);
+    }
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
     calibrate_voltage(ADC1_GPIO9_CHANNEL);
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -2860,6 +2959,11 @@ void handleEvent(AceButton* button, uint8_t eventType,
               SetupTimeMarker = millis();
               do_alarm_demo = true;
               OLED_msg("ALARM", " DEMO");
+#if defined(USE_SD_CARD)
+              closeSDlog();
+              if (settings->logflight == FLIGHT_LOG_ALWAYS)
+                closeFlightLog();
+#endif
           }
       }
       break;
@@ -2915,15 +3019,22 @@ void onPageButtonEvent() {
 
 static void ESP32_Button_setup()
 {
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+        list_reserved_pins();
+
   if (( hw_info.model == SOFTRF_MODEL_PRIME_MK2 &&
        (hw_info.revision == 2 || hw_info.revision == 5)) ||
        esp32_board == ESP32_S2_T8_V1_1 ||
        esp32_board == ESP32_S3_DEVKIT) {
+
     int button_pin = (esp32_board == ESP32_S2_T8_V1_1) ?
                      SOC_GPIO_PIN_T8_S2_BUTTON :
                      (esp32_board == ESP32_S3_DEVKIT) ?
                      SOC_GPIO_PIN_S3_BUTTON :
                      SOC_GPIO_PIN_TBEAM_V05_BUTTON;
+
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+        if (ESP32_pin_reserved(button_pin, false, "Button1")) return;
 
     // Button(s) uses external pull up resistor.
     pinMode(button_pin, button_pin == 0 ? INPUT_PULLUP : INPUT);
@@ -2943,6 +3054,8 @@ static void ESP32_Button_setup()
   }
 
   if (middle_button_pin != SOC_UNUSED_PIN) {
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+        if (ESP32_pin_reserved(middle_button_pin, false, "Button2")) return;
     button_2.init(middle_button_pin);
     ButtonConfig* PageButtonConfig = button_2.getButtonConfig();
     PageButtonConfig->setEventHandler(handleEvent2);

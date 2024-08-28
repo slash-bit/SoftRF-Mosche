@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+//#include <string.h>
+
 #include "../system/SoC.h"
 
 #if defined(EXCLUDE_WIFI)
@@ -27,8 +29,9 @@ void Web_fini()     {}
 #include <Arduino.h>
 
 #if defined(ESP32)
+
 #include "SPIFFS.h"
-#endif
+#include "SD.h"
 
 #include "../system/SoC.h"
 #include "../driver/Battery.h"
@@ -42,9 +45,13 @@ void Web_fini()     {}
 #include "../driver/Buzzer.h"
 #include "../driver/Voice.h"
 #include "../driver/Bluetooth.h"
+#if defined(USE_SD_CARD)
+#include "../driver/SDcard.h"
+#endif
 #include "../TrafficHelper.h"
 #include "../protocol/radio/Legacy.h"
 #include "../protocol/data/NMEA.h"
+#include "../protocol/data/IGC.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
 
@@ -175,9 +182,7 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 </body>\
 </html>";
 
-#if defined(ESP32)
-
-static const char upload_html[] PROGMEM =
+static const char wav_upload_html[] PROGMEM =
 "<html>\
  <head>\
  <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\
@@ -188,23 +193,48 @@ static const char upload_html[] PROGMEM =
  </form>\
  </html>";
 
+static const char log_upload_html[] PROGMEM =
+"<html>\
+ <head>\
+ <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\
+ </head>\
+ <p>Select and upload a file into SD/logs</p>\
+ <form method='POST' action='/dologupld' enctype='multipart/form-data'>\
+ <input type='file' name='name'><input type='submit' value='Upload' title='Upload'>\
+ </form>\
+ </html>";
+
 static File UploadFile;
 static const char *textplain = "text/plain";
 
-void wavUpload()
+void anyUpload(bool toSD)
 {
   HTTPUpload& uploading = server.upload();
 
   if(uploading.status == UPLOAD_FILE_START)
   {
-    Serial.println(F("Replacing waves.tar in SPIFFS..."));
-    clear_waves();
-    //SPIFFS.remove("/waves.tar");
-    UploadFile = SPIFFS.open("/waves.tar", "w");
-       // ignore the source file name, always save it in SPIFFS as waves.tar
-    if(! UploadFile) {
-      Serial.println(F("Failed to create waves.tar in SPIFFS..."));
-      return;
+#if defined(USE_SD_CARD)
+    if (toSD) {
+        String filename = uploading.filename;
+        if (filename.startsWith("/"))
+            filename = "/logs" + filename;
+        else
+            filename = "/logs/" + filename;
+        Serial.print(F("uploading file: "));
+        Serial.println(filename);
+        UploadFile = SD.open(filename.c_str(), FILE_WRITE);
+        if(! UploadFile)
+            Serial.println(F("Failed to open file for writing on SD"));
+    } else
+#endif
+    {
+        Serial.println(F("Replacing waves.tar in SPIFFS..."));
+        clear_waves();
+        //SPIFFS.remove("/waves.tar");
+        UploadFile = SPIFFS.open("/waves.tar", "w");
+           // ignore the source file name, always save it in SPIFFS as waves.tar
+        if(! UploadFile)
+            Serial.println(F("Failed to create waves.tar in SPIFFS..."));
     }
   }
   else if (uploading.status == UPLOAD_FILE_WRITE)
@@ -218,11 +248,9 @@ void wavUpload()
   {
     if(UploadFile) {
       UploadFile.close();
-      Serial.print(F("Upload Size: ")); Serial.println(uploading.totalSize);
-      parse_wav_tar();
+      Serial.print(F("Uploaded Size: ")); Serial.println(uploading.totalSize);
       if (uploading.totalSize > 0) {
-        server.sendHeader("Location","/");      // Redirect the client to the status page
-        server.send(303);
+        server.send(200, textplain, "uploaded file");
       } else {
         server.send(500, textplain, "500: uploaded zero bytes");
       }
@@ -233,7 +261,22 @@ void wavUpload()
   yield();
 }
 
+
+void wavUpload()   // into SPIFFS
+{
+    anyUpload(false);
+}
+
+void logUpload()   // into SD card /logs/
+{
+    anyUpload(true);
+}
+
 void alarmlogfile(){
+#if defined(USE_SD_CARD)
+    closeSDlog();
+    closeFlightLog();
+#endif
     if (AlarmLogOpen) {
       AlarmLog.close();
       AlarmLogOpen = false;
@@ -252,7 +295,63 @@ void alarmlogfile(){
     }
 }
 
-#endif   // ESP32
+#if defined(USE_SD_CARD)
+void flightlogfile(){
+    closeSDlog();
+    closeFlightLog();
+    String lastlog = " ";
+    bool found = false;
+    if (FlightLogPath[0]) {            // the last file written since boot
+        lastlog = FlightLogPath+6;     // bare name, skip the "/logs/"
+        found = true;
+    } else {
+        // find latest file by alphabetical order of file name
+        File root = SD.open("/logs");
+        if (! root) {
+            Serial.println(F("Cannot open SD/logs"));
+            server.send ( 200, "text/html", "(cannot open SD/logs)");
+            return;
+        }
+        File file = root.openNextFile();
+        String file_name;
+        while(file){
+            file_name = file.name();
+            if (file_name.endsWith(".IGC") || file_name.endsWith(".igc")) {
+                if (strcmp(lastlog.c_str(), file.name()) < 0) {
+                    lastlog = file.name();
+                    //Serial.print(F("Candidate latest log: "));
+                    //Serial.println(lastlog);
+                    found = true;
+                }
+            }
+            file = root.openNextFile();
+        }
+        file.close();
+        root.close();
+    }
+    if (found) {
+        Serial.print(F("Sending latest log: ")); Serial.println(lastlog);
+        char buf[64];
+        snprintf(buf, 64, "attachment; filename=%s", lastlog.c_str());
+        lastlog = "/logs/" + lastlog;
+        File file = SD.open(lastlog.c_str(), FILE_READ);
+        if (file) {
+            String contentType = "application/octet-stream";         // fake the MIME type
+            server.sendHeader("Content-Type", contentType);
+            server.sendHeader("Content-Disposition", buf);
+            server.sendHeader("Connection", "close");
+            server.streamFile(file, contentType);
+            file.close();
+        } else {
+            Serial.print(F("Could not open latest log: ")); Serial.println(lastlog);
+            server.send ( 404, textplain, "Could not open flight log file");
+        }
+    } else {
+        server.send ( 404, textplain, "No flight log found");
+    }
+    yield();
+}
+#endif
 
 void handleSettings() {
 
@@ -1175,7 +1274,7 @@ void handleSettings() {
     size -= len;
   }
 
-  /* whether T-Beam has external GNSS, and PPS wire added (to GPIO37, or to "VP") */
+  /* whether T-Beam has external GNSS, PPS wire, SD card adapter added */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
     snprintf_P ( offset, size,
       PSTR("\
@@ -1195,6 +1294,25 @@ void handleSettings() {
 <input type='radio' name='ppswire' value='0' %s>Absent\
 <input type='radio' name='ppswire' value='1' %s>Present\
 </td>\
+</tr>\
+<tr>\
+<th align=left>SD card slot:</th>\
+<td align=right>\
+<select name='sd_card'>\
+<option %s value='%d'>None</option>\
+<option %s value='%d'>on pins 13,25,2,0</option>\
+<option %s value='%d'>on pins 13,%s,2,0</option>\
+<option %s value='%d'>on LORA pins & 0</option>\
+</td>\
+</tr>\
+<tr>\
+<th align=left>Flight logging:</th>\
+<td align=right>\
+<select name='logflight'>\
+<option %s value='%d'>Off</option>\
+<option %s value='%d'>Always</option>\
+<option %s value='%d'>Airborne</option>\
+</td>\
 </tr>"),
   (settings->gnss_pins==EXT_GNSS_NONE  ? "selected" : ""), EXT_GNSS_NONE,
   (settings->gnss_pins==EXT_GNSS_39_4  ? "selected" : ""), EXT_GNSS_39_4,
@@ -1202,7 +1320,15 @@ void handleSettings() {
   (settings->gnss_pins==EXT_GNSS_13_2  ? "selected" : ""), EXT_GNSS_13_2,
   (settings->gnss_pins==EXT_GNSS_15_14 ? "selected" : ""), EXT_GNSS_15_14,
         (hw_info.revision < 8 ? 25 : 15),
-  (!settings->ppswire ? "checked" : "") , (settings->ppswire ? "checked" : ""));
+  (!settings->ppswire ? "checked" : "") , (settings->ppswire ? "checked" : ""),
+  (settings->sd_card==SD_CARD_NONE  ? "selected" : ""), SD_CARD_NONE,
+  (settings->sd_card==SD_CARD_13_25 ? "selected" : ""), SD_CARD_13_25,
+  (settings->sd_card==SD_CARD_13_VP ? "selected" : ""), SD_CARD_13_VP,
+        (hw_info.revision < 8 ? "4" : "VP"),
+  (settings->sd_card==SD_CARD_LORA  ? "selected" : ""), SD_CARD_LORA,
+  (settings->logflight==FLIGHT_LOG_NONE     ? "selected" : ""), FLIGHT_LOG_NONE,
+  (settings->logflight==FLIGHT_LOG_ALWAYS   ? "selected" : ""), FLIGHT_LOG_ALWAYS,
+  (settings->logflight==FLIGHT_LOG_AIRBORNE ? "selected" : ""), FLIGHT_LOG_AIRBORNE);
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -1273,6 +1399,7 @@ void handleSettings() {
   len = strlen(offset);
   offset += len;
   Serial.print(F("Settings page size: ")); Serial.println(offset-Settings_temp);
+  // currently about 12800
 
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
@@ -1305,7 +1432,7 @@ void handleRoot() {
   char str_alt[16];
   char str_Vcc[8];
 
-  char *Root_temp = (char *) malloc(3300);
+  char *Root_temp = (char *) malloc(3500);
   if (Root_temp == NULL) {
     Serial.println(F(">>> not enough RAM"));
     return;
@@ -1316,12 +1443,12 @@ void handleRoot() {
   dtostrf(ThisAircraft.altitude,  7, 1, str_alt);
   dtostrf(vdd, 4, 2, str_Vcc);
 
-  snprintf_P ( Root_temp, 3000,
+  snprintf_P ( Root_temp, 3500,
     PSTR("<html>\
-  <head>\
-    <meta name='viewport' content='width=device-width, initial-scale=1'>\
-    <title>SoftRF status</title>\
-  </head>\
+ <head>\
+  <meta name='viewport' content='width=device-width, initial-scale=1'>\
+  <title>SoftRF status</title>\
+ </head>\
 <body>\
  <table width=100%%>\
   <tr><!-- <td align=left><h1>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</h1></td> -->\
@@ -1350,11 +1477,11 @@ void handleRoot() {
   <tr><th align=left>Battery voltage</th><td align=right><font color=%s>%s</font></td></tr>\
  </table>\
  <table width=100%%>\
-   <tr><th align=left>Packets</th>\
-    <td align=right><table><tr>\
-     <th align=left>Tx&nbsp;&nbsp;</th><td align=right>%u</td>\
-     <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Rx&nbsp;&nbsp;</th><td align=right>%u</td>\
-   </tr></table></td></tr>\
+  <tr><th align=left>Packets</th>\
+   <td align=right><table><tr>\
+    <th align=left>Tx&nbsp;&nbsp;</th><td align=right>%u</td>\
+    <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Rx&nbsp;&nbsp;</th><td align=right>%u</td>\
+  </tr></table></td></tr>\
  </table>\
  <hr>\
  <h3 align=center>Most recent GNSS fix</h3>\
@@ -1366,31 +1493,32 @@ void handleRoot() {
   <tr><td align=left><b>Altitude</b>&nbsp;&nbsp;(above MSL)</td><td align=right>%s</td></tr>\
   %s\
  </table>\
- <hr>\
+ <hr>&nbsp;<br>\
  <table width=100%%>\
   <tr>\
-    <td><input type=button onClick=\"location.href='/settings'\" value='Settings'></td>\
-    <td><input type=button onClick=\"location.href='/firmware'\" value='Firmware update'></td>\
-    <td><input type=button onClick=\"location.href='/reboot'\" value='Reboot'></td>\
-    <td><input type=button onClick=\"location.href='/about'\" value='About'></td>\
+   <td><input type=button onClick=\"location.href='/settings'\" value='Settings'></td>\
+   <td><input type=button onClick=\"location.href='/reboot'\" value='Reboot'></td>\
+   <td><input type=button onClick=\"location.href='/firmware'\" value='Firmware update'></td>\
+   <td><input type=button onClick=\"location.href='/about'\" value='About'></td>\
   </tr>\
  </table>\
  <hr>\
  <table width=100%%>\
   <tr>\
-    <td>%d WAV files found</td>\
-    <td><input type=button onClick=\"location.href='/wavupload'\" value='Upload waves.tar'></td>\
-    <td><input type=button onClick=\"location.href='/format'\" value='Clear ALL files'></td>\
+   <td>%d WAV files found</td>\
+   <td><input type=button onClick=\"location.href='/wavupload'\" value='Upload waves.tar'></td>\
+   <td><input type=button onClick=\"location.href='/format'\" value='Clear ALL files'></td>\
   </tr>\
  </table>\
  <hr>\
  <table width=100%%>\
   <tr>\
-    <td>Alarm Log:</td>\
-    <td><input type=button onClick=\"location.href='/alarmlog'\" value='Download'></td>\
-    <td><input type=button onClick=\"location.href='/clearlog'\" value='Clear'></td>\
+   <td>Alarm Log:</td>\
+   <td><input type=button onClick=\"location.href='/alarmlog'\" value='Download'></td>\
+   <td><input type=button onClick=\"location.href='/clearlog'\" value='Clear'></td>\
   </tr>\
  </table>\
+ %s\
 </body>\
 </html>"),
     (default_settings_used ?
@@ -1410,11 +1538,28 @@ void handleRoot() {
     tx_packets_counter, rx_packets_counter,
     timestamp, sats, str_lat, str_lon, str_alt,
     ((hw_info.model == SOFTRF_MODEL_PRIME_MK2) ?
-         "<tr><td><input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'></td></tr>"
+ "<tr><td align=middle>\
+  <input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'>\
+ </td></tr>"
           : ""),
-    num_wav_files
+    num_wav_files,
+#if defined(USE_SD_CARD)
+ "  <hr>\
+ <table width=100%%>\
+  <tr>\
+   <td>Flight Logs:</td>\
+   <td><input type=button onClick=\"location.href='/listlogs'\" value='List'></td>\
+   <td><input type=button onClick=\"location.href='/flightlog'\" value='Download Latest'></td>\
+   <td><input type=button onClick=\"location.href='/clearlogs'\" value='Clear'></td>\
+   <td><input type=button onClick=\"location.href='/clearoldlogs'\" value='Empty trash'></td>\
+  </tr>\
+ </table>"
+#else
+ ""
+#endif
   );
   Serial.print(F("Status page size: ")); Serial.println(strlen(Root_temp));
+  // currently about 2800
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
   server.sendHeader(String(F("Pragma")), String(F("no-cache")));
@@ -1567,6 +1712,10 @@ void handleInput() {
       settings->gnss_pins = server.arg(i).toInt();
     } else if (server.argName(i).equals("ppswire")) {
       settings->ppswire = server.arg(i).toInt();
+    } else if (server.argName(i).equals("sd_card")) {
+      settings->sd_card = server.arg(i).toInt();
+    } else if (server.argName(i).equals("logflight")) {
+      settings->logflight = server.arg(i).toInt();
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -1640,6 +1789,7 @@ void handleInput() {
 
   /* enforce some hardware limitations (not enough GPIO pins) */
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
+
       if (hw_info.revision < 8) {
           if (settings->voice == VOICE_EXT) {
               // pin 14 not available, cannot do external I2S
@@ -1656,15 +1806,55 @@ void handleInput() {
               settings->altpin0 = false;
               if (settings->voice != VOICE_OFF || settings->strobe != STROBE_OFF)
                   settings->ppswire = false;
+              if (settings->sd_card == SD_CARD_13_25) {
+                  settings->ppswire = false;
+              }
           }
           if (settings->gnss_pins == EXT_GNSS_15_14) {
-              // pin 25 is used for GNSS (rather than 15)
+              // pin 25 is used for GNSS on v0.7 (rather than 15)
               settings->voice = VOICE_OFF;
               settings->strobe = STROBE_OFF;
+              //if (settings->sd_card == SD_CARD_13_VP) {    // now uses 4 instead of VP
+              //    settings->ppswire = false;
+              //}
+              if (settings->sd_card == SD_CARD_13_25) {
+                  settings->sd_card = SD_CARD_NONE;
+                  settings->gnss_pins = EXT_GNSS_NONE;  // don't know what's wired
+                  settings->ppswire = false;
+              }
           }
-          if (settings->rx1090 != ADSB_RX_NONE) {
-              // ADS-B uses VP, cannot use it for main serial rx
+          if (settings->gnss_pins == EXT_GNSS_13_2) {
+              if (settings->sd_card == SD_CARD_13_25 || settings->sd_card == SD_CARD_13_VP) {
+                  settings->sd_card = SD_CARD_NONE;
+                  settings->gnss_pins = EXT_GNSS_NONE;  // don't know what's wired
+              }
+              settings->ppswire = false;
+          }
+          if (settings->sd_card == SD_CARD_13_VP) {    // now uses 4 instead of VP
+              if (settings->gnss_pins == EXT_GNSS_39_4 || settings->gnss_pins == EXT_GNSS_13_2) {
+                  settings->sd_card = SD_CARD_NONE;
+                  settings->gnss_pins = EXT_GNSS_NONE;
+              }
+              //if (settings->gnss_pins != EXT_GNSS_NONE)
+              //    settings->ppswire = false;
+          }
+          if (settings->ppswire && settings->gnss_pins == EXT_GNSS_15_14)
               settings->altpin0 = false;
+          if (settings->gnss_pins == EXT_GNSS_39_4)
+              settings->altpin0 = false;
+          if (settings->rx1090 != ADSB_RX_NONE)
+              settings->altpin0 = false;
+      } else {    // T-Beam v1.x
+          //if (settings->gnss_pins == EXT_GNSS_NONE || settings->sd_card == SD_CARD_13_VP)
+          if (settings->gnss_pins == EXT_GNSS_NONE)
+              settings->ppswire = false;
+          if (settings->ppswire)
+              settings->altpin0 = false;
+          if (settings->gnss_pins == EXT_GNSS_13_2) {
+              if (settings->sd_card == SD_CARD_13_25 || settings->sd_card == SD_CARD_13_VP) {
+                  settings->sd_card = SD_CARD_NONE;
+                  settings->gnss_pins = EXT_GNSS_NONE;  // don't know what's wired
+              }
           }
       }
       if (settings->gnss_pins == EXT_GNSS_39_4) {
@@ -1676,9 +1866,9 @@ void handleInput() {
           if (settings->voice == VOICE_EXT)
               settings->voice = VOICE_OFF;
       }
-      if (settings->gnss_pins != EXT_GNSS_NONE) {
-          if (settings->ppswire)
-              settings->altpin0 = false;
+      if (settings->sd_card == SD_CARD_13_25) {
+          settings->voice = VOICE_OFF;
+          settings->strobe = STROBE_OFF;
       }
       if (settings->rx1090 != ADSB_RX_NONE) {
           // dedicate Serial2 to the ADS-B receiver module
@@ -1695,8 +1885,9 @@ void handleInput() {
           if (settings->d1090     == DEST_UART2)
               settings->d1090      = DEST_NONE;
       }
-      if (settings->voice == VOICE_EXT)
+      if (settings->voice == VOICE_EXT) {
           settings->volume = BUZZER_OFF;  // free up pins 14 & 15 for I2S use
+      }
   } else {
       settings->voice = VOICE_OFF;
   }
@@ -1770,6 +1961,7 @@ PSTR("<html>\
 <tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
 <tr><th align=left>Ext GNSS</th><td align=right>%d</td></tr>\
 <tr><th align=left>PPS wire</th><td align=right>%d</td></tr>\
+<tr><th align=left>SD card</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
 </table>\
@@ -1794,7 +1986,7 @@ PSTR("<html>\
     settings->rx1090, settings->gdl90_in, settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
     settings->power_save, settings->power_external, settings->freq_corr, settings->logalarms,
-    settings->gnss_pins, settings->ppswire, settings->debug_flags,
+    settings->gnss_pins, settings->ppswire, settings->sd_card, settings->debug_flags,
   //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
     (settings->igc_key[0]? 0x88888888 : 0),
     (settings->igc_key[1]? 0x88888888 : 0),
@@ -1819,7 +2011,7 @@ PSTR("<html>\
 void handleNotFound() {
 
   String message = "File Not Found\n\n";
-  message += "URI: ";
+  message += "URI: /SD";
   message += server.uri();
   message += "\nMethod: ";
   message += ( server.method() == HTTP_GET ) ? "GET" : "POST";
@@ -1840,17 +2032,228 @@ bool handleFileRead(String path) { // send the requested file to the client (if 
     return false;
   if (! path.startsWith("/"))
     path = "/" + path;
-  String contentType = "application/x-object";             // fake the MIME type
+  char buf[40];
+  //size_t slash = path.find_last_of("/");
+  //slash = ((slash == std::string::npos)? 0 : slash+1);
+  // - can't seem to make that compile, so roll our own:
+  const char *cp = path.c_str();
+  int slash = strlen(cp);
+  while (slash > 0) {
+      if (cp[slash-1] == '/')
+          break;
+      --slash;
+  }
+  cp += slash;    // point to after the last slash
+  snprintf(buf, 40, "attachment; filename=%s", cp);
+  String contentType = "application/octet-stream";
   if (SPIFFS.exists(path)) {                               // If the file exists
-    File file = SPIFFS.open(path, "r");                    // Open the file
-    size_t sent = server.streamFile(file, contentType);    // Send it to the client
-    file.close();                                          // Close the file again
-    Serial.println(String(F("\tSent file: ")) + path);
+    File file = SPIFFS.open(path, FILE_READ);              // Open the file
+    if (file) {
+      server.sendHeader("Content-Type", contentType);
+      server.sendHeader("Content-Disposition", buf);
+      server.sendHeader("Connection", "close");
+      size_t sent = server.streamFile(file, contentType);    // Send it to the client
+      file.close();
+    }
+    Serial.println(String(F("\tSent file: SPIFFS")) + path);
     return true;
   }
+#if defined(USE_SD_CARD)
+  // if not found in SPIFFS, look on SD card
+  if (SD.exists(path)) {
+    File file = SD.open(path, FILE_READ);
+    if (file) {
+      server.sendHeader("Content-Type", contentType);
+      server.sendHeader("Content-Disposition", buf);
+      server.sendHeader("Connection", "close");
+      size_t sent = server.streamFile(file, contentType);
+      file.close();
+    }
+    Serial.println(String(F("\tSent file: SD")) + path);
+    return true;
+  }
+#endif
   Serial.println(String(F("\tFile Not Found: ")) + path);
   return false;
 }
+
+#if defined(USE_SD_CARD)
+
+// list files in SD/logs/
+int igc2num(char c)
+{
+    if (c >= '0' && c <= '9')
+        return (c - '0');
+    if (c >= 'A' && c <= 'Z')
+        return (c - 'A' + 10);
+    return 0;
+}
+#define FILELSTSIZ 8000
+void handleListLogs()
+{
+  if (ThisAircraft.airborne==0) {
+      closeFlightLog();
+      closeSDlog();
+  }
+  File root = SD.open("/logs");
+  if (! root) {
+      Serial.println(F("Cannot open SD/logs"));
+      server.send ( 200, "text/html", "(cannot open SD/logs)");
+      return;
+  }
+  char *filelist = (char *) malloc(FILELSTSIZ);
+  if (! filelist) {
+      Serial.println(F("cannot allocate memory for file list"));
+      server.send ( 200, "text/html", "(cannot allocate memory for file list)");
+      root.close();
+      return;
+  }
+  Serial.println(F("Files in SD/logs:"));
+  snprintf(filelist, FILELSTSIZ, "Files in SD/logs:<br>");
+  int nfiles = 0;
+  File file = root.openNextFile();
+  while(file){
+    if(!file.isDirectory()){
+      Serial.print("  ");
+      const char *fn = file.name();
+      Serial.print(fn);
+      Serial.print("  [");
+      Serial.print(file.size());
+      Serial.println(" bytes]");
+      String file_name = fn;
+      int len = strlen(filelist);
+      if (len < FILELSTSIZ-130) {
+        if (file_name.endsWith(".IGC")) {
+          snprintf(filelist+len, FILELSTSIZ-len,
+             "&nbsp;&nbsp;<a href=\"/logs/%s\">%s</a>&nbsp;&nbsp;[202%d-%02d-%02d]&nbsp;&nbsp;[%d bytes]<br>",
+                   fn, fn, igc2num(fn[0]), igc2num(fn[1]), igc2num(fn[2]), file.size());
+        } else {
+          snprintf(filelist+len, FILELSTSIZ-len,
+             "&nbsp;&nbsp;<a href=\"/logs/%s\">%s</a>&nbsp;&nbsp;&nbsp;&nbsp;[%d bytes]<br>",
+                   fn, fn, file.size());
+        }
+      } else {
+        Serial.println("... and more ...");
+        snprintf(filelist+len, FILELSTSIZ-len, "... and more ...<br>");
+        break;
+      }
+      ++nfiles;
+    }
+    yield();
+    file = root.openNextFile();
+  }
+  if (nfiles == 0) {
+      Serial.println("  (none)");
+      int len = strlen(filelist);
+      snprintf(filelist+len, FILELSTSIZ-len, "&nbsp;&nbsp;(none)<br>");
+  }
+  file.close();
+  root.close();
+  server.send ( 200, "text/html", filelist);
+  free(filelist);
+}
+
+bool handleFlightLogs(bool trash)
+{
+    bool leftover = false;
+    closeSDlog();
+    closeFlightLog();
+    char *filelist = (char *) malloc(FILELSTSIZ);
+    if (! filelist) {
+        Serial.println("cannot allocate memory for file list");
+        return false;
+    }
+    filelist[FILELSTSIZ-1] = '\0';
+    int nfiles = 0;
+    char *cp = filelist;
+    File root = SD.open(trash? "/logs/old" : "/logs");
+    if (! root) {
+        if (trash) {
+            Serial.println(F("Cannot open SD/logs/old"));
+            server.send ( 200, "text/html", "(cannot open SD/logs/old)");
+        } else {
+            Serial.println(F("Cannot open SD/logs"));
+            server.send ( 200, "text/html", "(cannot open SD/logs)");
+        }
+        return false;
+    }
+    if (trash)
+        Serial.println(F("deleting old flight logs..."));
+    else
+        Serial.println(F("clearing flight logs..."));
+    File file = root.openNextFile();
+    String file_name;
+    while(file){
+        file_name = file.name();
+        if (file_name.endsWith(".IGC") || file_name.endsWith(".igc")) {
+            int len = cp - filelist;
+            if (len < FILELSTSIZ-80) {
+                *cp++ = ((!trash && file.size()>4000)? '1' : '0');
+                strcpy(cp, file.name());
+                Serial.print("  ");
+                Serial.println(cp);
+                cp += strlen(cp) + 1;
+                ++nfiles;
+            } else {
+                leftover = true;
+            }
+        }
+        yield();
+        file = root.openNextFile();
+    }
+    file.close();
+    root.close();
+    *cp = '\0';      // signals no more files (besides the count in nfiles)
+    cp = filelist;   // rewind list
+    String logpath, oldpath;
+    while (nfiles > 0 && *cp) {
+        bool move = (*cp++ == '1');
+        size_t len = strlen(cp);
+        logpath = "/logs/";
+        logpath += cp;
+        oldpath = "/logs/old/";
+        oldpath += cp;
+        if (move) {            // move large files
+            if (SD.rename(logpath,oldpath))
+                Serial.print("moved: ");
+            else
+                Serial.print("failed to move: ");
+        } else {              // delete small (or old) files
+            if (SD.remove(trash? oldpath : logpath))
+                Serial.print("removed: ");
+            else
+                Serial.print("failed to remove: ");
+        }
+        Serial.println(cp);
+        cp += len + 1;
+        --nfiles;
+        yield();
+    }
+    free(filelist);
+    if (trash)
+        server.send ( 200, "text/html", "old flight logs deleted");
+    else
+        server.send ( 200, "text/html", "flight logs cleared");
+    return leftover;
+}
+
+void handleClearLogs()
+{
+    bool leftover = true;
+    while (leftover) {
+        leftover = handleFlightLogs(false);
+    }
+}
+
+void handleClearOldLogs()
+{
+    bool leftover = true;
+    while (leftover) {
+        leftover = handleFlightLogs(true);
+    }
+}
+
+#endif   // SD_CARD
 
 void serve_P_html(const char *html)
 {
@@ -1876,8 +2279,6 @@ void Web_setup()
     serve_P_html(about_html);
   } );
 
-#if defined(ESP32)
-
   server.on( "/gps_reset", []() {
     Serial.println(F("Factory Reset GNSS..."));
     gnss_needs_reset = true;
@@ -1889,13 +2290,24 @@ void Web_setup()
   } );
 
   server.on ( "/wavupload", []() {
-    serve_P_html(upload_html);
+    serve_P_html(wav_upload_html);
   } );
 
   server.on("/dowavupld", HTTP_POST,  // if the client posts to the upload page
     [](){ server.send(200); },        // Send 200 to tell the client we are ready to receive
     wavUpload                         // Receive and save the file
   );
+
+#if defined(USE_SD_CARD)
+  server.on ( "/logupload", []() {
+    serve_P_html(log_upload_html);
+  } );
+
+  server.on("/dologupld", HTTP_POST,  // if the client posts to the upload page
+    [](){ server.send(200); },        // Send 200 to tell the client we are ready to receive
+    logUpload                         // Receive and save the file
+  );
+#endif
 
   server.on( "/format", []() {
     clear_waves();
@@ -1916,12 +2328,18 @@ void Web_setup()
     }
     server.send(200, textplain, "Alarm Log cleared");
   } );
+
+#if defined(USE_SD_CARD)
+  server.on ( "/listlogs", handleListLogs );
+  server.on ( "/flightlog", flightlogfile );
+  server.on ( "/clearlogs", handleClearLogs );
+  server.on ( "/clearoldlogs", handleClearOldLogs );
 #endif
 
   server.on ( "/input", handleInput );
 
-  server.onNotFound([]() {                              // If the client requests any URI
-    if (!handleFileRead(server.uri()))                  // send it if it exists
+  server.onNotFound([]() {                          // If the client requests any URI
+    if (!handleFileRead(server.uri()))              // send it if it exists
         handleNotFound();
   });
 
@@ -1961,6 +2379,7 @@ void Web_setup()
 
   server.on("/update", HTTP_POST, [](){
     SoC->swSer_enableRx(false);
+    closeFlightLog();
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), "*");
     server.send(200, textplain, (Update.hasError())?"UPDATE FAILED":"UPDATE DONE, REBOOTING");
@@ -1980,25 +2399,19 @@ void Web_setup()
       Serial.printf("Update: %s\r\n", upload.filename.c_str());
       uint32_t maxSketchSpace = SoC->maxSketchSpace();
       if (Update.begin(maxSketchSpace)) {   //start with max available size
-#if defined(ESP32)
         blue_LED_1hz();
         OLED_msg("UPDATE", "...");
-#endif
       } else {
         Update.printError(Serial);
-#if defined(ESP32)
         blue_LED_4hz();
         OLED_msg("UPDATE", "FAILED");
-#endif
         Serial.println("update.begin failed");
       }
     } else if(upload.status == UPLOAD_FILE_WRITE){
       if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
         Update.printError(Serial);
-#if defined(ESP32)
         blue_LED_4hz();
         OLED_msg("UPDATE", "FAILED");
-#endif
         Serial.println("\r\nupdate.write failed");
       } else {
         static uint16_t i = 0;
@@ -2010,25 +2423,19 @@ void Web_setup()
           if ((j & 31) == 0)
               Serial.print("\r\n");
           char buf[8];
-#if defined(ESP32)
           snprintf(buf,7,"..%d..",j);
           OLED_msg("UPDATE", buf);
-#endif
         }
       }
     } else if(upload.status == UPLOAD_FILE_END){
       if(Update.end(true)){ //true to set the size to the current progress
         Serial.printf("\r\nUpdate Success: %u\r\nRebooting...\r\n", upload.totalSize);
-#if defined(ESP32)
         blue_LED_on();
         OLED_msg("UPDATE", "SUCCESS");
-#endif
       } else {
         Update.printError(Serial);
-#if defined(ESP32)
         blue_LED_4hz();
         OLED_msg("UPDATE", "FAILED");
-#endif
         Serial.println("\r\nupdate.end failed");
       }
       Serial.setDebugOutput(false);
@@ -2061,5 +2468,11 @@ void Web_fini()
 {
   server.stop();
 }
+
+#else
+void Web_setup()    {}
+void Web_loop()     {}
+void Web_fini()     {}
+#endif /* ESP32 */
 
 #endif /* EXCLUDE_WIFI */

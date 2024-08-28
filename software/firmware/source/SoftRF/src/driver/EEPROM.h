@@ -125,6 +125,23 @@ enum
 	EXT_GNSS_15_14
 };
 
+enum
+{
+	SD_CARD_NONE=0,   // SCK, MISO, MOSI, SS
+	SD_CARD_13_25,    // SD card on 13,25,2,0
+	SD_CARD_13_VP,    // SD card on 13,VP,2,0
+	SD_CARD_LORA      // SD card on 5,19,27,0
+};
+
+enum
+{
+	FLIGHT_LOG_NONE=0,
+	FLIGHT_LOG_ALWAYS,
+	FLIGHT_LOG_AIRBORNE,
+	FLIGHT_LOG_RSVD
+};
+#define FLIGHT_LOG_INTERVAL 4   // seconds
+
 typedef struct __attribute__((packed)) Settings {
 
     uint8_t  mode:4;            // do not move
@@ -160,7 +177,9 @@ typedef struct __attribute__((packed)) Settings {
     bool     alarm_demo:1;
 
     uint8_t  gnss_pins:2;    // external GNSS added to T-Beam  // do not move
-    uint8_t  resvd3:6;
+    uint8_t  sd_card:2;
+    uint8_t  logflight:2;
+    uint8_t  resvd3:2;
 
     int8_t   freq_corr; /* +/-, kHz */   // do not move
     uint8_t  relay:2;

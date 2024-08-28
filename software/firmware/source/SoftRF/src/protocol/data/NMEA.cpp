@@ -39,6 +39,9 @@
 #include "../../driver/Strobe.h"
 #endif
 #include "../../driver/Bluetooth.h"
+#if defined(USE_SD_CARD)
+#include "../../driver/SDcard.h"
+#endif
 #include "../../TrafficHelper.h"
 
 #define ADDR_TO_HEX_STR(s, c) (s += ((c) < 0x10 ? "0" : "") + String((c), HEX))
@@ -271,26 +274,41 @@ static char *ltrim(char *s)
   return s;
 }
 
-void NMEA_add_checksum(char *buf, size_t limit)
+unsigned int NMEA_add_checksum()
 {
-  size_t sentence_size = strlen(buf);
+//Serial.print("NMEA_add_checksum(): '");
+//Serial.print(NMEABuffer);
 
-  //calculate the checksum
+  //calculate the checksum - get sentence length as a side effect
+  unsigned int n;
+  char c;
   unsigned char cs = 0;
-  for (unsigned int n = 1; n < sentence_size - 1; n++) {
-    cs ^= buf[n];
+  for (n = 1; n < sizeof(NMEABuffer) - 5; n++) {
+    c = NMEABuffer[n];
+    if (c == '*')
+        break;
+    if (c == '\0')
+        break;
+    cs ^= c;
   }
-
-  char *csum_ptr = buf + sentence_size;
-  snprintf_P(csum_ptr, limit, PSTR("%02X\r\n"), cs);
+//Serial.print("' - n:");
+//Serial.println(n);
+  if (c == '*') {
+      char *csum_ptr = &NMEABuffer[n+1];
+      snprintf_P(csum_ptr, 5, PSTR("%02X\r\n"), cs);
+//Serial.print("checksum added: ");
+//Serial.print(NMEABuffer);
+      return (n + 5);
+  }
+  return 0;
 }
 
 void sendPFLAJ()
 {
     snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAJ,A,%d,%d,0*"),
                  ThisAircraft.airborne, ThisAircraft.airborne);
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 24);
-    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+    int nmealen = NMEA_add_checksum();
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
 }
 
 // send self-test and version sentences out, imitating a FLARM
@@ -312,14 +330,14 @@ void sendPFLAV(bool nowait)
       uint32_t pps = SoC->get_PPS_TimeMarker();
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAE,A,0,0%s*"),
           (pps > 0 && millis()-pps < 2000)? ",PPS received" : "");
-      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 24);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+      int nmealen = NMEA_add_checksum();
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
     }
     if (nowait || timebits == 0x60) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PFLAV,A,2.4,7.24,%s-%s*"),
                    SOFTRF_IDENT, SOFTRF_FIRMWARE_VERSION);  // our version in obstacle db text field
-      NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - 48);
-      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+      int nmealen = NMEA_add_checksum();
+      NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
     }
 //  if (nowait || timebits == 0x00 || timebits == 0x40) {    // every 64 seconds
 //      sendPFLAJ();
@@ -360,10 +378,16 @@ void NMEA_setup()
         uint8_t rx_pin = Serial2RxPin;   // VN
         if (hw_info.revision < 8)
             rx_pin = Serial0AltRxPin;    // VP
-        Serial2.begin(Serial2Baud, SERIAL_8N1, rx_pin, Serial2TxPin, settings->invert2);
-        has_serial2 = true;
-        Serial.printf("Serial2 started on pins %d,%d at baud rate %d, logic:%d\r\n",
+        const char *label = "Aux Serial";
+        if (settings->rx1090)
+            label = "ADS-B Module";
+        if (ESP32_pin_reserved(rx_pin, false, label) == false
+         && ESP32_pin_reserved(Serial2TxPin, false, label) == false) {
+            Serial2.begin(Serial2Baud, SERIAL_8N1, rx_pin, Serial2TxPin, settings->invert2);
+            has_serial2 = true;
+            Serial.printf("Serial2 started on pins %d,%d at baud rate %d, logic:%d\r\n",
                rx_pin, Serial2TxPin, Serial2Baud, settings->invert2);
+        }
     }
   }
 #endif
@@ -838,8 +862,8 @@ void NMEA_loop()
     snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PGRMZ,%d,f,%c*"),
                altitude, isValidGNSSFix() ? '3' : '1'); /* feet , 3D fix */
 
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, strlen(NMEABuffer), false);
+    unsigned int nmealen = NMEA_add_checksum();
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, nmealen, false);
 
 #if !defined(EXCLUDE_LK8EX1)
     char str_Vcc[6];
@@ -851,8 +875,8 @@ void NMEA_loop()
             constrain((int) Baro_temperature(), -99, 98),                  /* deg. C */
             str_Vcc);
 
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, strlen(NMEABuffer), false);
+    nmealen = NMEA_add_checksum();
+    NMEA_Outs(settings->nmea_s, settings->nmea2_s, NMEABuffer, nmealen, false);
 
 #endif /* EXCLUDE_LK8EX1 */
 
@@ -1144,8 +1168,8 @@ void NMEA_Export()
             course, speed, ltrim(str_climb_rate), fop->aircraft_type
             PFLAA_EXT1_ARGS );
 #endif
-         NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-         NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+         unsigned int nmealen = NMEA_add_checksum();
+         NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
 
         //}  /* done skipping the HP object */
 
@@ -1229,8 +1253,19 @@ void NMEA_Export()
                 PFLAU_EXT1_ARGS );
     }
 
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+    unsigned int nmealen = NMEA_add_checksum();
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
+
+//#if defined(USE_SD_CARD)
+#if 0
+if (settings->debug_flags) {
+    nmealen -= 2;   // overwrite existing \r\n
+    snprintf_P(NMEABuffer+nmealen, sizeof(NMEABuffer)-nmealen, " at %02d:%02d:%02d\r\n",
+         gnss.time.hour(), gnss.time.minute(), gnss.time.second());
+    Serial.print(NMEABuffer);
+    SD_log(NMEABuffer);
+}
+#endif
 
     static int beatcount = 0;
     if (++beatcount < 10)
@@ -1242,8 +1277,8 @@ void NMEA_Export()
             PSTR("$PSRFH,%06X,%d,%d,%d,%d,%d*"),
             ThisAircraft.addr,settings->rf_protocol,
             rx_packets_counter,tx_packets_counter,(int)(voltage*100),ESP.getFreeHeap());
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
-    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+    nmealen = NMEA_add_checksum();
+    NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
 
     if (settings->debug_flags & DEBUG_RESVD1) {
@@ -1384,6 +1419,7 @@ void NMEA_GGA()
 
   if (gen_sz) {
     strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
+    GPGGA_Copy[gen_sz] = '\0';
     NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
   }
 }
@@ -1403,13 +1439,13 @@ void NMEA_GGA()
 
 void nmea_cfg_send()
 {
-    NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer) - strlen(NMEABuffer));
+    unsigned int nmealen = NMEA_add_checksum();
 #if defined(USE_NMEA_CFG)
     uint8_t dest = NMEA_Source;           // answer the config source
 #else
     uint8_t dest = settings->nmea_out;    // is nmea_cfg_send() called?
 #endif /* USE_NMEA_CFG */
-    NMEA_Out(dest, NMEABuffer, strlen(NMEABuffer), false);
+    NMEA_Out(dest, NMEABuffer, nmealen, false);
 }
 
 static void nmea_cfg_restart()

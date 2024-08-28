@@ -675,8 +675,8 @@ Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
     if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
         aircraft_type = AIRCRAFT_TYPE_STATIC;
         pkt->airborne = 2;
-    } else if (millis() - SetupTimeMarker < 60000) {
-        pkt->airborne = 2;    /* post-boot testing */
+  //} else if (millis() - SetupTimeMarker < 60000) {
+  //    pkt->airborne = 2;    /* post-boot testing */
     } else if (aircraft->airborne == 0) {
         pkt->airborne = 1;
     } else if (aircraft->circling != 0 && fabs(aircraft->turnrate) > 6.0) {
@@ -822,7 +822,8 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
       else
           project_this(aircraft);       /* which also calls airborne() */
       if (millis() - SetupTimeMarker < 60000) {
-          pkt->airborne = 1;    /* post-boot testing */
+        //pkt->airborne = 1;    /* post-boot testing */
+          pkt->airborne = aircraft->airborne;
       } else {
           pkt->airborne = aircraft->airborne;
       }

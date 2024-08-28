@@ -16,15 +16,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "system/SoC.h"
 #include "TrafficHelper.h"
 #include "protocol/radio/Legacy.h"
 #include "protocol/data/NMEA.h"
+#include "protocol/data/IGC.h"
 #include "ApproxMath.h"
 #include "Wind.h"
 #include "driver/EEPROM.h"
 #include "driver/GNSS.h"
 #include "driver/RF.h"
-
+#include "driver/SDcard.h"
 
 float wind_best_ns = 0.0;  /* mps */
 float wind_best_ew = 0.0;
@@ -67,6 +69,9 @@ void Estimate_Wind()
   if (new_time == old_time)
     return;
 
+  // this function is called every 666 ms
+  // but a new GNSS reading is only once per second
+
   /* recover from GPS outage */
   if (new_time - old_time > 3000) {
      old_time = new_time;
@@ -78,8 +83,8 @@ void Estimate_Wind()
 
   old_time = new_time;
 
-  project_this(&ThisAircraft);
-  float turnrate = ThisAircraft.turnrate;  /* was computed in project_this() */
+  project_this(&ThisAircraft);              // which also calls this_airborne()
+  float turnrate = ThisAircraft.turnrate;  // was computed in project_this()
   float course_change, interval;
 
   if (ThisAircraft.circling == 0) { /* not considered in a stable circle */
@@ -410,16 +415,17 @@ void this_airborne()
     if (speed < 1.0) {
 
       if (airborne > 0) {
-        --airborne;
-        /* after 50 calls (~20 sec if consecutive)
+        airborne -= 2;
+        /* after 30 calls (~30 sec if consecutive)
            with speed < 1 knot consider it a landing */
+        // if alternating between >1kt and <1kt the -=2 will win over the ++
       } else /* not airborne */ {
         /* if had some speed and then stopped - reset to -4 again */
         airborne = -4;
         initial_latitude = 0;
       }
 
-    } else if (airborne < 0) {    /* not airborne but moving with speed > 1 knot */
+    } else if (airborne <= 0) {    /* not airborne but moving with speed > 1 knot */
 
       if (GNSSTimeMarker > 0 && ThisAircraft.prevtime_ms > 0) {  /* had fix for a while */
 
@@ -442,9 +448,13 @@ void this_airborne()
             }
             prevspeed = speed;
             if (airborne > 0)    /* consistently good indications */
-                 airborne = 50;  /* now really airborne */
+                 airborne = 60;  /* now really airborne */
         }
       }
+
+    } else if (airborne < 60) {    /* airborne and moving with speed > 1 knot */
+
+        ++airborne;  // so multiple momentary hovers will not accumulate to a "landing"
 
     }
 
@@ -473,6 +483,10 @@ void this_airborne()
             Serial.println(F("Failed to start SPIFFS"));
         }
       }
+#if defined(USE_SD_CARD)
+      if (settings->logflight == FLIGHT_LOG_AIRBORNE)
+          openFlightLog();
+#endif
 #endif
     } else if (ThisAircraft.airborne==1 && airborne<=0) {
       airborne_changed = true;
@@ -481,6 +495,10 @@ void this_airborne()
       // close the alarm log after landing
       AlarmLog.close();
       AlarmLogOpen = false;
+#if defined(USE_SD_CARD)
+      if (settings->logflight == FLIGHT_LOG_AIRBORNE)
+          closeFlightLog();
+#endif
 #endif
     }
 
@@ -491,12 +509,19 @@ void this_airborne()
         sendPFLAJ();
     }
 
-    if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_PROJECTION)) {
+    if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags /* & DEBUG_PROJECTION */ )) {
       if (airborne != was_airborne) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-          PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.1f\r\n"),
+          PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.0f\r\n"),
             airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
         NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+#if defined(USE_SD_CARD)
+        int nmealen = strlen(NMEABuffer) - 2;   // overwrite existing \r\n
+        snprintf_P(NMEABuffer+nmealen, sizeof(NMEABuffer)-nmealen, " at %02d:%02d:%02d\r\n",
+             gnss.time.hour(), gnss.time.minute(), gnss.time.second());
+        Serial.print(NMEABuffer);
+        SD_log(NMEABuffer);
+#endif
       }
     }
 }

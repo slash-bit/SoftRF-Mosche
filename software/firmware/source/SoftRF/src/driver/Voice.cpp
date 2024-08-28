@@ -322,6 +322,12 @@ void Voice_setup(void)
   if (settings->voice == VOICE_OFF)
       return;
 
+  if (SOC_GPIO_PIN_VOICE == SOC_UNUSED_PIN)
+      return;
+
+  if (ESP32_pin_reserved(SOC_GPIO_PIN_VOICE, false, "Voice"))
+      return;
+
   if (settings->gnss_pins == EXT_GNSS_15_14) {
       if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
           settings->voice = VOICE_OFF;   // on v0.7 will use pin 25 for input from GNSS
@@ -332,6 +338,10 @@ void Voice_setup(void)
   if (settings->voice == VOICE_EXT) {
       Buzzer_fini();
       settings->volume = BUZZER_OFF;   // free up pins 14 & 15
+      if (ESP32_pin_reserved(SOC_GPIO_PIN_BUZZER, false, "Voice I2S"))
+          return;
+      if (ESP32_pin_reserved(SOC_GPIO_PIN_BUZZER2, false, "Voice I2S"))
+          return;
   }
 
   i2s_installed = setup_i2s();

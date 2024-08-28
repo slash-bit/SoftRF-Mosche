@@ -223,36 +223,46 @@ void Time_loop()
         return;       /* time still handled in RF.cpp RF_SetChannel() */
 
     uint32_t gnss_age = gnss.time.age();
-    uint32_t last_Commit_Time = now_ms - gnss_age;
+    uint32_t latest_Commit_Time = now_ms - gnss_age;
     bool newfix = false;
     
     uint32_t pps_btime_ms;
     uint32_t newtime;
-    uint32_t time_corr_neg;
+    uint32_t time_corr_neg;   // ms from PPS to commit_time
+
+// also compute as if PPS not available, for a test
+uint32_t no_pps_corr;
+uint32_t no_pps_time;
 
     if (isValidFix()) {
 
         pps_btime_ms = SoC->get_PPS_TimeMarker();
         if (pps_btime_ms > 0) {
-          if (now_ms > pps_btime_ms + 1010)
-            pps_btime_ms += 1000;
+          if (latest_Commit_Time < pps_btime_ms)
+            pps_btime_ms -= 1000;
           newtime = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION;   /* seems to receive FLARM better */
+          time_corr_neg = latest_Commit_Time - pps_btime_ms;
+
+no_pps_corr = gnss_chip ? gnss_chip->rmc_ms : 100;
+no_pps_time = latest_Commit_Time - no_pps_corr;
+
         } else {   /* PPS not available */
           time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
-          newtime = last_Commit_Time - time_corr_neg;
+          newtime = latest_Commit_Time - time_corr_neg;
         }
     
         if (gnss_age < 2500 && newtime > base_time_ms) {
             static uint32_t lasttime_ms = 0;
-            if (last_Commit_Time - lasttime_ms > 150) {     /* new data arrived from GNSS */
+            if ((pps_btime_ms == 0 || latest_Commit_Time > pps_btime_ms)
+             && latest_Commit_Time > lasttime_ms + 400) {     /* new data arrived from GNSS */
                 newfix = true;
-                lasttime_ms = last_Commit_Time;
-                //if (settings->debug_flags & DEBUG_FAKEFIX) {
-                //    Serial.print("New fix at: ");
-                //    Serial.print(now_ms - pps_btime_ms);                   
-                //    Serial.print(" ms after PPS at: ");
-                //    Serial.println(pps_btime_ms);
-                //}
+                lasttime_ms = latest_Commit_Time;
+                if (settings->debug_flags & DEBUG_FAKEFIX) {
+                    Serial.print("New fix at: ");
+                    Serial.print(now_ms - pps_btime_ms);                   
+                    Serial.print(" ms after PPS at: ");
+                    Serial.println(pps_btime_ms);
+                }
             }
         }
     }
@@ -267,22 +277,27 @@ void Time_loop()
     }
 
     if (pps_btime_ms > 0) {
-      if (now_ms > pps_btime_ms + 1010) {
+      if (now_ms > pps_btime_ms + 1000) {
         pps_btime_ms += 1000;
         newtime += 1000;
       }
-      if (pps_btime_ms <= last_Commit_Time) {
-        time_corr_neg = (last_Commit_Time - pps_btime_ms) % 1000;
-      } else {
-        time_corr_neg = 1000 - ((pps_btime_ms - last_Commit_Time) % 1000);
-      }
-      ref_time_ms = base_time_ms = newtime;  // = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION
+      //ref_time_ms = base_time_ms = newtime;  // = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION
       /* the adjusted time seems to better fit actual FLARM time slots */
-    } else {
+
+if (settings->debug_flags & DEBUG_FAKEFIX) {
+//if ((OurTime & 0x03) == 0) {
+int32_t diff = (int32_t)no_pps_time - (int32_t)newtime;
+Serial.print("no-PPS error: ");
+Serial.println(diff);
+//}
+}
+    //} else {
       //uint32_t last_RMC_Commit = now_ms - gnss.date.age();
       //time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
-      ref_time_ms = base_time_ms = newtime;
+      //ref_time_ms = base_time_ms = newtime;
     }
+
+    ref_time_ms = base_time_ms = newtime;
 
     int yr = gnss.date.year();
     if( yr > 99)
@@ -297,7 +312,9 @@ void Time_loop()
     tm.Minute = gnss.time.minute();
     tm.Second = gnss.time.second();
 
-    OurTime = makeTime(tm) + (gnss.time.age() + time_corr_neg) / 1000;
+    OurTime = makeTime(tm);
+    if (gnss_age + time_corr_neg >= 1000)
+        OurTime += 1;
     /* updated ref_time_ms is the other side effect */
 
     /* system clock also gets updated, by GNSSTimeSync() called from GNSS_loop() */

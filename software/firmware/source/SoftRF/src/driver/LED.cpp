@@ -40,21 +40,10 @@ static unsigned long status_LED_TimeMarker = 0;
 
 void LED_setup() {
 
-  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-    if (hw_info.revision < 8) {
-      if (settings->gnss_pins == EXT_GNSS_15_14)   // pin 14 is connected to the red LED
-        return;
-      if (settings->volume != BUZZER_OFF)
-        return;
-    } else {
-      if (settings->gnss_pins == EXT_GNSS_39_4)    // pin 4 is connected to the red LED
-        return;
-      if (settings->baudrate2 != BAUD_DEFAULT)     // Serial2 is using pin 4
-        return;
-      if (settings->rx1090 != ADSB_RX_NONE)
-        return;
-    }
-  }
+#if defined(ESP32)
+  if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+      if (ESP32_pin_reserved(SOC_GPIO_PIN_STATUS, false, "Status LED")) return;
+#endif
 
 #if !defined(EXCLUDE_LED_RING)
   if (SOC_GPIO_PIN_LED != SOC_UNUSED_PIN && settings->pointer != LED_OFF) {

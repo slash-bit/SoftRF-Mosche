@@ -52,11 +52,10 @@ void Strobe_setup(void)
       return;
   StrobePauseMarker = millis();
   StrobePin = SOC_GPIO_PIN_STROBE;
-  if (settings->voice != VOICE_OFF && settings->gnss_pins != EXT_GNSS_15_14) {
+  if (settings->voice != VOICE_OFF) {
       if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
           // (gpio15 not available on T-Beam v0.7)
           settings->strobe = STROBE_OFF;
-          settings->volume = BUZZER_OFF;
           return;
       }
       StrobePin = SOC_GPIO_PIN_BUZZER2;   // use pin 15 instead
@@ -64,6 +63,8 @@ void Strobe_setup(void)
           settings->volume = BUZZER_OFF;
   }
   if (StrobePin == SOC_UNUSED_PIN)
+      return;
+  if (ESP32_pin_reserved(StrobePin, false, "Strobe"))
       return;
 #else
   settings->strobe = STROBE_OFF;
@@ -117,8 +118,8 @@ void Strobe_Start()
     if (settings->nmea_l || settings->nmea2_l) {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRSF,%d*"), NMEAlevel);
-        NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-        NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+        unsigned int nmealen = NMEA_add_checksum();
+        NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
     }
 }
 

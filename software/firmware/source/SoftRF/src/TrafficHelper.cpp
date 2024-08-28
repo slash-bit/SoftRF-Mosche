@@ -29,6 +29,7 @@
 #include "ui/Web.h"
 #include "protocol/radio/Legacy.h"
 #include "protocol/data/NMEA.h"
+#include "protocol/data/IGC.h"
 #include "ApproxMath.h"
 #include "Wind.h"
 
@@ -701,11 +702,13 @@ void AddTraffic(ufo_t *fop)
         if (do_relay)  do_relay = air_relay(fop);
         // this updates fop->timerelayed, to be copied later into container[]
 
-        /* ignore "new" GPS fixes that are exactly the same as before */
+        /* ignore "new" positions that are exactly the same as before */
         if (fop->altitude == cip->altitude &&
             fop->latitude == cip->latitude &&
             fop->longitude == cip->longitude) {
-                cip->timerelayed = fop->timerelayed;
+                cip->last_crc    = fop->last_crc;      // so 2nd time slot packet will be ignored
+                cip->timestamp   = fop->timestamp;     // so it won't expire
+                cip->timerelayed = fop->timerelayed;   // in case relayed above
                 return;
         }
 
@@ -969,8 +972,8 @@ void Traffic_loop()
       if (settings->nmea_l || settings->nmea2_l) {
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSRAA,%d*"), sound_alarm_level-1);
-          NMEA_add_checksum(NMEABuffer, sizeof(NMEABuffer)-10);
-          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, strlen(NMEABuffer), false);
+          unsigned int nmealen = NMEA_add_checksum();
+          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
       }
       if (mfop != NULL) {
         // if (notified)
@@ -990,8 +993,14 @@ void Traffic_loop()
           int day   = gnss.date.day();
           // $GPGGA,235317.00,4003.90395,N,10512.57934,W,...
           char *cp = &GPGGA_Copy[7];   // after the "$GPGGA,", start of timestamp
-          GPGGA_Copy[43] = '\0';       // overwrite the comma after the "E" or "W"
-Serial.print("GGA timestamp: ");
+          char *ep = &GPGGA_Copy[35];
+          while (*ep != 'E' && *ep != 'W') {
+              if (ep > &GPGGA_Copy[48])  break;
+              ++ep;
+          }
+          ++ep;
+          *ep = '\0';       // overwrite the comma after the "E" or "W"
+Serial.print("GGA time & position: ");
 Serial.println(cp);
           int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
           rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
@@ -1008,6 +1017,13 @@ Serial.println(NMEABuffer);
               AlarmLog.close();
               AlarmLogOpen = false;
           }
+#if defined(USE_SD_CARD)
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+              PSTR("ALARM %d,%d,%06x,%d,%d,%d\r\n"),
+              mfop->alarm_level-1, alarmcount, mfop->addr,
+              rel_bearing, (int)mfop->distance, (int)mfop->alt_diff);
+          FlightLogComment(NMEABuffer);
+#endif
         }
 #endif
       }

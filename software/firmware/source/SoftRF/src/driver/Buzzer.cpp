@@ -75,12 +75,17 @@ void Buzzer_setup(void)
 {
   if (settings->volume == BUZZER_OFF)
       return;
-  if (settings->gnss_pins == EXT_GNSS_15_14) {
+
+  buzzer1pin = SOC_GPIO_PIN_BUZZER;
+  if (buzzer1pin == SOC_UNUSED_PIN) {
+      settings->volume = BUZZER_OFF;
+      return;
+  }
+  if (ESP32_pin_reserved(buzzer1pin, false, "Buzzer")) {
       settings->volume = BUZZER_OFF;
       return;
   }
 
-  buzzer1pin = SOC_GPIO_PIN_BUZZER;
   buzzer2pin = SOC_GPIO_PIN_BUZZER2;
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && hw_info.revision < 8) {
       buzzer2pin = SOC_GPIO_PIN_VOICE;
@@ -95,13 +100,15 @@ void Buzzer_setup(void)
   }
 
   if (settings->volume == BUZZER_EXT) {
-      if (buzzer1pin == SOC_UNUSED_PIN)
-          return;
       pinMode(buzzer1pin, OUTPUT);
       ext_buzzer(true);   // turn buzzer on briefly for self-test
       delay(200);
       ext_buzzer(false);
   } else {
+      if (ESP32_pin_reserved(buzzer2pin, false, "Buzzer")) {
+          settings->volume = BUZZER_OFF;
+          return;
+      }
       toneAC_setup(buzzer2pin, buzzer1pin);
       volume = (settings->volume == BUZZER_VOLUME_LOW ? 8 : 10);
   }
