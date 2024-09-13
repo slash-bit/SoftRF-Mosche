@@ -124,7 +124,7 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
             i++;
         }
         RXbuffer[i] = '\0';
-//if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_FAKEFIX)) {
+//if ((settings->nmea_d || settings->nmea2_d)  && (settings->debug_flags & DEBUG_DEEPER)) {
 //Serial.print("TCP>");
 //Serial.print(RXbuffer);
 //}
@@ -137,7 +137,7 @@ static int WiFi_receive_TCP(char* RXbuffer, int RXbuffer_size)
 static void WiFi_flush_TCP()
 {
 static bool db;
-//db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_FAKEFIX));
+//db = ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_DEEPER));
     if (client.connected())
     {
 //if (db && client.available())
@@ -1274,14 +1274,14 @@ if (settings->debug_flags) {
 
 #if !defined(EXCLUDE_SOFTRF_HEARTBEAT)
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-            PSTR("$PSRFH,%06X,%d,%d,%d,%d,%d*"),
+            PSTR("$PSRFH,%06X,%d,%d,%d,%d,%d,%d*"),
             ThisAircraft.addr,settings->rf_protocol,
-            rx_packets_counter,tx_packets_counter,(int)(voltage*100),ESP.getFreeHeap());
+            rx_packets_counter,tx_packets_counter,millis(),(int)(voltage*100),ESP.getFreeHeap());
     nmealen = NMEA_add_checksum();
     NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
 
-    if (settings->debug_flags & DEBUG_RESVD1) {
+    if (settings->debug_flags & DEBUG_DEEPER) {
         Serial.printf("ThisAircraft.baro_alt_diff = %.0f\r\n", ThisAircraft.baro_alt_diff);
         Serial.printf("OthAcfts Avg baro_alt_diff = %.0f\r\n", average_baro_alt_diff);
     }

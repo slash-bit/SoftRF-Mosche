@@ -368,7 +368,7 @@ static size_t makeHeartbeat(uint8_t *buf)
 static size_t makeType10and20(uint8_t *buf, uint8_t id, ufo_t *aircraft)
 {
 // >>>  generate output for testing - report ownship as traffic
-  if (settings->debug_flags & DEBUG_FAKEFIX)
+  if (settings->debug_flags & DEBUG_SIMULATE)
       id = GDL90_TRAFFIC_MSG_ID;
 
   uint8_t *ptr = buf;

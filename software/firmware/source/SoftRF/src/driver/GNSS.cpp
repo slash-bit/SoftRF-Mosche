@@ -23,10 +23,11 @@
 #endif
 #include <TimeLib.h>
 
+#include "../system/SoC.h"
 #include "GNSS.h"
 #include "EEPROM.h"
+#include "SDcard.h"
 #include "../protocol/data/NMEA.h"
-#include "../system/SoC.h"
 #include "WiFi.h"
 #include "RF.h"
 #include "Battery.h"
@@ -626,14 +627,17 @@ Serial.println("... re-sending UBX command");
       GNSS_DEBUG_PRINT(c, HEX);
 
       if (ubloxProcessData(c)) {
-        if (ubloxClass == requestedClass && ubloxId == requestedID)
+        if (ubloxClass == requestedClass && ubloxId == requestedID) {
+            GNSS_cnt = 0;
             return true;
+        }
       }
     }
 
     waittime = (millis() - startTime);
   }
 
+  GNSS_cnt = 0;
   return false;
 }
 
@@ -1346,8 +1350,8 @@ bool leap_seconds_valid()
 
 bool isValidGNSSFix()
 {
-  if (settings->debug_flags & DEBUG_FAKEFIX)
-      return true;   // for testing
+  //if (settings->debug_flags & DEBUG_SIMULATE)
+  //    return true;   // for testing
   if (! GNSS_fix_cache)
       return false;
   return true;
@@ -1476,6 +1480,8 @@ byte GNSS_setup() {
   NMEA_Source = DEST_NONE;
 //#endif /* USE_NMEA_CFG */
 
+  GNSS_cnt = 0;
+
   return (byte) gnss_id;
 }
 
@@ -1560,6 +1566,12 @@ void GNSSTimeSync()
 bool Try_GNSS_sentence() {
     int ndx;
     bool isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
+
+//if (isValidSentence)
+//Serial.printf(">[%d] %c\r\n", GNSS_cnt, GNSSbuf[GNSS_cnt]);
+//else
+//Serial.printf(" [%d] %c\r\n", GNSS_cnt, GNSSbuf[GNSS_cnt]);
+
     if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
       NMEA_Source = DEST_NONE;
       if (settings->nmea_g || settings->nmea2_g) {
@@ -1614,6 +1626,56 @@ void PickGNSSFix()
   int c = -1;
 
   if (is_prime_mk2) {
+
+    if (settings->debug_flags & DEBUG_SIMULATE) {
+      // read simulated GNSS sentences from either a file or the main serial port
+      static uint32_t burst_start = 0;
+      static uint32_t next_burst = 30000;   // start sim running 30s after boot
+      while (true) {
+#if defined(USE_SD_CARD)
+        if (SIMfileOpen) {
+          if (millis() < next_burst)     // pause until next simulated second
+            return;
+          if (!SIMfile.available())
+            return;
+          c = SIMfile.read();
+        } else
+#endif
+        {
+          if (SerialOutput.available() <= 0)
+            return;
+          c = SerialOutput.read();
+          if (millis() < next_burst)     // discard input until next simulated second
+            return;
+        }
+        if (GNSS_cnt == 0 && (c == '.' || c == '\r' || c == '\n')) {
+            // a blank line or starting with '.' means: wait for next second
+            if (burst_start != 0)
+                next_burst = burst_start + 1000;
+            burst_start = 0;
+            return;
+        }
+        if (isPrintable(c) || c == '\r' || c == '\n') {
+          if (burst_start == 0)
+              burst_start = millis();
+          GNSSbuf[GNSS_cnt] = c;
+          bool isValidSentence = Try_GNSS_sentence();
+          //if (isValidSentence) {
+          //    GNSSbuf[GNSS_cnt+1] = '\n';
+          //    GNSSbuf[GNSS_cnt+2] = '\0';
+          //    Serial.print("sim> ");
+          //    Serial.println((const char *) GNSSbuf);
+          //}
+          if (c=='\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+            GNSS_cnt = 0;
+          } else {
+            GNSS_cnt++;
+            yield();
+          }
+        }
+      }        // infinite loop unless !available() above, or pausing
+      return;
+    }
 
     // only use the internal (or add-on serial) GNSS, leave other ports alone for data bridging
     while (true) {

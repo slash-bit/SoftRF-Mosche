@@ -138,7 +138,7 @@ enum
 	FLIGHT_LOG_NONE=0,
 	FLIGHT_LOG_ALWAYS,
 	FLIGHT_LOG_AIRBORNE,
-	FLIGHT_LOG_RSVD
+	FLIGHT_LOG_TRAFFIC
 };
 #define FLIGHT_LOG_INTERVAL 4   // seconds
 
@@ -237,8 +237,8 @@ typedef union EEPROM_U {
 #define DEBUG_PROJECTION 0x02
 #define DEBUG_ALARM 0x04
 #define DEBUG_LEGACY 0x08
-#define DEBUG_RESVD1 0x10
-#define DEBUG_FAKEFIX 0x20
+#define DEBUG_DEEPER 0x10
+#define DEBUG_SIMULATE 0x20
 
 void EEPROM_setup(void);
 void EEPROM_defaults(void);

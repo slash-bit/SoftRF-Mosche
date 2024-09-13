@@ -1312,6 +1312,7 @@ void handleSettings() {
 <option %s value='%d'>Off</option>\
 <option %s value='%d'>Always</option>\
 <option %s value='%d'>Airborne</option>\
+<option %s value='%d'>Traffic</option>\
 </td>\
 </tr>"),
   (settings->gnss_pins==EXT_GNSS_NONE  ? "selected" : ""), EXT_GNSS_NONE,
@@ -1328,7 +1329,8 @@ void handleSettings() {
   (settings->sd_card==SD_CARD_LORA  ? "selected" : ""), SD_CARD_LORA,
   (settings->logflight==FLIGHT_LOG_NONE     ? "selected" : ""), FLIGHT_LOG_NONE,
   (settings->logflight==FLIGHT_LOG_ALWAYS   ? "selected" : ""), FLIGHT_LOG_ALWAYS,
-  (settings->logflight==FLIGHT_LOG_AIRBORNE ? "selected" : ""), FLIGHT_LOG_AIRBORNE);
+  (settings->logflight==FLIGHT_LOG_AIRBORNE ? "selected" : ""), FLIGHT_LOG_AIRBORNE,
+  (settings->logflight==FLIGHT_LOG_TRAFFIC  ? "selected" : ""), FLIGHT_LOG_TRAFFIC);
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -2091,7 +2093,7 @@ int igc2num(char c)
 #define FILELSTSIZ 8000
 void handleListLogs()
 {
-  if (ThisAircraft.airborne==0) {
+  if (ThisAircraft.airborne==0 || (settings->debug_flags & DEBUG_SIMULATE)) {
       closeFlightLog();
       closeSDlog();
   }
@@ -2124,9 +2126,10 @@ void handleListLogs()
       int len = strlen(filelist);
       if (len < FILELSTSIZ-130) {
         if (file_name.endsWith(".IGC")) {
+          int year = igc2num(fn[0]);
           snprintf(filelist+len, FILELSTSIZ-len,
-             "&nbsp;&nbsp;<a href=\"/logs/%s\">%s</a>&nbsp;&nbsp;[202%d-%02d-%02d]&nbsp;&nbsp;[%d bytes]<br>",
-                   fn, fn, igc2num(fn[0]), igc2num(fn[1]), igc2num(fn[2]), file.size());
+             "&nbsp;&nbsp;<a href=\"/logs/%s\">%s</a>&nbsp;&nbsp;[20%d%d-%02d-%02d]&nbsp;&nbsp;[%d bytes]<br>",
+                   fn, fn, (year<4? 3 : 2), year, igc2num(fn[1]), igc2num(fn[2]), file.size());
         } else {
           snprintf(filelist+len, FILELSTSIZ-len,
              "&nbsp;&nbsp;<a href=\"/logs/%s\">%s</a>&nbsp;&nbsp;&nbsp;&nbsp;[%d bytes]<br>",
@@ -2272,6 +2275,9 @@ void Web_setup()
   server.on ( "/settings", handleSettings );
 
   server.on ( "/reboot", []() {
+    Serial.println(F("Rebooting from web page..."));
+    server.send(200, textplain, "Rebooting...");
+    delay(600);
     reboot();
   } );
 

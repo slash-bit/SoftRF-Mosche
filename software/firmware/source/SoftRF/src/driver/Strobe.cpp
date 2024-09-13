@@ -194,8 +194,9 @@ void Strobe_loop(void)
 
 void Strobe_fini(void)
 {
-  digitalWrite(StrobePin, LOW);    // turns strobe off
-  StrobePauseMarker = 0;           // prevents new flashes
+  if (StrobePin != SOC_UNUSED_PIN)
+      digitalWrite(StrobePin, LOW);    // turns strobe off
+  StrobePauseMarker = 0;               // prevents new flashes
 }
 
 #endif /* EXCLUDE_STROBE */

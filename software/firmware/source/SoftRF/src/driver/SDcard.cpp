@@ -17,6 +17,8 @@ static uint8_t ss_pin;
 static uint8_t cardType = CARD_NONE;
 static File SDfile;
 static bool SDfileOpen = false;
+File SIMfile;
+bool SIMfileOpen = false;
 
 // check for firmware update file
 // if found, do update, then delete the file and reboot
@@ -165,6 +167,21 @@ void SD_setup() {
       SDfileOpen = true;
   else
       Serial.println("Failed to open SD/logs/log.txt for writing");
+
+  if (settings->debug_flags & DEBUG_SIMULATE) {
+      // try to open file with simulated GNSS sentences
+      SIMfile = SD.open("/logs/simulate.txt", FILE_READ);
+      if (! SIMfile) {
+          Serial.println("File SD/logs/simulate.txt not found");
+      } else if (SIMfile.size() == 0) {
+          SIMfile.close();
+          SD.remove("/logs/simulate.txt");
+          Serial.println("Empty SD/logs/simulate.txt deleted");
+      } else {
+          SIMfileOpen = true;
+          Serial.println("File SD/logs/simulate.txt found");
+      }
+  }
 }
 
 void SD_log(const char * message)
@@ -183,9 +200,7 @@ void SD_log(const char * message)
 void closeSDlog()
 {
   if (SDfileOpen) {
-      //digitalWrite(ss_pin, LOW);
       SDfile.close();
-      //digitalWrite(ss_pin, HIGH);
       SDfileOpen = false;
   }
 }

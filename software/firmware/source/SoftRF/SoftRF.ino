@@ -375,6 +375,7 @@ Serial.println(F("... Baro_setup() returned"));
 
 void shutparts()
 {
+Serial.println("shutparts()...");
 #if defined(USE_SD_CARD)
   closeSDlog();
   closeFlightLog();
@@ -388,25 +389,6 @@ void shutparts()
 #endif
   SERIAL_FLUSH();
   SoC->swSer_enableRx(false);
-#if 0
-  // this crashed if BLE was active
-  if (SoC->Bluetooth_ops)
-     SoC->Bluetooth_ops->fini();
-  Buzzer_fini();
-  Voice_fini();
-  Strobe_fini();
-  RF_Shutdown();
-  SoC->WDT_fini();
-  NMEA_fini();
-  Web_fini();
-#if defined(ESP32)
-  if (AlarmLogOpen)
-     AlarmLog.close();
-#endif
-  if (SoC->USB_ops)
-     SoC->USB_ops->fini();
-  WiFi_fini();
-#else
 #if defined(ESP32)
   if (AlarmLogOpen)
      AlarmLog.close();
@@ -423,7 +405,6 @@ void shutparts()
      SoC->Bluetooth_ops->fini();
   if (SoC->USB_ops)
      SoC->USB_ops->fini();
-#endif
   if (settings->mode != SOFTRF_MODE_UAV)
     GNSS_fini();
   delay(1000);
@@ -545,7 +526,7 @@ void normal()
       if (initial_time == 0) {
         initial_time = millis();
       } else if (GNSSTimeMarker == 0) {
-        if (millis() > initial_time + 30000) {
+        if (millis() > initial_time + 30000 || (settings->debug_flags & DEBUG_SIMULATE)) {
           /* 30 sec after first fix */
           GNSSTimeMarker = millis();
         }
@@ -717,8 +698,11 @@ void normal()
 #if defined(USE_SD_CARD)
   if (settings->logflight != FLIGHT_LOG_NONE) {
     if (isTimeToIGC()) {
-      if (validfix)
+      if (validfix) {
           logFlightPosition();
+          if (settings->logflight == FLIGHT_LOG_TRAFFIC)
+              logCloseTraffic();
+      }
       IGCTimeMarker = millis();
     }
   }

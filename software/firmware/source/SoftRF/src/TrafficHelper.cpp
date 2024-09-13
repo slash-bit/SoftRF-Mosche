@@ -277,7 +277,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 {
   if (fop->distance > 2*ALARM_ZONE_CLOSE
-      || fabs(fop->alt_diff) > 2*VERTICAL_SEPARATION) {
+      || fabs(fop->adj_alt_diff) > VERTICAL_SEPARATION) {
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
@@ -287,11 +287,6 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
-
-  //if (fop->protocol == RF_PROTOCOL_LATEST) {
-  //  return (Alarm_Vector(this_aircraft, fop));
-    /* we don't know how to fully interpret the new protocol yet */
-  //}
 
   /* here start the expensive calculations */
 
@@ -543,9 +538,10 @@ void Traffic_Update(ufo_t *fop)
     fop->dy = (int32_t) y;
   }
 
-  int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
-  rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
-  fop->RelativeBearing = rel_bearing;
+  //int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
+  int rel_heading = (int) (fop->bearing - ThisAircraft.heading);
+  rel_heading += (rel_heading < -180 ? 360 : (rel_heading > 180 ? -360 : 0));
+  fop->RelativeBearing = rel_heading;   // << should rename RelativeHeading
 
   fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
@@ -886,6 +882,49 @@ void Traffic_setup()
   }
 }
 
+void logOneTraffic(ufo_t *fop, const char *label)
+{
+#if defined(USE_SD_CARD)
+    uint32_t addr = ((fop->no_track)? 0xAAAAAA : fop->addr);
+    int alarm_level = fop->alarm_level - 1;
+    if (alarm_level < ALARM_LEVEL_NONE)
+        alarm_level = ALARM_LEVEL_NONE;
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      PSTR("%s,%d,%d,%06x,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
+      label, alarm_level, fop->aircraft_type, addr,
+      (int)fop->distance, (int)fop->bearing,
+      (int)fop->speed, (int)fop->course, (int)fop->turnrate,
+      (int)fop->RelativeBearing, (int)fop->alt_diff, (int)(fop->vs - ThisAircraft.vs),
+      (int)ThisAircraft.speed, (int)ThisAircraft.course, (int)ThisAircraft.turnrate,
+      (int)(wind_speed * (1.0 / _GPS_MPS_PER_KNOT)), (int)wind_direction);
+    //Serial.print(NMEABuffer);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+    FlightLogComment(NMEABuffer+4);   // it will prepend the LPLT
+#endif
+}
+
+// insert data about all "close" traffic into the flight log
+// called after the logFlightPosition() call
+void logCloseTraffic()
+{
+#if defined(USE_SD_CARD)
+    ufo_t *fop;
+    for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        fop = &Container[i];
+        if (fop->addr == 0)
+            continue;
+        if (fop->airborne == 0)
+            continue;
+        if (fop->adj_distance > 1000  // meters, adjusted for altitude difference
+                && fop->alarm_level == ALARM_LEVEL_NONE)
+            continue;
+        if ((ThisAircraft.timestamp - fop->timestamp) > 3 /*seconds*/ )
+            continue;
+        logOneTraffic(fop, "LPLTT");
+    }
+#endif
+}
+
 void Traffic_loop()
 {
     if (! isTimeToUpdateTraffic())
@@ -986,7 +1025,7 @@ void Traffic_loop()
           mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
         }
 #if defined(ESP32)
-        if (settings->logalarms && AlarmLogOpen) {
+        if (alarmcount>0 && settings->logalarms && AlarmLogOpen) {
           int year  = gnss.date.year();
           if( year > 99)  year = year - 2000;
           int month = gnss.date.month();
@@ -1002,12 +1041,12 @@ void Traffic_loop()
           *ep = '\0';       // overwrite the comma after the "E" or "W"
 Serial.print("GGA time & position: ");
 Serial.println(cp);
-          int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
-          rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
+          //int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
+          //rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("%02d%02d%02d,%s,%d,%d,%06x,%d,%d,%d\r\n"),
               year, month, day, cp, mfop->alarm_level-1, alarmcount,
-              mfop->addr, rel_bearing, (int)mfop->distance, (int)mfop->alt_diff);
+              mfop->addr, (int)mfop->RelativeBearing, (int)mfop->distance, (int)mfop->alt_diff);
 Serial.println(NMEABuffer);
           int len = strlen(NMEABuffer);
           if (AlarmLog.write((const uint8_t *)NMEABuffer, len) == len) {
@@ -1017,14 +1056,19 @@ Serial.println(NMEABuffer);
               AlarmLog.close();
               AlarmLogOpen = false;
           }
-#if defined(USE_SD_CARD)
-          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("ALARM %d,%d,%06x,%d,%d,%d\r\n"),
-              mfop->alarm_level-1, alarmcount, mfop->addr,
-              rel_bearing, (int)mfop->distance, (int)mfop->alt_diff);
-          FlightLogComment(NMEABuffer);
-#endif
         }
+#if defined(USE_SD_CARD)
+        if (settings->logalarms || settings->logflight == FLIGHT_LOG_TRAFFIC) {
+            logOneTraffic(mfop, "LPLTA");  // do not wait until logFlightPosition()
+        //} else if (settings->logflight != FLIGHT_LOG_NONE) {
+        //    uin32_t addr = ((mfop->no_track)? 0xAAAAAA : mfop->addr);
+        //    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+        //      PSTR("A,%d,%d,%06x,%d,%d,%d\r\n"),
+        //      mfop->alarm_level-1, alarmcount, addr,
+        //      (int)mfop->RelativeBearing, (int)mfop->distance, (int)mfop->alt_diff);
+        //    FlightLogComment(NMEABuffer);
+        }
+#endif
 #endif
       }
     }

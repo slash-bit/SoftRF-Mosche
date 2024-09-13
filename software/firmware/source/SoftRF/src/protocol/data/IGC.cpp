@@ -112,6 +112,7 @@ char clean_igc_char(char c)
 void failFlightLog()
 {
     FlightLog.close();
+    FlightLogOpen = false;
     FlightLogFail = true;
 }
 
@@ -528,18 +529,19 @@ bool logFlightPosition()
         // to be used to start the flight log once it is opened
         if (FlightLogFail)
             return false;
-        if (settings->logflight != FLIGHT_LOG_AIRBORNE)
+        if (settings->logflight != FLIGHT_LOG_AIRBORNE
+         && settings->logflight != FLIGHT_LOG_TRAFFIC)
             return false;
         prepositioning = true;
     } else if (prepositioning) {   // but now FlightLogOpen
         // write the stored positions to the newly opened file
         for (int i=0; i<num_pre_positions; i++) {
-if (i==0) {
-Serial.print("incl pre-pos from: [");
-Serial.print(pre_positions_head);
-Serial.print("]: ");
-Serial.print(pre_positions_buf + (B_RECORD_SIZE * pre_positions_head));
-}
+//if (i==0) {
+//Serial.print("incl pre-pos from: [");
+//Serial.print(pre_positions_head);
+//Serial.print("]: ");
+//Serial.print(pre_positions_buf + (B_RECORD_SIZE * pre_positions_head));
+//}
             igc_file_append_nonconst(pre_positions_buf + (B_RECORD_SIZE * pre_positions_head));
             pre_positions_head = (pre_positions_head + 1) % PRE_POS_NUM;
         }
@@ -624,10 +626,10 @@ Serial.print(pre_positions_buf + (B_RECORD_SIZE * pre_positions_head));
     snprintf(pp, B_RECORD_SIZE, brecord_template, palt, galt);
 
     if (prepositioning) {
-Serial.print("pre-position[");
-Serial.print(pre_positions_next);
-Serial.print("]: ");
-Serial.print(pp);
+//Serial.print("pre-position[");
+//Serial.print(pre_positions_next);
+//Serial.print("]: ");
+//Serial.print(pp);
         pre_positions_next = (pre_positions_next + 1) % PRE_POS_NUM;
         if (num_pre_positions < PRE_POS_NUM)
             ++num_pre_positions;
@@ -644,14 +646,16 @@ Serial.print(pp);
 // must be given a null-terminated string
 void FlightLogComment(const char *data)
 {
+    if (FlightLogFail)
+        return;
     if (! FlightLogOpen)
         return;
     char buf[80];
-    strcpy(buf, "LPLT ");
+    strcpy(buf, "LPLT");
     size_t len = strlen(data);
-    if (len > 71)  len = 71;   // IGC format limits lines to 76 chars
-    strncpy(buf+5, data, len);
-    len += 5;
+    if (len > 72)  len = 72;   // IGC format limits lines to 76 chars
+    strncpy(buf+4, data, len);
+    len += 4;
     if (buf[len-2] != '\r') {
         buf[len++] = '\r';
         buf[len++] = '\n';
@@ -679,7 +683,7 @@ void test_final(MD5_CTX *md5)
 }
 void MD5_test()
 {
-    if (! (settings->debug_flags & DEBUG_FAKEFIX))  return;
+    if (! (settings->debug_flags & DEBUG_SIMULATE))  return;
     Serial.println("MD5 test:");
     //MD5::make_hash(md5_a, "abcdefghijklmnopqrstuvwxyz");
     //Serial.println("MD5 should be:   c3fcd3d76192e4007dfb496cca67e13b");

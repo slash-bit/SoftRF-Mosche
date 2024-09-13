@@ -23,11 +23,6 @@ extern float wind_best_ns;    /* mps */
 extern float wind_best_ew;
 extern float wind_speed;
 extern float wind_direction;
-
-extern float avg_turnrate;
-extern float avg_speed;       /* average around the circle */
-extern float avg_climbrate;
-
 extern time_t AirborneTime;
 
 void project_this(ufo_t *);

@@ -39,7 +39,7 @@
 #define ALARM_TIME_EXTREME    6
 
 #define VERTICAL_SLOPE                5  /* slope effect for alerts */
-#define VERTICAL_SLACK               60  /* meters  - allow for GPS alt error */
+#define VERTICAL_SLACK               30  /* meters  - allow for GPS alt error */
 #define VERTICAL_SEPARATION         300  /* meters  - for alerts */
 #define VERTICAL_VISIBILITY_RANGE   900  /* this value higher than FLARM specs */
 
@@ -73,8 +73,9 @@ void ParseData(void);
 void Traffic_setup(void);
 void Traffic_loop(void);
 void ClearExpired(void);
-void Traffic_Update(ufo_t *);
+void Traffic_Update(ufo_t *fop);
 int  Traffic_Count(void);
+void logCloseTraffic(void);
 
 int  traffic_cmp_by_distance(const void *, const void *);
 float Adj_alt_diff(ufo_t *, ufo_t *);

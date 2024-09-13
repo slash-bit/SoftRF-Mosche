@@ -257,7 +257,7 @@ no_pps_time = latest_Commit_Time - no_pps_corr;
              && latest_Commit_Time > lasttime_ms + 400) {     /* new data arrived from GNSS */
                 newfix = true;
                 lasttime_ms = latest_Commit_Time;
-                if (settings->debug_flags & DEBUG_FAKEFIX) {
+                if (settings->debug_flags & DEBUG_DEEPER) {
                     Serial.print("New fix at: ");
                     Serial.print(now_ms - pps_btime_ms);                   
                     Serial.print(" ms after PPS at: ");
@@ -284,7 +284,7 @@ no_pps_time = latest_Commit_Time - no_pps_corr;
       //ref_time_ms = base_time_ms = newtime;  // = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION
       /* the adjusted time seems to better fit actual FLARM time slots */
 
-if (settings->debug_flags & DEBUG_FAKEFIX) {
+if (settings->debug_flags & DEBUG_DEEPER) {
 //if ((OurTime & 0x03) == 0) {
 int32_t diff = (int32_t)no_pps_time - (int32_t)newtime;
 Serial.print("no-PPS error: ");
