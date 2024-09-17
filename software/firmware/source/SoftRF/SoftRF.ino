@@ -375,7 +375,6 @@ Serial.println(F("... Baro_setup() returned"));
 
 void shutparts()
 {
-Serial.println("shutparts()...");
 #if defined(USE_SD_CARD)
   closeSDlog();
   closeFlightLog();
@@ -449,34 +448,20 @@ void normal()
   Time_loop();   /* this is where GNSS time data is processed for Legacy protocol */
 
   static uint32_t initial_time = 0;
-  static uint32_t nextprev_ms = 0;
 
   bool validfix = isValidFix();
-  bool newfix = false;
-
-  uint32_t gnss_age;
-  uint32_t thistime_ms;
 
   if (validfix) {
 
-    /* also store a more precise GPS time stamp (millisecond resolution):  */
-    /* - alas gnss.time returns whole seconds not centiseconds as promised */
-    gnss_age = gnss.location.age();
-    thistime_ms = millis() - gnss_age;                   /* = lastCommitTime */
-
-    newfix = (thistime_ms - ThisAircraft.gnsstime_ms > 400   // new data arrived from GNSS
-                   && gnss_age < 3000);
-
     static float prev_lat = 0;
     static float prev_lon = 0;
-
     if (firstfix) {
         SetupTimeMarker = millis();
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
         firstfix = false;
         validfix = false;            // wait for next fix
-    } else if (newfix) {
+    } else if (gnss_new_fix) {
         if (fabs(gnss.location.lat()-prev_lat) > 0.15)   // looks like bad data
             validfix = false;
         if (fabs(gnss.location.lng()-prev_lon) > 0.25)
@@ -486,9 +471,11 @@ void normal()
     }
   }
 
-  if (validfix) {
+  if (validfix) {   // still, after the adjustments above
 
-    if (newfix) {
+    if (gnss_new_fix) {           // set in GNSS.cpp
+
+      gnss_new_fix = false;       // reset until new data arrives
 
 #if 0
       if (settings->rf_protocol != RF_PROTOCOL_LEGACY
@@ -497,21 +484,20 @@ void normal()
         ThisAircraft.timestamp = now();     // updated by GNSSTimeSync()
       else
 #endif
-        ThisAircraft.timestamp = OurTime;   // updated in either Time.cpp or RF.cpp
-      ThisAircraft.gnsstime_ms = thistime_ms;
+        ThisAircraft.timestamp = OurTime;      // updated in either Time.cpp or RF.cpp
 
-//Serial.printf("new GNSS fix from %d at %d, PPS was %d\r\n", thistime_ms, millis(), ref_time_ms);
-/*
- - On T-Beam get two fixes each second, from about 190 & 280 ms after PPS.
- - And only those two time, each second - why?
- - The additional fix from 280ms is discarded above.
-*/
+      /* store previous course & altitude and timestamp
+          so as to allow computation of turn and climb rates */
+      ThisAircraft.prevtime_ms = ThisAircraft.gnsstime_ms;
+      ThisAircraft.prevcourse = ThisAircraft.course;
+      ThisAircraft.prevheading = ThisAircraft.heading;
+      ThisAircraft.prevaltitude = ThisAircraft.altitude;
 
-//    float lat = ThisAircraft.latitude;
-//    float lon = ThisAircraft.longitude;
+      // the new fix data
+      //ThisAircraft.gnsstime_ms = thistime_ms;
+      ThisAircraft.gnsstime_ms = ref_time_ms;          /* last PPS, real or assumed */
       ThisAircraft.latitude = gnss.location.lat();
       ThisAircraft.longitude = gnss.location.lng();
-//    newfix = newfix && (ThisAircraft.latitude != lat || ThisAircraft.longitude != lon);
       ThisAircraft.altitude = gnss.altitude.meters();
       if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
         /* for "winch" aircraft type, elevate above ground */
@@ -536,29 +522,11 @@ void normal()
       if (baro_chip == NULL) {
         /* only do this once every 4 seconds */
         static uint32_t time_to_estimate_climb = 0;
-        if (newfix && ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
+        if (ThisAircraft.gnsstime_ms > time_to_estimate_climb) {
           time_to_estimate_climb = ThisAircraft.gnsstime_ms + 4100;
           ThisAircraft.vs = Estimate_Climbrate();
         }
       } /* else it was filled above in Baro_loop() */
-
-      /* After some time has passed, store previous course & altitude
-         and timestamp so as to allow computation of turn and climb rates */
-      static float next_prevcourse=0;
-      static float next_prevheading=0;
-      static float next_prevalt=0;
-      uint32_t now_ms = ThisAircraft.gnsstime_ms;
-      if (newfix && now_ms > ((nextprev_ms + 1400) ^ ((nextprev_ms >> 4) & 0x0FF))) {
-        /* about 1400 ms with some pseudo-random jitter */
-        ThisAircraft.prevtime_ms = nextprev_ms;  /* usually 3-4 sec apart */
-        ThisAircraft.prevcourse = next_prevcourse;
-        ThisAircraft.prevheading = next_prevheading;
-        ThisAircraft.prevaltitude = next_prevalt;
-        nextprev_ms = now_ms;
-        next_prevcourse = ThisAircraft.course;   /* frozen snapshot to be used later */
-        next_prevheading = ThisAircraft.heading;
-        next_prevalt = ThisAircraft.altitude;
-      }
 
 #if 0
 /* check timing */
@@ -591,20 +559,14 @@ void normal()
       }
 #endif /* EXCLUDE_EGM96 */
 
-      /* estimate wind from present and past GNSS data */
-      /* only do this once every 666 milliseconds */
-      static uint32_t time_to_estimate_wind = 0;
-      if (ThisAircraft.gnsstime_ms > time_to_estimate_wind) {
-        Estimate_Wind();
-        time_to_estimate_wind = ThisAircraft.gnsstime_ms + 666;
-      }
+      Estimate_Wind();      // estimate wind from present and past GNSS data
 
       /* generate a random aircraft ID if necessary */
       /* doing it here (after some delay) allows use of millis() as seed for random ID */
       if (ThisAircraft.addr == 0)
         generate_random_id();
 
-    }  /* end of if(newfix) */
+    }  /* end of if(new_fix) */
 
     // check for newly received data, usually returns false
     // >>> do this here too to ensure no incoming packets are missed
@@ -638,7 +600,6 @@ void normal()
       initial_time = 0;
       GNSSTimeMarker = 0;
       ThisAircraft.prevtime_ms = 0;
-      nextprev_ms = 0;
     }
   }
 

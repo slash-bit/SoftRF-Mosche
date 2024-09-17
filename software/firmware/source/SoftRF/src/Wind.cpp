@@ -215,8 +215,8 @@ FlightLogComment(NMEABuffer);
           old_lon_time = 0;
           prev_gs_ns = prev_cd_ns = wind_best_ns;
           prev_gs_ew = prev_cd_ew = wind_best_ew;
-          weight_gs = 0.06;
-          weight_cd = 0.045;  /* weights will increase or decrease later */
+          weight_gs = 0.04;
+          weight_cd = 0.03;   /* weights will increase or decrease later */
       }
 
       return;
@@ -285,7 +285,7 @@ FlightLogComment(NMEABuffer);
          || (fabs(wind_best_ew) > 2.5 && fabs(wind_ew-prev_gs_ew) > 0.5*fabs(wind_best_ew))) {
            if (weight_gs > 0.03)  weight_gs -= 0.02;
         } else {
-           if (weight_gs < 0.11)  weight_gs += 0.02;
+           if (weight_gs < 0.09)  weight_gs += 0.02;
         }
         prev_gs_ns = wind_ns;
         prev_gs_ew = wind_ew;
@@ -342,9 +342,9 @@ FlightLogComment(NMEABuffer);
       wind_ns = drift_ns / interval;               /* m/s */
       if (fabs(wind_ns-wind_best_ns) < 20.0 /* && fabs(wind_ns-wind_best_ns) > 1.0 */ ) {
         if (fabs(wind_best_ns) > 2.5 && fabs(wind_ns-prev_cd_ns) > 0.5*fabs(wind_best_ns))
-          if (weight_cd > 0.02)   weight_cd -= 0.015;
+          if (weight_cd > 0.02)  weight_cd -= 0.015;
         else
-          if (weight_cd < 0.095)  weight_cd += 0.015;  /* may get bumped up in EW section too */
+          if (weight_cd < 0.08)  weight_cd += 0.015;  /* may get bumped up in EW section too */
         prev_cd_ns = wind_ns;
         if (wind_best_ns == 0.0)  /* not initialized yet */
           wind_best_ns = wind_ns;
@@ -368,9 +368,9 @@ FlightLogComment(NMEABuffer);
       wind_ew = drift_ew / interval;
       if (fabs(wind_ew-wind_best_ew) < 20.0 /* && fabs(wind_ew-wind_best_ew) > 1.0 */ ) {
         if (fabs(wind_best_ew) > 2.5 && fabs(wind_ew-prev_cd_ew) > 0.5*fabs(wind_best_ew))
-          if (weight_cd > 0.02)   weight_cd -= 0.015;
+          if (weight_cd > 0.02)  weight_cd -= 0.015;
         else
-          if (weight_cd < 0.095)  weight_cd += 0.015;
+          if (weight_cd < 0.08)  weight_cd += 0.015;
         prev_cd_ew = wind_ew;
         if (wind_best_ew == 0.0)
           wind_best_ew = wind_ew;
@@ -1172,7 +1172,7 @@ To compute the correct air-reference circling path:
     aturnrate = heading_change / (0.001 * (float) interval);
     if (fabs(aturnrate) > 50.0)  aturnrate = 0.0;        /* ignore implausible data */
     if (fabs(aturnrate) <  2.0)  aturnrate = 0.0;        /* ignore inaccurate data */
-    if (interval < 1200 && fop->turnrate != 0) {
+    if (interval < 1400 && fop->turnrate != 0) {
        /* short interval between packets, average with previously known turn rate */
        fop->turnrate = 0.5 * (aturnrate + fop->turnrate);
     } else {

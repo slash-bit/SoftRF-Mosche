@@ -368,7 +368,9 @@ void RF_SetChannel(void)
       ref_time_ms = pps_btime_ms;
     } else {
       uint32_t last_RMC_Commit = now_ms - gnss.date.age();
-      time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
+      time_corr_neg = 100;
+      if (gnss_chip)
+          time_corr_neg = gnss_chip->rmc_ms;
       ref_time_ms = last_RMC_Commit - time_corr_neg;
     }
 

@@ -557,9 +557,10 @@ bool logFlightPosition()
     // $GPGGA,235317.00,4003.90395,N,10512.57934,W,...
     // $GNGGA,144935.000,4521.30100,N,07547.22870,W,...
     char *gp = &GPGGA_Copy[7];   // after the "$GPGGA,", start of timestamp
-    if (strlen(gp) < 35) {
-        Serial.print("Bad GGA: ");
-        Serial.println(GPGGA_Copy);
+    //if (strlen(gp) < 35) {
+    if (*gp == '\0') {           // set in GNSS.cpp
+        //Serial.print("Bad GGA skipped");
+        //Serial.println(GPGGA_Copy);
         return false;
     }
     char *bp = &brecord_template[1];

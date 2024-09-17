@@ -1878,10 +1878,13 @@ Serial.println("Buzzer_test() using ToneAC...");
         reason == REASON_SOFT_RESTART) {
 Serial.println("... tone 1:");
       Buzzer_tone(440, 500);
+      delay(200);
 Serial.println("... tone 2:");
       Buzzer_tone(640, 500);
+      delay(200);
 Serial.println("... tone 3:");
       Buzzer_tone(840, 500);
+      delay(200);
 Serial.println("... tone 4:");
       Buzzer_tone(1040, 600);
     } else if (reason == REASON_WDT_RST) {

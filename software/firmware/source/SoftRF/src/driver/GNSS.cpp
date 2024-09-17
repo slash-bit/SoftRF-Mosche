@@ -28,6 +28,7 @@
 #include "EEPROM.h"
 #include "SDcard.h"
 #include "../protocol/data/NMEA.h"
+#include "../system/Time.h"
 #include "WiFi.h"
 #include "RF.h"
 #include "Battery.h"
@@ -50,6 +51,12 @@
 #if !defined(GNSS_FLUSH)
 #define GNSS_FLUSH()        Serial_GNSS_Out.flush()
 #endif
+
+// since last PPS:
+bool gnss_new_fix  = false;
+bool gnss_new_time = false;
+bool gnss_time_from_rmc = false;
+uint32_t latest_Commit_Time = 0;   // millis() at first Time-commit after last PPS
 
 bool gnss_needs_reset = false;
 
@@ -123,8 +130,9 @@ const char *GNSS_name[] = {
 
 #if defined(ENABLE_GNSS_STATS)
 /*
+ * Stats collected by Linar:
  * Sony: GGA -  24 , RMC -  38
- * L76K: GGA -  70+, RMC - 135+
+ * L76K: GGA -  70+, RMC - 135+    // == AT65
  * Goke: GGA - 185+, RMC - 265+
  * Neo6: GGA - 138 , RMC -  67
  * MT33: GGA -  48 , RMC - 175
@@ -888,6 +896,7 @@ static bool ublox_factory_reset()
 
   return true;
 }
+#endif /* EXCLUDE_GNSS_UBLOX */
 
 static void reset_gnss()
 {
@@ -933,7 +942,6 @@ static void reset_gnss()
 #endif
     }
 }
-#endif /* EXCLUDE_GNSS_UBLOX */
 
 #if !defined(EXCLUDE_GNSS_SONY)
 static gnss_id_t sony_probe()
@@ -1299,6 +1307,7 @@ const gnss_chip_ops_t at65_ops = {
 #endif /* EXCLUDE_GNSS_AT65 */
 
 static bool GNSS_fix_cache = false;
+static bool badGGA = true;
 
 bool leap_seconds_valid()
 {
@@ -1362,6 +1371,12 @@ byte GNSS_setup() {
 
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */)
       is_prime_mk2 = true;
+
+  if (settings->debug_flags & DEBUG_SIMULATE) {
+      GNSS_cnt = 0;
+      gnss_chip = &generic_nmea_ops;
+      return GNSS_MODULE_NMEA;
+  }
 
   gnss_id_t gnss_id = GNSS_MODULE_NONE;
 
@@ -1480,13 +1495,12 @@ byte GNSS_setup() {
   NMEA_Source = DEST_NONE;
 //#endif /* USE_NMEA_CFG */
 
-  GNSS_cnt = 0;
-
   return (byte) gnss_id;
 }
 
 void GNSS_loop()
 {
+
 #if defined(ESP32)
   if (gnss_needs_reset) {
       gnss_needs_reset = false;
@@ -1505,7 +1519,7 @@ void GNSS_loop()
    * No fix when any of them is missing or lost.
    * Valid date is critical for legacy protocol (only).
    */
-  GNSS_fix_cache = gnss.location.isValid()               &&
+  GNSS_fix_cache = gnss.location.isValid() && !badGGA    &&
                    gnss.altitude.isValid()               &&
                    gnss.date.isValid()                   &&
                   (gnss.location.age() <= NMEA_EXP_TIME) &&
@@ -1560,65 +1574,146 @@ void GNSSTimeSync()
             gnss.date.month(),
             gnss.date.year());
     GNSSTimeSyncMarker = millis();
+
+// piggy-back on this once-a-minute timer to show GNSS timing stats if collected
+#if defined(ENABLE_GNSS_STATS)
+    if (gnss_stats.gga_count > 100) {
+        Serial.print("Average GGA ms after PPS: ");
+        Serial.println(gnss_stats.gga_time_ms / gnss_stats.gga_count);
+        gnss_stats.gga_time_ms = 0;
+        gnss_stats.gga_count = 0;
+    }
+    if (gnss_stats.rmc_count > 100) {
+        Serial.print("Average RMC ms after PPS: ");
+        Serial.println(gnss_stats.rmc_time_ms / gnss_stats.rmc_count);
+        gnss_stats.rmc_time_ms = 0;
+        gnss_stats.rmc_count = 0;
+    }
+#endif
   }
 }
 
+// determine in one place (here) when a "new fix" is obtained
+// - no longer need to handle this in SoftRF.ino and in Time.cpp
 bool Try_GNSS_sentence() {
-    int ndx;
-    bool isValidSentence = gnss.encode(GNSSbuf[GNSS_cnt]);
 
-//if (isValidSentence)
-//Serial.printf(">[%d] %c\r\n", GNSS_cnt, GNSSbuf[GNSS_cnt]);
-//else
-//Serial.printf(" [%d] %c\r\n", GNSS_cnt, GNSSbuf[GNSS_cnt]);
+    static uint32_t prev_fix_ms = 0;
+    static uint32_t new_gga_ms  = 0;
+    static uint32_t new_rmc_ms  = 0;
+    static int ndx = sizeof(GNSSbuf)-2;
 
-    if (GNSSbuf[GNSS_cnt] == '\r' && isValidSentence) {
-      NMEA_Source = DEST_NONE;
-      if (settings->nmea_g || settings->nmea2_g) {
-        for (ndx = GNSS_cnt - 4; ndx >= 0; ndx--) { // jump over CS and *
-          if ((GNSSbuf[ndx] == '$') && (GNSSbuf[ndx+1] == 'G')) {
-            size_t write_size = GNSS_cnt - ndx + 1;   // includes * and CS
-          char *gb = (char *) &GNSSbuf[ndx];
-#if 0
-          if (!strncmp(gb+3, "GGA,", strlen("GGA,"))) {
-            GGA_Stop_Time_Marker = millis();
+    char c = GNSSbuf[GNSS_cnt];
+    if (c == '$')
+        ndx = GNSS_cnt;
+    bool isValidSentence = gnss.encode(c);
+    if (!isValidSentence || ndx+6>GNSS_cnt || GNSSbuf[ndx+1]!='G')
+        return isValidSentence;
 
-            Serial.print("GGA Start: ");
-            Serial.print(GGA_Start_Time_Marker);
-            Serial.print(" Stop: ");
-            Serial.print(GGA_Stop_Time_Marker);
-            Serial.print(" gnss.time.age: ");
-            Serial.println(gnss.time.age());
+    size_t write_size = GNSS_cnt;
+    if (c=='\r' || c=='\n') {
+        --write_size;
+        //c = GNSSbuf[write_size];
+        //if (c=='\r' || c=='\n')
+        //    --write_size;
+    }
+    write_size = write_size - ndx + 1;    // \r\n not included
+    char *gb = (char *) &GNSSbuf[ndx];
+    ndx = sizeof(GNSSbuf)-2;             // anticipating next sentence
 
+    bool is_gga = (gb[3]=='G' && gb[4]=='G' && gb[5]=='A' && gb[6]==',');
+
+    uint32_t now_ms = millis();
+    if (now_ms > prev_fix_ms + 600) {           // expect one fix per second
+      gnss_new_fix = gnss_new_time = false;     // withdraw what was not consumed
+      bool is_rmc = (gb[3]=='R' && gb[4]=='M' && gb[5]=='C' && gb[6]==',');
+      if ((is_gga && new_gga_ms != 0) || (is_rmc && new_rmc_ms != 0)
+                 || (latest_Commit_Time != 0 && now_ms > latest_Commit_Time + 600)) {
+          // other sentence failed to arrive within same second - start over
+          latest_Commit_Time = 0;
+          new_gga_ms  = 0;
+          new_rmc_ms  = 0;
+      }
+      if (is_gga) {
+          new_gga_ms = now_ms;
+          if (! latest_Commit_Time) {
+              latest_Commit_Time = now_ms - gnss.time.age();  // for use by Time_loop()
+              // age() should be small since we just now did gnss.encode().
+              gnss_time_from_rmc = false;    // GGA arrived before RMC
           }
-#endif
-            /*
-             * Work around issue with "always 0.0,M" GGA geoid separation value
-             * given by some Chinese GNSS chipsets
-             */
-            bool is_gga = (write_size>7 && !strncmp(gb+3, "GGA,", 4));
-#if defined(USE_NMEALIB)
-            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && is_gga
-                  && gnss.separation.meters() == 0.0) {
-              NMEA_GGA();
-              // GGA is output either directly (below) or indirectly (via NMEA_GGA()) but not both.
-              // Observed on a T-Beam: NMEA_GGA() while no fix, then direct.
-            }
-            else
-#endif
-            {
-              if (is_gga) {
-                strncpy(GPGGA_Copy, gb, write_size);  // for traffic alarm logging
-                GPGGA_Copy[write_size] = '\0';
-              }
-              NMEA_Outs(settings->nmea_g, settings->nmea2_g, gb, write_size, true);
-            }
-            return true;
+          if (write_size > 40) {
+              badGGA = false;
+              strncpy(GPGGA_Copy, gb, write_size);  // for traffic alarm logging
+              GPGGA_Copy[write_size] = '\0';
+          } else {
+              badGGA = true;
+              GNSS_fix_cache = false;
+              GPGGA_Copy[7] = '\0';
           }
-        }
+      }
+      if (is_rmc) {
+          new_rmc_ms = now_ms;
+          if (! latest_Commit_Time) {
+              latest_Commit_Time = now_ms - gnss.time.age();
+              gnss_time_from_rmc = true;     // RMC arrived before GGA
+          }
+      }
+      if (new_gga_ms && new_rmc_ms) {   // received both GGA & RMC sentences
+#if defined(ENABLE_GNSS_STATS)
+          uint32_t pps = ref_time_ms;   // maintained in Time.cpp
+          uint32_t when;
+          if (new_gga_ms > pps) {
+              when = new_gga_ms - pps;
+              if (when > 1000)   when -= 1000;
+          } else {
+              when = pps - new_gga_ms;
+              if (when > 1000)   when -= 1000;
+              when = 1000 - when;
+          }
+          if (when < 1000) {
+              gnss_stats.gga_time_ms += when;
+              gnss_stats.gga_count++;
+          }
+          if (new_rmc_ms > pps) {
+              when = new_rmc_ms - pps;
+              if (when > 1000)   when -= 1000;
+          } else {
+              when = pps - new_rmc_ms;
+              if (when > 1000)   when -= 1000;
+              when = 1000 - when;
+          }
+          if (when < 1000) {
+              gnss_stats.rmc_time_ms += when;
+              gnss_stats.rmc_count++;
+          }
+#endif /* ENABLE_GNSS_STATS */
+          new_gga_ms  = 0;              // reset markers
+          new_rmc_ms  = 0;
+          prev_fix_ms = now_ms;         // for timing the wait for next fix
+          gnss_new_fix  = true;         // flags for external consumption
+          gnss_new_time = true;         // will be reset to false when consumed
       }
     }
-    return false;
+    // get here even if within same second, to output GSV to NMEA destinations
+
+    /*
+     * Work around issue with "always 0.0,M" GGA geoid separation value
+     * given by some Chinese GNSS chipsets
+     */
+#if defined(USE_NMEALIB)
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && is_gga
+           && gnss.separation.meters() == 0.0) {
+         if (settings->nmea_g || settings->nmea2_g)
+             NMEA_GGA();
+            // GGA is output either indirectly (via NMEA_GGA()) or directly (below).
+            // Observed on a T-Beam: NMEA_GGA() while no fix, then direct.
+    }
+    else
+#endif
+    {
+        if (settings->nmea_g || settings->nmea2_g)
+            NMEA_Outs(settings->nmea_g, settings->nmea2_g, gb, write_size, true);
+    }
+    return true;
 }
 
 void PickGNSSFix()
@@ -1630,7 +1725,8 @@ void PickGNSSFix()
     if (settings->debug_flags & DEBUG_SIMULATE) {
       // read simulated GNSS sentences from either a file or the main serial port
       static uint32_t burst_start = 0;
-      static uint32_t next_burst = 30000;   // start sim running 30s after boot
+      static uint32_t next_burst = 40200;   // start sim running 40s after boot
+//Serial.printf("PickGNSSFix(): millis %d next_burst %d\r\n", millis(), next_burst);
       while (true) {
 #if defined(USE_SD_CARD)
         if (SIMfileOpen) {
@@ -1651,7 +1747,7 @@ void PickGNSSFix()
         if (GNSS_cnt == 0 && (c == '.' || c == '\r' || c == '\n')) {
             // a blank line or starting with '.' means: wait for next second
             if (burst_start != 0)
-                next_burst = burst_start + 1000;
+                next_burst = ref_time_ms + 1200;  // 200 ms after next simulated PPS
             burst_start = 0;
             return;
         }
@@ -1695,8 +1791,10 @@ void PickGNSSFix()
         /* ignore */
         continue;
       }
+      NMEA_Source = DEST_NONE;
       (void) Try_GNSS_sentence();
-      if (GNSSbuf[GNSS_cnt] == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+      //if (GNSSbuf[GNSS_cnt] == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+      if (c == '\r' || c == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
         GNSS_cnt = 0;
       } else {
         GNSS_cnt++;
@@ -1797,7 +1895,7 @@ void PickGNSSFix()
       continue;
     }
 
-#if defined(ENABLE_GNSS_STATS)
+#if defined(ENABLE_GNSS_STATS2)
     if ( (GNSS_cnt >= 5) &&
          (GNSSbuf[GNSS_cnt-5] == '$') &&
          (GNSSbuf[GNSS_cnt-4] == 'G') &&
@@ -1814,11 +1912,13 @@ void PickGNSSFix()
         gnss_stats.rmc_count++;
       }
     }
-#endif /* ENABLE_GNSS_STATS */
+#endif /* ENABLE_GNSS_STATS2 */
 
     if (Try_GNSS_sentence()) {
 #if defined(USE_NMEA_CFG)
-      NMEA_Process_SRF_SKV_Sentences();
+      if (GNSSbuf[1]!='G')
+          NMEA_Process_SRF_SKV_Sentences();
+          // if it was a valid sentence but not a GNSS sentence
 #endif /* USE_NMEA_CFG */
     }
 
@@ -1850,7 +1950,8 @@ void PickGNSSFix()
     }
 #endif /* ENABLE_D1090_INPUT */
 
-    if (GNSSbuf[GNSS_cnt] == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+    //if (GNSSbuf[GNSS_cnt] == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+    if (c == '\r' || c == '\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
       GNSS_cnt = 0;
     } else {
       GNSS_cnt++;

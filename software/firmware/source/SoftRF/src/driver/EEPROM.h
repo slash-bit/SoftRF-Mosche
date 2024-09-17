@@ -149,7 +149,7 @@ typedef struct __attribute__((packed)) Settings {
     uint8_t  band:4;            // do not move
     uint8_t  txpower:2;         // do not move
     uint8_t  volume:2;
-    uint8_t  aircraft_type;     // do not move
+    uint8_t  aircraft_type;     // can be reduced to 5 bits (not 4!)
 
 //    uint8_t  led_num;   - not used
     uint8_t  resvd2;
@@ -174,12 +174,12 @@ typedef struct __attribute__((packed)) Settings {
     uint8_t  power_save:2;
     uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
     uint8_t  rx1090:2;    // attached ADS-B receiver module    // do not move
-    bool     alarm_demo:1;
+    bool     alarm_demo:1;     // not used
 
     uint8_t  gnss_pins:2;    // external GNSS added to T-Beam  // do not move
-    uint8_t  sd_card:2;
+    uint8_t  sd_card:2;      // gpio pins for SD card adapter
     uint8_t  logflight:2;
-    uint8_t  resvd3:2;
+    uint8_t  resvd3:2;       // can use for flight logging interval choices
 
     int8_t   freq_corr; /* +/-, kHz */   // do not move
     uint8_t  relay:2;

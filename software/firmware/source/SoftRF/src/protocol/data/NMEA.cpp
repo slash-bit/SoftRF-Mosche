@@ -1418,8 +1418,8 @@ void NMEA_GGA()
                                         NMEALIB_SENTENCE_GPGGA );
 
   if (gen_sz) {
-    strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
-    GPGGA_Copy[gen_sz] = '\0';
+    //strncpy(GPGGA_Copy, nmealib_buf.buffer, gen_sz);  // for traffic alarm logging
+    //GPGGA_Copy[gen_sz] = '\0';
     NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
   }
 }

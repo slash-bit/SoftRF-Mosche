@@ -213,7 +213,7 @@ void Time_loop()
     }
 #endif
 
-    if (now_ms - last_loop < 30)
+    if (now_ms - last_loop < 20)
         return;
     last_loop = now_ms;
 
@@ -222,48 +222,81 @@ void Time_loop()
      && settings->rf_protocol != RF_PROTOCOL_OGNTP)
         return;       /* time still handled in RF.cpp RF_SetChannel() */
 
-    uint32_t gnss_age = gnss.time.age();
-    uint32_t latest_Commit_Time = now_ms - gnss_age;
-    bool newfix = false;
-    
+    uint32_t gnss_age;
     uint32_t pps_btime_ms;
     uint32_t newtime;
     uint32_t time_corr_neg;   // ms from PPS to commit_time
+
+    bool newfix = false;
+    if (isValidFix() && gnss_new_time) {     // set in GNSS.cpp
+        newfix = true;
+        gnss_new_time = false;               // reset until new data arrives
+        gnss_age = gnss.time.age();
+    }
+
+    if (settings->debug_flags & DEBUG_SIMULATE) {
+
+        // simulate PPS based on millis()
+        if (ref_time_ms == 0)
+            ref_time_ms = 1000 * (now_ms / 1000);  // most recent multiple of 1000
+//Serial.printf("Time_loop(): millis %d ref_time_ms %d  gnss_new_time %d\r\n", millis(), ref_time_ms, gnss_new_time);
+        if (!newfix) {
+            if (now_ms >= ref_time_ms + 1000) {
+              OurTime += 1;
+              ref_time_ms += 1000;
+            }
+            return;
+        }
+        pps_btime_ms = ref_time_ms;
+        if (latest_Commit_Time < pps_btime_ms)
+            pps_btime_ms -= 1000;
+        if (latest_Commit_Time < pps_btime_ms)
+            time_corr_neg = 200;
+        else
+            time_corr_neg = latest_Commit_Time - pps_btime_ms;
+        // fall through to computation of OurTime
+
+    } else {
 
 // also compute as if PPS not available, for a test
 uint32_t no_pps_corr;
 uint32_t no_pps_time;
 
-    if (isValidFix()) {
+    if (newfix) {
+
+        uint16_t assumed_ms = 100;
+        if (gnss_chip)
+            assumed_ms = (gnss_time_from_rmc? gnss_chip->rmc_ms : gnss_chip->gga_ms);
+
+        if (latest_Commit_Time == 0)       // should not happen
+            latest_Commit_Time = now_ms;
 
         pps_btime_ms = SoC->get_PPS_TimeMarker();
         if (pps_btime_ms > 0) {
           if (latest_Commit_Time < pps_btime_ms)
             pps_btime_ms -= 1000;
-          newtime = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION;   /* seems to receive FLARM better */
+          newtime = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION;   // seems to receive FLARM better
           time_corr_neg = latest_Commit_Time - pps_btime_ms;
 
-no_pps_corr = gnss_chip ? gnss_chip->rmc_ms : 100;
+no_pps_corr = assumed_ms;
 no_pps_time = latest_Commit_Time - no_pps_corr;
 
         } else {   /* PPS not available */
-          time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
+          time_corr_neg = assumed_ms;
           newtime = latest_Commit_Time - time_corr_neg;
         }
     
-        if (gnss_age < 2500 && newtime > base_time_ms) {
-            static uint32_t lasttime_ms = 0;
-            if ((pps_btime_ms == 0 || latest_Commit_Time > pps_btime_ms)
-             && latest_Commit_Time > lasttime_ms + 400) {     /* new data arrived from GNSS */
-                newfix = true;
-                lasttime_ms = latest_Commit_Time;
-                if (settings->debug_flags & DEBUG_DEEPER) {
-                    Serial.print("New fix at: ");
-                    Serial.print(now_ms - pps_btime_ms);                   
-                    Serial.print(" ms after PPS at: ");
-                    Serial.println(pps_btime_ms);
-                }
+        if ( /* newfix && */ gnss_age < 2500 && newtime > base_time_ms
+            && (pps_btime_ms == 0 || latest_Commit_Time > pps_btime_ms)) {
+            /* new data arrived from GNSS */
+            if (settings->debug_flags & DEBUG_DEEPER) {
+                Serial.print("New fix at: ");
+                Serial.print(now_ms - pps_btime_ms);                   
+                Serial.print(" ms after PPS at: ");
+                Serial.println(pps_btime_ms);
             }
+        } else {
+            newfix = false;
         }
     }
 
@@ -299,6 +332,8 @@ Serial.println(diff);
 
     ref_time_ms = base_time_ms = newtime;
 
+    }   // end of if (settings->debug_flags & DEBUG_SIMULATE)
+
     int yr = gnss.date.year();
     if( yr > 99)
         yr = yr - 1970;
@@ -317,5 +352,6 @@ Serial.println(diff);
         OurTime += 1;
     /* updated ref_time_ms is the other side effect */
 
-    /* system clock also gets updated, by GNSSTimeSync() called from GNSS_loop() */
+    /* system clock also gets updated, once a minute,
+           by GNSSTimeSync() called from GNSS_loop() */
 }
