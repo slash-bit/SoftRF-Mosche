@@ -20,6 +20,7 @@
 
 #include "../SoftRF.h"
 #include "system/SoC.h"
+#include "system/Time.h"
 #include "TrafficHelper.h"
 #include "driver/EEPROM.h"
 #include "driver/RF.h"
@@ -77,7 +78,8 @@ float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
 {
   float alt_diff = fop->alt_diff;           /* positive means fop is higher than this_aircraft */
   float vsr = fop->vs - this_aircraft->vs;  /* positive means fop is rising relative to this_aircraft */
-  if (abs(vsr) > 1000)  vsr = 0;            /* ignore implausible data */
+  if (vsr >  2000)  vsr =  2000;            /* ignore implausible data (units are fpm) */
+  if (vsr < -2000)  vsr = -2000;
   float alt_change = vsr * 0.05;  /* expected change in 10 seconds, converted to meters */
 
   /* only adjust towards higher alarm level: */
@@ -89,13 +91,12 @@ float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
     if (alt_diff > 0)  return 0;  /* minimum abs_alt_diff */
   }
 
-  /* GPS altitude is fuzzy so ignore the first 60m difference */
-  if (alt_diff > 0) {
-    if (alt_diff < VERTICAL_SLACK)  return 0;
+  /* GPS altitude is fuzzy so ignore the first VERTICAL_SLACK (30m) difference */
+  if (alt_diff > VERTICAL_SLACK)
     return (alt_diff - VERTICAL_SLACK);
-  }
-  if (-alt_diff < VERTICAL_SLACK)  return 0;
-  return (alt_diff + VERTICAL_SLACK);
+  if (alt_diff < -VERTICAL_SLACK)
+    return (alt_diff + VERTICAL_SLACK);
+  return 0;
 }
 
 /*
@@ -117,7 +118,7 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
   else
          adj_distance = distance;
 
-  if (adj_distance < ALARM_ZONE_EXTREME)
+  if (adj_distance < ALARM_ZONE_EXTREME && fop->alert_level > ALARM_LEVEL_NONE)
     --fop->alert_level;     /* may sound new alarm for same URGENT level */
   if (adj_distance < ALARM_ZONE_URGENT) {
     rval = ALARM_LEVEL_URGENT;
@@ -145,14 +146,18 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
     return Alarm_Distance(this_aircraft, fop);
 
   float distance = fop->distance;
-  if (distance > 2*ALARM_ZONE_CLOSE
-      || fabs(fop->alt_diff) > 2*VERTICAL_SEPARATION) {
+  if (distance > 2*ALARM_ZONE_CLOSE) {    // 3km
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
 
-  if (distance / (fop->speed + this_aircraft->speed)
-         > ALARM_TIME_CLOSE * _GPS_MPS_PER_KNOT) {
+  float abs_alt_diff = fabs(fop->adj_alt_diff);
+  if (abs_alt_diff > VERTICAL_SEPARATION) {
+    return ALARM_LEVEL_NONE;
+    /* save CPU cycles */
+  }
+
+  if (distance > (fop->speed + this_aircraft->speed) * (ALARM_TIME_LOW * _GPS_MPS_PER_KNOT)) {
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
@@ -160,22 +165,14 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
   /* if either aircraft is turning, vector method is not usable */
   if (fabs(this_aircraft->turnrate) > 3.0 || fabs(fop->turnrate) > 3.0)
         return Alarm_Distance(this_aircraft, fop);
-//  if (fop->turnrate == 0.0) {   /* turnrate not available */
-//    float angle = fabs(fop->course - fop->prevcourse);
-//    if (angle > 270.0)  angle = 360.0 - angle;
-//    if (angle > 6.0)
-//      return Alarm_Distance(this_aircraft, fop);
-//  }
 
   float V_rel_magnitude, V_rel_direction, t;
 
-  if (fabs(fop->adj_alt_diff) < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
+  if (abs_alt_diff < VERTICAL_SEPARATION) {  /* no alarms if too high or too low */
 
-    float adj_distance;
-    if (fop->adj_distance > distance)
-           adj_distance = fop->adj_distance;
-    else
-           adj_distance = distance;
+    float adj_distance = fop->adj_distance;
+    if (adj_distance < distance)
+        adj_distance = distance;
 
     /* Subtract 2D velocity vector of traffic from 2D velocity vector of this aircraft */ 
     float V_rel_y = this_aircraft->speed * cos_approx(this_aircraft->course) -
@@ -187,64 +184,64 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
     V_rel_direction = atan2_approx(V_rel_y, V_rel_x);     /* direction fop is coming from */
 
     /* +- some degrees tolerance for collision course */
+    /* also check the relative speed, ALARM_VECTOR_SPEED = 2 m/s */
+    /* also adj_distance takes altitude difference into account */
 
     if (V_rel_magnitude > ALARM_VECTOR_SPEED) {
 
-      /* time is seconds prior to impact */
-      /* take altitude difference into account */
-
+      /* time in seconds prior to impact */
       t = adj_distance / V_rel_magnitude;
 
       float rel_angle = fabs(V_rel_direction - fop->bearing);
+      if (rel_angle > 180.0)  rel_angle = 360.0 - rel_angle;    // handle wraparound at 360
 
-      if (rel_angle < ALARM_VECTOR_ANGLE && V_rel_magnitude > 3 * ALARM_VECTOR_SPEED) {
+      if (rel_angle < ALARM_VECTOR_ANGLE && V_rel_magnitude > (3 * ALARM_VECTOR_SPEED)) {
 
         /* time limit values are compliant with FLARM data port specs */
-
-        if (t < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_URGENT;
-        } else if (t < ALARM_TIME_IMPORTANT) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else if (t < ALARM_TIME_LOW) {
-          rval = ALARM_LEVEL_LOW;
-        } else if (t < ALARM_TIME_CLOSE) {
+        if (t < ALARM_TIME_CLOSE) {
           rval = ALARM_LEVEL_CLOSE;
+          if (t < ALARM_TIME_LOW) {
+            rval = ALARM_LEVEL_LOW;
+            if (t < ALARM_TIME_IMPORTANT) {
+              rval = ALARM_LEVEL_IMPORTANT;
+              if (t < ALARM_TIME_URGENT)
+                rval = ALARM_LEVEL_URGENT;
+            }
+          }
         }
 
       } else if (rel_angle < 2 * ALARM_VECTOR_ANGLE) {
 
-        /* reduce alarm level since direction is less direct */
-
-        if (t < ALARM_TIME_EXTREME) {
-          rval = ALARM_LEVEL_URGENT;
-        } else if (t < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else if (t < ALARM_TIME_IMPORTANT) {
-          rval = ALARM_LEVEL_LOW;
-        } else if (t < ALARM_TIME_LOW) {
+        /* reduce alarm level since direction is less direct and/or relative speed is low */
+        if (t < ALARM_TIME_LOW) {
           rval = ALARM_LEVEL_CLOSE;
-/*      } else if (t < ALARM_TIME_CLOSE) {
-          rval = ALARM_LEVEL_NONE;               */
+          if (t < ALARM_TIME_IMPORTANT) {
+            rval = ALARM_LEVEL_LOW;
+            if (t < ALARM_TIME_URGENT) {
+              rval = ALARM_LEVEL_IMPORTANT;
+              if (t < ALARM_TIME_EXTREME)
+                rval = ALARM_LEVEL_URGENT;
+            }
+          }
         }
 
       } else if (rel_angle < 3 * ALARM_VECTOR_ANGLE) {
 
         /* further reduce alarm level for larger angles */
-
-        if (t < ALARM_TIME_EXTREME) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else if (t < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_LOW;
-        } else if (t < ALARM_TIME_IMPORTANT) {
+        if (t < ALARM_TIME_IMPORTANT) {
           rval = ALARM_LEVEL_CLOSE;
-/*      } else if (t < ALARM_TIME_LOW) {
-          rval = ALARM_LEVEL_NONE;               */
+          if (t < ALARM_TIME_URGENT) {
+            rval = ALARM_LEVEL_LOW;
+            if (t < ALARM_TIME_EXTREME)
+              rval = ALARM_LEVEL_IMPORTANT;
+          }
         }
       }
+
     }
   }
 
-  if (t < ALARM_TIME_EXTREME)
+  if (rval >= ALARM_LEVEL_LOW && t < ALARM_TIME_EXTREME && fop->alert_level > ALARM_LEVEL_NONE)
       --fop->alert_level;     /* may sound new alarm for same URGENT level */
 
   /* send data out via NMEA for debugging */
@@ -276,16 +273,32 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
  */
 static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 {
-  if (fop->distance > 2*ALARM_ZONE_CLOSE
-      || fabs(fop->adj_alt_diff) > VERTICAL_SEPARATION) {
+  if (fop->distance > 2*ALARM_ZONE_CLOSE) {    // 3km
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
 
-  if (fop->distance / (fop->speed + this_aircraft->speed)
-         > ALARM_TIME_LOW * _GPS_MPS_PER_KNOT) {
+  float v2 = fop->speed + this_aircraft->speed;
+  if (fop->distance > v2 * (ALARM_TIME_LOW * _GPS_MPS_PER_KNOT)) {
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
+  }
+
+  int vv = (int)v2;
+  int dz = ((vv * vv) >> 8);
+  dz = (int)fabs(fop->adj_alt_diff) - dz;   // rough accounting for potential zoom-up
+  if (dz > VERTICAL_SEPARATION) {
+    return ALARM_LEVEL_NONE;
+    /* save CPU cycles */
+  }
+
+  // if fop->protocol==RF_PROTOCOL_LATEST turnrate is already known from the received packet
+  if (fop->protocol == RF_PROTOCOL_LATEST &&
+         fabs(this_aircraft->turnrate) < 2.0 && fabs(fop->turnrate) < 2.0) {
+    /* neither aircraft is turning */
+    return (Alarm_Vector(this_aircraft, fop));
+    // hopefully this takes care of aerotows?
+    // >>> or try and use this algorithm anyway?
   }
 
   /* here start the expensive calculations */
@@ -297,48 +310,80 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   /* project_this(this_aircraft); */
   /* - was already called from Estimate_Wind() or Legacy_Encode() */
 
-  if (fabs(this_aircraft->turnrate) < 2.0 && fabs(fop->turnrate) < 2.0) {
-    /* neither aircraft is circling */
+  if (fop->protocol != RF_PROTOCOL_LATEST &&
+         fabs(this_aircraft->turnrate) < 2.0 && fabs(fop->turnrate) < 2.0) {
+    /* neither aircraft is turning */
     return (Alarm_Vector(this_aircraft, fop));
     // hopefully this takes care of aerotows?
     // >>> or try and use this algorithm anyway?
   }
 
-  /* Project relative position second by second into the future */
-  /* Time points in the ns/ew array may be +2,4,6,8, and perhaps 2,6,10,14 for towplanes    */
-  /*   - although that's in the FLARM transmissions, we compute what we want in Wind.cpp    */
+  // flag if both aircraft are circling in the same direction
+  bool gaggling = (abs(this_aircraft->circling + fop->circling) == 2);
+
+  // flag if possibly a tow operation
+  bool towing = (this_aircraft->aircraft_type==AIRCRAFT_TYPE_TOWPLANE && fop->aircraft_type==AIRCRAFT_TYPE_GLIDER)
+             || (this_aircraft->aircraft_type==AIRCRAFT_TYPE_GLIDER && fop->aircraft_type==AIRCRAFT_TYPE_TOWPLANE);
+  if (towing) {
+    float course_diff = fabs(this_aircraft->course - fop->course);
+    if (course_diff > 20.0 && course_diff < 340.0)            towing = false;
+    if (fabs(this_aircraft->turnrate - fop->turnrate) > 6.0)  towing = false;   // deg/sec
+    if (fabs(this_aircraft->speed - fop->speed) > 15.0)       towing = false;   // knots
+  }
+  // actually diverted typical towing (both non-turning) to vector method above
 
   /* Use integer math for computational speed */
 
-  /* also take altitude difference into account */
-  int dz = (int) fop->alt_diff;
+  /* also take altitude difference and zoom-up into account */
+  dz = (int) fop->alt_diff;          // meters   - not adj_alt_diff since we re-compute zoom-up here
+  float vsr = fop->vs - this_aircraft->vs;  // fpm, >0 if fop is rising relative to this_aircraft
   int absdz = abs(dz);
   int adjdz = absdz;
-  /* assume lower aircraft may zoom up */
-  /* potential zoom altitude is about V^2/20 (m, m/s) */
-  int vx, vy, vv, vv20;
-  if (dz < 0) {             // other aircraft is lower
+  // assume lower aircraft may be zooming up
+  // potential zoom altitude is about V^2/20 (m, m/s)
+  int vx, vy, vv20;
+  if (dz < 0 && !fop->circling && vsr > 400) {
+    // other aircraft is lower and not circling and relatively rising by > 2 m/s
     vx = fop->air_ew[0];
-    vy = fop->air_ns[0];    // quarter-meters per second airspeed
-  } else {
+    vy = fop->air_ns[0];              // airspeed in quarter-meters per second
+    vv = (vx*vx + vy*vy);
+  } else if (dz > 0 && !this_aircraft->circling && vsr < -400) {
+    // this aircraft is lower and not circling and relatively rising by > 2 m/s
     vx = this_aircraft->air_ew[0];
     vy = this_aircraft->air_ns[0];
+    vv = (vx*vx + vy*vy);
+  } else {
+    vv = 0;
   }
-  vv = (vx*vx + vy*vy);
-  vv20 = vv - (20*20*4*4);  // zoom to 20 m/s
-  if (vv20 > 0)
-    adjdz -= vv20 >> 9;     // about 2/3 of possible zoom
-  adjdz -= 70;        // account for possible GPS altitude discrepancy
+  bool zoom = false;
+  int32_t factor;
+  if (vv > (20*20*4*4)) {
+    vv20 = vv - (20*20*4*4);     // can zoom until airspeed decreases to 20 m/s
+    adjdz -= vv20 >> 9;          // about 2/3 of possible zoom
+    if (vv20 > 8000) {
+      zoom = true;
+      /* if zooming to level of other aircraft, speed decreases           */
+      /* rough approximation: multiply speed by (1 - 5*dz/vv)             */
+      /*    5 = 20, halved for average over time, halved again for sqrt() */
+      factor = (5*16*64) * (int32_t) absdz;
+      factor = 64 - factor/vv;         // if zoom, vv cannot be zero
+      if (factor < 48)  factor = 48;   // <<< maybe should lower this limit, to 32?
+    }
+  }
+  adjdz -= VERTICAL_SLACK;       // for possible GPS altitude discrepancy, 30m, reduced from 70
   if (adjdz < 0)
     adjdz = 0;
-  if (adjdz > 100)
+  if (adjdz > 60)                // meters - cannot reach the 120m 3D distance threshold below
     return (ALARM_LEVEL_NONE);
 
   /* may want to adjust dz over time? */
   /* - but is relative vs representative of future? */
   /* - in same thermal average relative vs = 0 */
 
-  /* prepare the second-by-second velocity vectors */
+  /* Project relative position second by second into the future */
+  /* Time points in our ns/ew array of airspeeds are at +3,6,9,12,15,18 sec */
+
+  /* prepare second-by-second velocity vectors */
   static int thisvx[20];
   static int thisvy[20];
   static int thatvx[20];
@@ -348,26 +393,20 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   int *py = thisvy;
   /* considered interpolating between the 4 points, but does not seem useful */
   int i, j;
-  /* if zooming to level of other aircraft, speed decreases */
-  /* rough approximation: multiply speed by (1 - 5*dz/vv)   */
-  /*    5 = 20, halved for average, halved again for sqrt() */
-  if (vv20 > 8000 && dz > 15) {
-    int32_t factor = (5*16*64) * (int32_t) absdz;
-    factor = 64 - factor/vv;
-    if (factor < 48)  factor = 48;
-    for (i=0; i<6; i++) {
-       int32_t v;
-       v = this_aircraft->air_ew[i];
-       v *= factor;
-       vx = v >> 6;
-       v = this_aircraft->air_ns[i];
-       v *= factor;
-       vy = v >> 6;
-       for (j=0; j<3; j++) {
-         *px++ = vx;
-         *py++ = vy;    
-       }
-    }
+  if (zoom && dz > 15) {
+      for (i=0; i<6; i++) {
+         int32_t v;
+         v = this_aircraft->air_ew[i];
+         v *= factor;
+         vx = v >> 6;
+         v = this_aircraft->air_ns[i];
+         v *= factor;
+         vy = v >> 6;
+         for (j=0; j<3; j++) {
+           *px++ = vx;
+           *py++ = vy;    
+         }
+      }
   } else {
     for (i=0; i<6; i++) {
       vx = this_aircraft->air_ew[i];  /* quarter-meters per second */
@@ -384,10 +423,7 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   /* same for the other aircraft */
   px = thatvx;
   py = thatvy;
-  if (vv20 > 8000 && dz < -15) {
-    int32_t factor = (5*16*64) * (int32_t) absdz;
-    factor = 64 - factor/vv;
-    if (factor < 48)  factor = 48;
+  if (zoom && dz < -15) {
     for (i=0; i<6; i++) {
        int32_t v;
        v = fop->air_ew[i];
@@ -416,12 +452,13 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
 
   /* 2D position of fop relative to this aircraft */
   /* - computed in Traffic_Update() */
-  /* convert to quarter-meters */
+  /* convert from meters to quarter-meters */
   int dx = fop->dx << 2;
   int dy = fop->dy << 2;
+  int cursqdist = dx*dx + dy*dy;
 
   /* project paths over time and find minimum 3D distance */
-  uint32_t minsqdist = 200*200*4*4;
+  int minsqdist = 200*200*4*4;
   int mintime = ALARM_TIME_CLOSE;
   int vxmin = 0;
   int vymin = 0;
@@ -443,14 +480,17 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
     j = 0;
   }
   int t;
-  int sqdz = (adjdz*adjdz) << 4;
+  adjdz <<= 3;
+  // <<2 for units: convert to quarter-meters,
+  // another <<1 to consider vertical separation 2x better than horizontal distance
+  int sqdz = adjdz * adjdz;
   for (t=0; t<18; t++) {  /* loop over the 1-second time points prepared */
     vx = thatvx[i] - thisvx[j];   /* relative velocity */
     vy = thatvy[i] - thisvy[j];
     dx += vx;   /* change in relative position over this second */
     dy += vy;
     /* dz += vz; */
-    uint32_t sqdist = dx*dx + dy*dy + sqdz;
+    int sqdist = dx*dx + dy*dy + sqdz;
     if (sqdist < minsqdist) {
       minsqdist = sqdist;
       vxmin = vx;
@@ -461,39 +501,43 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
     ++j;
   }
 
+  if (cursqdist <= minsqdist)     // if not getting any closer than current situation
+      return ALARM_LEVEL_NONE;    // then don't sound an alarm
+
   int8_t rval = ALARM_LEVEL_NONE;
 
   /* try and set thresholds for alarms with gaggles - and tows - in mind */
   /* squeezed between size of thermal, length of tow rope, and accuracy of prediction */
-  if (minsqdist < 60*60*4*4) {   /* 60 meters 3D separation */
-        if (mintime < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_URGENT;
-        } else if (mintime < ALARM_TIME_IMPORTANT) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else {  /* min-dist time is at most 18 seconds */
-          rval = ALARM_LEVEL_LOW;
-        }
-  } else if (minsqdist < 100*100*4*4) {   /* 100 meters */
-        if (mintime < ALARM_TIME_EXTREME) {
-          rval = ALARM_LEVEL_URGENT;
-        } else if (mintime < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else if (mintime < ALARM_TIME_IMPORTANT) {
-          rval = ALARM_LEVEL_LOW;
-        } else {
-          rval = ALARM_LEVEL_CLOSE;
-        }
-  } else if (minsqdist < 160*160*4*4 && (! this_aircraft->circling || ! fop->circling)) {
-        if (mintime < ALARM_TIME_EXTREME) {
-          rval = ALARM_LEVEL_IMPORTANT;
-        } else if (mintime < ALARM_TIME_URGENT) {
-          rval = ALARM_LEVEL_LOW;
-        } else {
-          rval = ALARM_LEVEL_CLOSE;
-        }
+  if (minsqdist < 40*40*4*4) {                /* 40 meters 3D separation */
+      if (mintime < ALARM_TIME_URGENT) {
+        rval = ALARM_LEVEL_URGENT;
+      } else if (mintime < ALARM_TIME_IMPORTANT) {
+        rval = ALARM_LEVEL_IMPORTANT;
+      } else {  /* min-dist time is at most 18 seconds */
+        rval = ALARM_LEVEL_LOW;
+      }
+  } else if (minsqdist < 70*70*4*4 && !gaggling && !towing ) {
+      if (mintime < ALARM_TIME_EXTREME) {
+        rval = ALARM_LEVEL_URGENT;
+      } else if (mintime < ALARM_TIME_URGENT) {
+        rval = ALARM_LEVEL_IMPORTANT;
+      } else if (mintime < ALARM_TIME_IMPORTANT) {
+        rval = ALARM_LEVEL_LOW;
+      } else {
+        rval = ALARM_LEVEL_CLOSE;
+      }
+  } else if (minsqdist < 120*120*4*4 && !gaggling && !towing ) {
+      if (mintime < ALARM_TIME_EXTREME) {
+        rval = ALARM_LEVEL_IMPORTANT;
+      } else if (mintime < ALARM_TIME_URGENT) {
+        rval = ALARM_LEVEL_LOW;
+      } else if (mintime < ALARM_TIME_IMPORTANT) {
+        rval = ALARM_LEVEL_CLOSE;
+      }
   }
-  uint32_t sqspeed = 0;
-  if (rval > ALARM_LEVEL_NONE /* && mintime > ALARM_TIME_EXTREME */ ) {
+  // reduce alarm level if collision speed is low
+  int sqspeed = 0;
+  if (rval > ALARM_LEVEL_NONE) {
     sqspeed = vxmin*vxmin + vymin*vymin;    /* relative speed at closest point, squared */
     if (sqspeed < 6*6*4*4) {     /* relative speed < 6 mps */
       --rval;       // <= IMPORTANT
@@ -507,11 +551,11 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   if (rval < ALARM_LEVEL_NONE)
       rval = ALARM_LEVEL_NONE;
 
-  if (rval >= ALARM_LEVEL_LOW && mintime < ALARM_TIME_EXTREME)
+  if (rval >= ALARM_LEVEL_LOW && mintime < ALARM_TIME_EXTREME && fop->alert_level > ALARM_LEVEL_NONE)
       --fop->alert_level;     /* may sound new alarm even for same URGENT level */
 
   /* send data out via NMEA for debugging */
-  if (rval > ALARM_LEVEL_CLOSE || fop->distance < ALARM_ZONE_IMPORTANT) {
+  if (rval > ALARM_LEVEL_CLOSE || fop->distance < 300 || minsqdist < 120*120*4*4) {
     if ((settings->nmea_d || settings->nmea2_d) && (settings->debug_flags & DEBUG_ALARM)) {
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSALL,%06X,%ld,%ld,%d,%d,%d,%d,%.1f,%.1f,%.1f,%ld,%ld,%.1f,%.1f,%.1f,%.1f\r\n"),
@@ -523,6 +567,49 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   }
 
   return rval;
+}
+
+void logOneTraffic(ufo_t *fop, const char *label)
+{
+#if defined(USE_SD_CARD)
+    uint32_t addr = ((fop->no_track)? 0xAAAAAA : fop->addr);
+    int alarm_level = fop->alarm_level - 1;
+    if (alarm_level < ALARM_LEVEL_NONE)
+        alarm_level = ALARM_LEVEL_NONE;
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      PSTR("%s,%d,%d,%06x,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
+      label, alarm_level, fop->aircraft_type, addr,
+      (int)fop->distance, (int)fop->bearing,
+      (int)fop->speed, (int)fop->course, (int)fop->turnrate,
+      (int)fop->RelativeBearing, (int)fop->alt_diff, (int)(fop->vs - ThisAircraft.vs),
+      (int)ThisAircraft.speed, (int)ThisAircraft.course, (int)ThisAircraft.turnrate,
+      (int)(wind_speed * (1.0 / _GPS_MPS_PER_KNOT)), (int)wind_direction);
+    //Serial.print(NMEABuffer);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+    FlightLogComment(NMEABuffer+4);   // it will prepend the LPLT
+#endif
+}
+
+// insert data about all "close" traffic into the flight log
+// called after the logFlightPosition() call
+void logCloseTraffic()
+{
+#if defined(USE_SD_CARD)
+    ufo_t *fop;
+    for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+        fop = &Container[i];
+        if (fop->addr == 0)
+            continue;
+        if (fop->airborne == 0)
+            continue;
+        if (fop->adj_distance > 1000  // meters, adjusted for altitude difference
+                && fop->alarm_level == ALARM_LEVEL_NONE)
+            continue;
+        if ((ThisAircraft.timestamp - fop->timestamp) > 3 /*seconds*/ )
+            continue;
+        logOneTraffic(fop, "LPLTT");
+    }
+#endif
 }
 
 void Traffic_Update(ufo_t *fop)
@@ -551,14 +638,22 @@ void Traffic_Update(ufo_t *fop)
   fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(adj_alt_diff);
 
   /* follow FLARM docs: do not issue alarms about non-airborne traffic */
-  /* (first minute exception removed) */
-  if ((fop->airborne == 0 || ThisAircraft.airborne == 0)
+  /* (first minute exception removed) (demo-mode exception added) */
+  if ((fop->airborne == 0 || ThisAircraft.airborne == 0) && !do_alarm_demo
             /* && (millis() - SetupTimeMarker > 60000) */ ) {
     fop->alarm_level = ALARM_LEVEL_NONE;
     return;
   }
 
-  if (Alarm_Level) {
+  // do not compute alarms unless data is current
+  if (OurTime > ThisAircraft.timestamp + 2)
+      return;
+  if (OurTime > fop->timestamp + 2)
+      return;
+
+  if (Alarm_Level) {  // if a collision prediction algorithm selected
+
+      uint8_t old_alarm_level = fop->alarm_level;
       fop->alarm_level = (*Alarm_Level)(&ThisAircraft, fop);
 
       /* Sound an alarm if new alert, or got closer than previous alert,     */
@@ -569,39 +664,50 @@ void Traffic_Update(ufo_t *fop)
       /* If now gone to NONE (farther than CLOSE), set alert_level to CLOSE, */
       /* then next time returns to alarm_level LOW will give an alert.       */
 
-      if (fop->alarm_level < fop->alert_level) {    /* if just less by 1...   */
-          fop->alert_level = fop->alarm_level + 1;  /* ...then no change here */
-      }
-      if (Alarm_timer != 0 && fop->alert_level > ALARM_LEVEL_NONE && millis() > Alarm_timer) {
-          --fop->alert_level;
+      if (fop->alarm_level < fop->alert_level)       /* if just less by 1...   */
+          fop->alert_level = fop->alarm_level + 1;   /* ...then no change here */
+
+      if (Alarm_timer != 0 && millis() > Alarm_timer) {
+          if (fop->alert_level > ALARM_LEVEL_NONE)
+              --fop->alert_level;
           Alarm_timer = 0;
       }
+
+#if defined(USE_SD_CARD)
+      if (fop->alarm_level > old_alarm_level) {
+        if (settings->logalarms || settings->logflight == FLIGHT_LOG_TRAFFIC)
+          logOneTraffic(fop, "LPLTA");  // do not wait until logFlightPosition()
+      }
+#endif
   }
 }
 
-/* relay landed-traffic if we are airborne */
+/* relay landed-out or ADS-B traffic if we are airborne */
 bool air_relay(ufo_t *fop)
 {
     static uint32_t lastrelay = 0;
 
-    //if (fop->airborne && (millis() > SetupTimeMarker + 60000)) {
     bool often = false;
     if (fop->airborne) {
       if (settings->relay < RELAY_ALL)
           return false;
-      if (fop->protocol == RF_PROTOCOL_GDL90 || fop->protocol == RF_PROTOCOL_ADSB_1090) {
-          // only relay ADS-B traffic if it is *not* far - already filtered in GNS5892.cpp
-          //if (fop->distance > 15*1852 || fabs(fop->alt_diff) > 2000.0)
-          //    return false;
+      //if (fop->protocol == RF_PROTOCOL_GDL90 || fop->protocol == RF_PROTOCOL_ADSB_1090) {
+      if (fop->protocol != RF_PROTOCOL_LATEST && fop->protocol != RF_PROTOCOL_LEGACY) {
+          if (fop->aircraft_type != AIRCRAFT_TYPE_JET && fop->aircraft_type != AIRCRAFT_TYPE_HELICOPTER) {
+              if (fop->distance > 10000)  // only relay gliders and light planes if close
+                  return false;
+          }
           often = true;
       } else {
-          // do not relay close-by FLARM traffic unless it is low (or landed)
-          if (fop->distance < 10000.0 && fop->alt_diff > -1000.0)
+          // only relay SoftRF traffic in landed-out mode, signaled by AIRCRAFT_TYPE_UNKNOWN
+          if (fop->aircraft_type != AIRCRAFT_TYPE_UNKNOWN)
               return false;
+          often = true;
       }
     }
 
-    // only relay once in a while: 5 seconds for any, 15 for same aircraft (7 for ADS-B)
+    // only relay once in a while:
+    //   5 seconds for any, 15 for same aircraft (7 for ADS-B or landed out)
     if (millis() < lastrelay + 1000*ANY_RELAY_TIME)
         return true;
     if (fop->timerelayed + (often? ANY_RELAY_TIME+2 : ENTRY_RELAY_TIME) > fop->timestamp)
@@ -614,13 +720,23 @@ bool air_relay(ufo_t *fop)
     if (RF_current_slot != 0 || !RF_Transmit_Ready())
         return true;
 
-    // >>> re-encode new-protocol packets into old protocol for relaying
+    // >>> re-encode packets for relaying
     bool relayed = false;
     size_t s = RF_Encode(&fo);
     if (s != 0)
         relayed = RF_Transmit(sizeof(legacy_packet_t), true);
 
     if (relayed) {
+        if (fop->protocol == RF_PROTOCOL_LATEST && fop->timerelayed == 0) {
+            // report relaying a landed-out aircraft
+            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+              PSTR("$PSRLO,%02d:%02d,%06x,%.5f,%.5f\r\n"),
+              gnss.time.hour(), gnss.time.minute(), fop->addr, fop->latitude, fop->longitude);
+            NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+#if defined(USE_SD_CARD)
+            FlightLogComment(NMEABuffer+3);   // it will prepend the LPLT
+#endif
+        }
         fop->timerelayed = ThisAircraft.timestamp;
         lastrelay = millis();
         relay_waiting = false;
@@ -654,9 +770,7 @@ void AddTraffic(ufo_t *fop)
 
     if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
       // relay some traffic - only if we are airborne (or in "relay only" mode)
-      if (settings->relay != RELAY_OFF
-          //&& (fop->protocol == RF_PROTOCOL_LEGACY || fop->protocol == RF_PROTOCOL_LATEST)
-              // - do not relay GDL90 or ADS-B traffic - perhaps should?
+      if (settings->relay != RELAY_OFF && ((settings->debug_flags & DEBUG_SIMULATE) == 0)
           && fop->relayed == false         // not a packet already relayed one hop
           && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
       {
@@ -675,13 +789,14 @@ void AddTraffic(ufo_t *fop)
         bool fop_adsb = fop->protocol == RF_PROTOCOL_GDL90 || fop->protocol == RF_PROTOCOL_ADSB_1090;
         bool cip_adsb = cip->protocol == RF_PROTOCOL_GDL90 || cip->protocol == RF_PROTOCOL_ADSB_1090;
 
-        // ignore external (ADS-B) data about aircraft we also receive from directly
         if (fop_adsb && ! cip_adsb) {
+            // ignore external (ADS-B) data about aircraft we also receive from directly
             if (timenow - cip->timestamp <= ENTRY_EXPIRATION_TIME)
                 return;
-            // was tracked via other means, but expired - take over this slot
+            // if was tracked via other means, but expired - take over this slot
             *cip = *fop;
             Traffic_Update(cip);
+            if (do_relay)  air_relay(cip);
             return;
         }
 
@@ -731,7 +846,7 @@ void AddTraffic(ufo_t *fop)
           fop->prevaltitude = cip->prevaltitude;
           /* >>> may want to also retain info needed to compute velocity vector at t=0 */
         }
-        fop->turnrate    = cip->turnrate;   /* keep the old turn rate */
+     /* fop->turnrate    = cip->turnrate;    keep the old turn rate   - why? */
         fop->alert       = cip->alert;
         fop->alert_level = cip->alert_level;
      /* fop->callsign    = cip->callsign; */
@@ -825,7 +940,7 @@ void AddTraffic(ufo_t *fop)
       return;
     }
 
-    /* otherwise, no slot found, ignore the new object */
+    /* otherwise ignore the new object */
 }
 
 void ParseData(void)
@@ -882,49 +997,6 @@ void Traffic_setup()
   }
 }
 
-void logOneTraffic(ufo_t *fop, const char *label)
-{
-#if defined(USE_SD_CARD)
-    uint32_t addr = ((fop->no_track)? 0xAAAAAA : fop->addr);
-    int alarm_level = fop->alarm_level - 1;
-    if (alarm_level < ALARM_LEVEL_NONE)
-        alarm_level = ALARM_LEVEL_NONE;
-    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-      PSTR("%s,%d,%d,%06x,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n"),
-      label, alarm_level, fop->aircraft_type, addr,
-      (int)fop->distance, (int)fop->bearing,
-      (int)fop->speed, (int)fop->course, (int)fop->turnrate,
-      (int)fop->RelativeBearing, (int)fop->alt_diff, (int)(fop->vs - ThisAircraft.vs),
-      (int)ThisAircraft.speed, (int)ThisAircraft.course, (int)ThisAircraft.turnrate,
-      (int)(wind_speed * (1.0 / _GPS_MPS_PER_KNOT)), (int)wind_direction);
-    //Serial.print(NMEABuffer);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
-    FlightLogComment(NMEABuffer+4);   // it will prepend the LPLT
-#endif
-}
-
-// insert data about all "close" traffic into the flight log
-// called after the logFlightPosition() call
-void logCloseTraffic()
-{
-#if defined(USE_SD_CARD)
-    ufo_t *fop;
-    for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        fop = &Container[i];
-        if (fop->addr == 0)
-            continue;
-        if (fop->airborne == 0)
-            continue;
-        if (fop->adj_distance > 1000  // meters, adjusted for altitude difference
-                && fop->alarm_level == ALARM_LEVEL_NONE)
-            continue;
-        if ((ThisAircraft.timestamp - fop->timestamp) > 3 /*seconds*/ )
-            continue;
-        logOneTraffic(fop, "LPLTT");
-    }
-#endif
-}
-
 void Traffic_loop()
 {
     if (! isTimeToUpdateTraffic())
@@ -945,9 +1017,8 @@ void Traffic_loop()
       
         if (ThisAircraft.timestamp - fop->timestamp <= ENTRY_EXPIRATION_TIME) {
 
-          if ((ThisAircraft.timestamp - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL)
-              Traffic_Update(fop);
-          /* else Traffic_Update(fop) was called last time a radio packet came in */
+          if ((RF_time - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL)
+              continue;
 
           /* determine the highest alarm level seen at the moment */
           if (fop->alarm_level > max_alarm_level)
@@ -972,9 +1043,9 @@ void Traffic_loop()
 
         } else {   /* expired ufo */
 
-          fop->addr = 0;
+          //fop->addr = 0;
 
-          //*fop = EmptyFO;
+          *fop = EmptyFO;
 
           /* implied by emptyFO:
           fop->addr = 0;
@@ -986,14 +1057,6 @@ void Traffic_loop()
         }
       }
     }
-
-    /* Sound an alarm if new alert, or got closer than previous alert,     */
-    /* or (hysteresis) got two levels farther, and then closer.            */
-    /* E.g., if alarm was for LOW, alert_level was set to LOW.             */
-    /* A new alarm alert will sound if close enough to now be IMPORTANT.   */
-    /* If gone to CLOSE, then back to LOW, still no new alarm.             */
-    /* If now gone to NONE (farther than CLOSE), set alert_level to CLOSE, */
-    /* then next time returns to alarm_level LOW will give an alert.       */
 
     if (sound_alarm_level > ALARM_LEVEL_CLOSE) {
       // use alarmcount to modify the sounds
@@ -1022,7 +1085,7 @@ void Traffic_loop()
           // also warn again for same level after 9 seconds
           if (Alarm_timer == 0)
               Alarm_timer = millis() + 9000;    // when may warn again about this aircraft
-          mfop->alert |= TRAFFIC_ALERT_SOUND;  /* not actually used for anything */
+          mfop->alert |= TRAFFIC_ALERT_SOUND;   // not actually used for anything
         }
 #if defined(ESP32)
         if (alarmcount>0 && settings->logalarms && AlarmLogOpen) {
@@ -1035,12 +1098,13 @@ void Traffic_loop()
           char *ep = &GPGGA_Copy[35];
           while (*ep != 'E' && *ep != 'W') {
               if (ep > &GPGGA_Copy[48])  break;
+              if (*ep == '\0')  break;
               ++ep;
           }
           ++ep;
           *ep = '\0';       // overwrite the comma after the "E" or "W"
-Serial.print("GGA time & position: ");
-Serial.println(cp);
+//Serial.print("GGA time & position: ");
+//Serial.println(cp);
           //int rel_bearing = (int) (mfop->bearing - ThisAircraft.course);
           //rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
@@ -1057,18 +1121,6 @@ Serial.println(NMEABuffer);
               AlarmLogOpen = false;
           }
         }
-#if defined(USE_SD_CARD)
-        if (settings->logalarms || settings->logflight == FLIGHT_LOG_TRAFFIC) {
-            logOneTraffic(mfop, "LPLTA");  // do not wait until logFlightPosition()
-        //} else if (settings->logflight != FLIGHT_LOG_NONE) {
-        //    uin32_t addr = ((mfop->no_track)? 0xAAAAAA : mfop->addr);
-        //    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-        //      PSTR("A,%d,%d,%06x,%d,%d,%d\r\n"),
-        //      mfop->alarm_level-1, alarmcount, addr,
-        //      (int)mfop->RelativeBearing, (int)mfop->distance, (int)mfop->alt_diff);
-        //    FlightLogComment(NMEABuffer);
-        }
-#endif
 #endif
       }
     }

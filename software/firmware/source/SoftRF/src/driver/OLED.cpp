@@ -84,9 +84,10 @@ static uint32_t prev_acrfts_counter = (uint32_t) -1;
 static uint32_t prev_sats_counter   = (uint32_t) -1;
 static uint32_t prev_uptime_minutes = (uint32_t) -1;
 static int32_t  prev_voltage        = (uint32_t) -1;
-static int8_t   prev_fix            = (uint8_t)  -1;
+static char     prev_fix            = ' ';
 static int8_t   prev_band           = -1;
 static int8_t   prev_type           = -1;
+static int8_t   prev_min            = -1;
 
 #if !defined(EXCLUDE_OLED_BARO_PAGE)
 static int32_t  prev_altitude       = (int32_t)   -10000;
@@ -177,7 +178,10 @@ static void OLED_settings()
     snprintf (buf, sizeof(buf), "%06X", ThisAircraft.addr);
     u8x8->draw2x2String(0, 2, buf);
 
-    u8x8->drawString(8, 1, PROTOCOL_text);
+    if (settings->debug_flags & DEBUG_SIMULATE)
+        u8x8->drawString(8, 1, "SIM");
+    else
+        u8x8->drawString(8, 1, PROTOCOL_text);
 
     char c = Protocol_ID[ThisAircraft.protocol][0];
     if (ThisAircraft.protocol == RF_PROTOCOL_LATEST)
@@ -274,7 +278,10 @@ static void OLED_radio()
 
     u8x8->drawString( 1, 0, ACFTS_text);
     u8x8->drawString( 7, 0, SATS_text);
-    u8x8->drawString(12, 0, FIX_text);
+    if (settings->debug_flags & DEBUG_SIMULATE)
+        u8x8->drawString(12, 0, "SIM");
+    else
+        u8x8->drawString(12, 0, FIX_text);
     u8x8->drawString(0, 4, TX_text);
     if (settings->rx1090) {
         u8x8->drawString(8, 4, RX_text);
@@ -307,14 +314,14 @@ static void OLED_radio()
 
     prev_acrfts_counter = (uint32_t) -1;
     prev_sats_counter   = (uint32_t) -1;
-    prev_fix            = (uint8_t)  -1;
+    prev_fix            = ' ';
 
     OLED_display_titles = true;
   }
 
   uint32_t acrfts_counter = Traffic_Count();
   uint32_t sats_counter   = gnss.satellites.value();
-  uint8_t  fix            = (uint8_t) isValidGNSSFix();
+  char fix = (isValidGNSSFix()? (leap_seconds_valid()? '+' : '!') : '-');
 
   if (prev_acrfts_counter != acrfts_counter) {
     disp_value = acrfts_counter > 99 ? 99 : acrfts_counter;
@@ -337,8 +344,7 @@ static void OLED_radio()
   }
 
   if (prev_fix != fix) {
-    u8x8->draw2x2Glyph(12, 1, fix > 0 ? '+' : '-');
-//  u8x8->draw2x2Glyph(12, 1, '0' + fix);
+    u8x8->draw2x2Glyph(12, 1, fix);
     prev_fix = fix;
   }
 
@@ -485,8 +491,11 @@ static void OLED_wifi()
 #if !defined(EXCLUDE_OLED_ACFT_PAGE)
 static void OLED_acft()
 {
+  static int prev_dist = -1;
+  static int prev_alt = 9999;
+
   static uint32_t next_ms = 0;
-  if (OLED_display_titles == true && millis() < next_ms)
+  if ((OLED_display_titles == true || prev_min >= 0) && millis() < next_ms)
     return;
   next_ms = millis() + 3000;
 
@@ -496,9 +505,7 @@ static void OLED_acft()
   if (prev_i < 0)
       OLED_display_titles = false;  // for transition from no-traffic to traffic
 
-  static int prev_dist = -1;
-  static int prev_alt = 9999;
-
+  char buf[16];
   int age;
   int i = prev_i + 1;
   if (i >= MAX_TRACKING_OBJECTS)
@@ -517,19 +524,26 @@ static void OLED_acft()
         i = 0;   // wrap around to the beginning of Container[]
   } while (i != j);
 
+  int minute = gnss.time.minute();
   if (! found) {     // no aircraft to show
       prev_i = -1;
-      u8x8->clear();
-      u8x8->drawString(2, 4, "NO TRAFFIC");
+      if (prev_min != minute) {
+          u8x8->clear();
+          u8x8->drawString(5, 1, "UTC");
+          snprintf (buf, sizeof(buf), "%02d:%02d", gnss.time.hour(), minute);
+          u8x8->draw2x2String(2, 2, buf);
+          prev_min = minute;
+          u8x8->drawString(2, 6, "NO TRAFFIC");
+      }
       prev_dist = -1;
       prev_alt = 9999;
-      OLED_display_titles = true;   // wait until next_ms
+      //OLED_display_titles = true;   // wait until next_ms
       return;
   }
+  prev_min = -1;
 
   int dist = (int) (Container[i].distance * 0.001);    // kilometers
   int rel_alt = (int) (Container[i].alt_diff * 0.01);  // hundreds of meters
-  char buf[16];
 
   if (OLED_display_titles) {
       if (i == prev_i) {
@@ -1076,6 +1090,7 @@ void OLED_Next_Page()
 #endif /* EXCLUDE_OLED_049 */
 
     OLED_display_titles = false;
+    prev_min = -1;
   }
 }
 

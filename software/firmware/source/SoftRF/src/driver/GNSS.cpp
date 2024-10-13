@@ -1718,11 +1718,12 @@ bool Try_GNSS_sentence() {
 
 void PickGNSSFix()
 {
-  int c = -1;
+  uint8_t c = 0;
 
   if (is_prime_mk2) {
 
     if (settings->debug_flags & DEBUG_SIMULATE) {
+      static uint8_t d = 0;
       // read simulated GNSS sentences from either a file or the main serial port
       static uint32_t burst_start = 0;
       static uint32_t next_burst = 40200;   // start sim running 40s after boot
@@ -1744,13 +1745,25 @@ void PickGNSSFix()
           if (millis() < next_burst)     // discard input until next simulated second
             return;
         }
-        if (GNSS_cnt == 0 && (c == '.' || c == '\r' || c == '\n')) {
+        if (GNSS_cnt == 0) {
+          if (c == '.' || c == '\r' || c == '\n') {
             // a blank line or starting with '.' means: wait for next second
-            if (burst_start != 0)
+            if (burst_start != 0) {
                 next_burst = ref_time_ms + 1200;  // 200 ms after next simulated PPS
-            burst_start = 0;
+                burst_start = 0;
+            } else if (c == '.') {
+                next_burst += 1000;               // ".." for a 2-sec delay, etc
+            } else if (c == '\n' && d == '\n') {
+                    next_burst += 1000;           // 2 blank lines for a 2-sec delay, etc
+            }
+            // '\r' ignored unless burst_start != 0
+            if (c != '\r')
+                d = c;
             return;
+          }
+          // else if (c == 'B') process IGC B-record as sim input
         }
+        d = 0;
         if (isPrintable(c) || c == '\r' || c == '\n') {
           if (burst_start == 0)
               burst_start = millis();

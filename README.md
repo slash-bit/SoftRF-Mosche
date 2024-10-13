@@ -8,9 +8,8 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 ### Latest additions:
 
 * vMB140: supports SD card & flight logging, on the T-Beam
-* vMB138: using add-on GNSS modules, on the T-Beam
+* vMB138: supports using add-on GNSS modules, on the T-Beam
 * vMB130: supports the GNS5892R ADS-B receiver module, on the T-Beam
-* vMB123: supports baro sensor on the T-Echo ("Badge")
 * vMB120: supports the latest 2024 radio protocol
 * vMB114: import traffic data in GDL90 format (from ADS-B receiver)
 * vMB110: added second serial port and data bridging (only on T-Beam)
@@ -24,7 +23,7 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 * Settable baud rate for serial output
 * Estimates wind while circling, uses for collision prediction
 * Corrected frequency hopping and time slots
-* Airborne devices relay radio packets from landed aircraft
+* Airborne devices can relay radio packets from landed aircraft
 * Can adjust SoftRF settings within T-Echo (without an app)
 
 ### And on the T-Beam specifically: 

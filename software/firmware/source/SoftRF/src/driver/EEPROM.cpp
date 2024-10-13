@@ -42,7 +42,8 @@ bool default_settings_used = false;
 eeprom_t eeprom_block;
 settings_t *settings;
 
-bool do_alarm_demo = false;  // besides settings->alarm_demo, activated by middle button on T-Beam
+bool do_alarm_demo = false;        // activated by middle button on T-Beam
+bool landed_out_mode = false;      // activated by button in status web page
 
 uint32_t baudrates[8] = 
 {
@@ -235,6 +236,7 @@ void EEPROM_defaults()
     settings->ppswire   = false;       // whether T-Beam v0.7 or external GNSS has PPS wire connected
     settings->sd_card   = SD_CARD_NONE;
     settings->logflight = FLIGHT_LOG_NONE;
+    settings->loginterval = LOG_INTERVAL_4S;
     settings->rx1090    = ADSB_RX_NONE;
 
     //strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
@@ -320,6 +322,7 @@ void show_settings_serial()
     Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
     Serial.print(F(" SD card adapter "));Serial.println(settings->sd_card);
     Serial.print(F(" Log flight "));Serial.println(settings->logflight);
+    Serial.print(F(" Log interval "));Serial.println(settings->loginterval);
     Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);
 #if defined(USE_OGN_ENCRYPTION)
     if (settings->rf_protocol == RF_PROTOCOL_OGNTP) {

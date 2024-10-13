@@ -506,6 +506,8 @@ void NMEA_setup()
   memset(&nmealib_buf, 0, sizeof(nmealib_buf));
 #endif /* USE_NMEALIB */
 
+  memset(GPGGA_Copy, 0, sizeof(GPGGA_Copy));
+
   PGRMZ_TimeMarker = millis();
 
 #if defined(ENABLE_AHRS)

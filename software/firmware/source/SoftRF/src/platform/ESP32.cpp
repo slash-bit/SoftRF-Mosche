@@ -1878,13 +1878,13 @@ Serial.println("Buzzer_test() using ToneAC...");
         reason == REASON_SOFT_RESTART) {
 Serial.println("... tone 1:");
       Buzzer_tone(440, 500);
-      delay(200);
+      delay(100);
 Serial.println("... tone 2:");
       Buzzer_tone(640, 500);
-      delay(200);
+      delay(100);
 Serial.println("... tone 3:");
       Buzzer_tone(840, 500);
-      delay(200);
+      delay(100);
 Serial.println("... tone 4:");
       Buzzer_tone(1040, 600);
     } else if (reason == REASON_WDT_RST) {
@@ -2315,7 +2315,10 @@ static byte ESP32_Display_setup()
         u8x8->drawString   (11, 6 + shift_y, ISO3166_CC[settings->band]);
 
       } else {
-        u8x8->draw2x2String( 2, 1, SoftRF_text1);
+        if (settings->debug_flags & DEBUG_SIMULATE)
+            u8x8->draw2x2String( 2, 1, "SIMUL");
+        else
+            u8x8->draw2x2String( 2, 1, SoftRF_text1);
         u8x8->drawString( 1, 4, "ver");
         u8x8->draw2x2String( 5, 4, SOFTRF_FIRMWARE_VERSION);
         u8x8->draw2x2String( 1, 6, default_settings_used? DFLT_text : USER_text);

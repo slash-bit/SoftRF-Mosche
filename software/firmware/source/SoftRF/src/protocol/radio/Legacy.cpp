@@ -280,15 +280,17 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
 #if 1
     if (settings->nmea_d || settings->nmea2_d) {
       if (settings->debug_flags & DEBUG_LEGACY) {
-        /* output the raw (but decrypted) packet as a whole, in hex */
-        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-          PSTR("$PSRFB,%ld,%06X,%s\r\n"),
-          timestamp, fop->addr,
-          bytes2Hex((byte *)pkt, sizeof (latest_packet_t)));
-        //Serial.print(NMEABuffer);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
-        if ((timestamp & 0x0F) != pkt->timebits)
-            Serial.println("timestamp != timebits");   // local & remote time out of sync
+        if (settings->debug_flags & DEBUG_DEEPER) {
+          /* output the raw (but decrypted) packet as a whole, in hex */
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PSRFB,%ld,%06X,%s\r\n"),
+            timestamp, fop->addr,
+            bytes2Hex((byte *)pkt, sizeof (latest_packet_t)));
+          //Serial.print(NMEABuffer);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          if ((timestamp & 0x0F) != pkt->timebits)
+              Serial.println("timestamp != timebits");   // local & remote time out of sync
+        }
       }
     }
 #endif
@@ -402,15 +404,17 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
           PSTR("$PSRFX,%ld,%06X,%d,%d,%d,%d,%d,%d\r\n"),
           timestamp, fop->addr, turnrate, speed10, vs10, course, pkt->airborne, pkt->unk8);
         NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
-        /* also output ownship data */
-        float speedf = this_aircraft->speed * _GPS_MPS_PER_KNOT; /* m/s */
-        float fvs10 = this_aircraft->vs * (10.0/ (_GPS_FEET_PER_METER * 60.0)); /* vs10 */
-        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-          PSTR("$PSRFA,%ld,%06X,%.6f,%.6f,%.0f,%.0f,%.0f,%.1f,%.1f\r\n"),
-          timestamp, fop->addr,
-          this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
-          speedf, this_aircraft->course, this_aircraft->turnrate, fvs10);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        if (settings->debug_flags & DEBUG_DEEPER) {
+          /* also output ownship data */
+          float speedf = this_aircraft->speed * _GPS_MPS_PER_KNOT; /* m/s */
+          float fvs10 = this_aircraft->vs * (10.0/ (_GPS_FEET_PER_METER * 60.0)); /* vs10 */
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PSRFA,%ld,%06X,%.6f,%.6f,%.0f,%.0f,%.0f,%.1f,%.1f\r\n"),
+            timestamp, fop->addr,
+            this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
+            speedf, this_aircraft->course, this_aircraft->turnrate, fvs10);
+          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        }
       }
     }
 #endif
@@ -451,8 +455,8 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     fop->last_crc = RF_last_crc;
 
     //uint32_t timestamp = (uint32_t) this_aircraft->timestamp;
-    //uint32_t timestamp = (uint32_t) OurTime;
-    uint32_t timestamp = (uint32_t) RF_time;   // incremented in RF.cpp 300 ms after PPS
+    uint32_t timestamp = (uint32_t) OurTime;
+    //uint32_t timestamp = (uint32_t) RF_time;   // incremented in RF.cpp 300 ms after PPS
     fop->timestamp = timestamp;
     fop->gnsstime_ms = millis();
 
@@ -479,7 +483,8 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     int ndx;
     uint8_t pkt_parity=0;
 
-    make_key(key, timestamp, (pkt->addr << 8) & 0xffffff);
+    //make_key(key, timestamp, (pkt->addr << 8) & 0xffffff);
+    make_key(key, (uint32_t) RF_time, (pkt->addr << 8) & 0xffffff);
     btea((uint32_t *) pkt + 1, -5, key);
 
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {
@@ -672,11 +677,16 @@ Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
     pkt->no_track = aircraft->no_track;
 
     uint8_t aircraft_type = aircraft->aircraft_type;
+    if (aircraft != &ThisAircraft
+           && aircraft_type == AIRCRAFT_TYPE_UNKNOWN)  // relaying landed-out traffic
+        aircraft_type == AIRCRAFT_TYPE_GLIDER;         // assumption
     if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
         aircraft_type = AIRCRAFT_TYPE_STATIC;
         pkt->airborne = 2;
   //} else if (millis() - SetupTimeMarker < 60000) {
   //    pkt->airborne = 2;    /* post-boot testing */
+  //} else if (do_alarm_demo) {
+  //    pkt->airborne = 2;
     } else if (aircraft->airborne == 0) {
         pkt->airborne = 1;
     } else if (aircraft->circling != 0 && fabs(aircraft->turnrate) > 6.0) {
@@ -749,34 +759,18 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     pkt->addr = id & 0x00FFFFFF;
 
     bool relay = (aircraft != &ThisAircraft);  // aircraft is some other aircraft
-    bool landed = relay && (aircraft->airborne == 0);
+    bool relay_landed_out = relay &&
+            aircraft->airborne==0 && aircraft->aircraft_type==AIRCRAFT_TYPE_UNKNOWN;
 
     if (relay)
         pkt->addr_type = aircraft->addr_type | 4;  // marks as a relayed packet
     else
         pkt->addr_type = settings->id_method;
 
-#if 0
-    if (settings->rf_protocol == RF_PROTOCOL_LATEST && (!relay || landed))
-        // relay in old protocol unless landed
+#if 1
+    // relay in old protocol unless relaying landed-out traffic
+    if (settings->rf_protocol == RF_PROTOCOL_LATEST && (!relay || relay_landed_out))
         return latest_encode(pkt_buffer, aircraft);
-    // or
-    if (settings->rf_protocol == RF_PROTOCOL_LATEST) {
-        if (!relay)
-            return latest_encode(pkt_buffer, aircraft);
-        if (landed && (((uint32_t) RF_time) & 0x03) == 0x03) {
-            // alternate old (3/4 of the time) and new protocol (1/4)
-            // - but only after we've been airborne for 120 minutes
-            //   (to avoid relaying a not-yet-launched contest grid)
-            if (AirborneTime != 0 && RF_time - AirborneTime > (120*60)) {
-                // munge the ID to avoid annoying FLARMs
-                // - alas that will prevent display of tail number etc
-                pkt->addr ^= 0x00800000;   // or change address type?
-                return latest_encode(pkt_buffer, aircraft);
-            }
-        }
-        // else fall through - relay in old protocol
-    }
 #else
     // always relay in old protocol
     if (settings->rf_protocol == RF_PROTOCOL_LATEST && !relay)
@@ -821,12 +815,13 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
           project_that(aircraft);
       else
           project_this(aircraft);       /* which also calls airborne() */
-      if (millis() - SetupTimeMarker < 60000) {
-        //pkt->airborne = 1;    /* post-boot testing */
+    //if (do_alarm_demo && !relay) {
+    //    pkt->airborne = 1;
+    //} else if (millis() - SetupTimeMarker < 60000 && !relay) {
+    //    pkt->airborne = 1;    /* post-boot testing */
+    //} else {
           pkt->airborne = aircraft->airborne;
-      } else {
-          pkt->airborne = aircraft->airborne;
-      }
+    //}
       int16_t vs10;
       if (aircraft->airborne) {
          for (int i=0; i<4; i++) {
@@ -857,7 +852,11 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     pkt->no_track = aircraft->no_track;
 
     uint8_t aircraft_type = aircraft->aircraft_type;
-    if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
+    if (landed_out_mode)
+        aircraft_type = AIRCRAFT_TYPE_UNKNOWN;    // marking ourself as landed-out
+    else if (relay_landed_out)
+        aircraft_type = AIRCRAFT_TYPE_GLIDER;     // assumption
+    else if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
         aircraft_type = AIRCRAFT_TYPE_STATIC;
         pkt->airborne = 1;
     }

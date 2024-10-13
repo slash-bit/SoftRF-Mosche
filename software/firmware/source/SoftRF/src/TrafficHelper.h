@@ -31,7 +31,7 @@
 
 /* for VECTOR method: */
 #define ALARM_VECTOR_ANGLE    10
-#define ALARM_VECTOR_SPEED    0.3
+#define ALARM_VECTOR_SPEED   2.0    // was 0.3 (m/s) which may have caused alarms on tow
 #define ALARM_TIME_CLOSE      30
 #define ALARM_TIME_LOW        19
 #define ALARM_TIME_IMPORTANT  13
@@ -40,7 +40,7 @@
 
 #define VERTICAL_SLOPE                5  /* slope effect for alerts */
 #define VERTICAL_SLACK               30  /* meters  - allow for GPS alt error */
-#define VERTICAL_SEPARATION         300  /* meters  - for alerts */
+#define VERTICAL_SEPARATION          80  /* meters adj_alt_diff - after SLACK removed - was 300 */
 #define VERTICAL_VISIBILITY_RANGE   900  /* this value higher than FLARM specs */
 
 /* stealth mode visibility range */

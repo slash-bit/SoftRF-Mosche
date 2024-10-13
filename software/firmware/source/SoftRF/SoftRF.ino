@@ -94,6 +94,7 @@
 #include "src/TTNHelper.h"
 #include "src/TrafficHelper.h"
 #include "src/Wind.h"
+#include "src/ApproxMath.h"
 
 #if !defined(EXCLUDE_VOICE)
 #if defined(ESP32)
@@ -114,7 +115,6 @@
 
 #define isTimeToDisplay() (millis() > LEDTimeMarker    + 1000)
 #define isTimeToExport()  (millis() > ExportTimeMarker + 1000)
-#define isTimeToIGC()     (millis() > IGCTimeMarker    + (FLIGHT_LOG_INTERVAL*1000))
 
 ufo_t ThisAircraft;
 
@@ -466,6 +466,23 @@ void normal()
             validfix = false;
         if (fabs(gnss.location.lng()-prev_lon) > 0.25)
             validfix = false;
+#if defined(ESP32)
+#if defined(USE_SD_CARD)
+#if 0
+        // compute course and compare with what TinyGPS says
+        if (validfix && ThisAircraft.airborne) {
+          float dy = (gnss.location.lat() - prev_lat);
+          float dx = (gnss.location.lng() - prev_lon) * CosLat(ThisAircraft.latitude);
+          float course2 = atan2_approx(dy, dx);
+          float coursediff = fabs(course2-gnss.course.deg());
+          if (coursediff > 180)  coursediff = 360 - coursediff;
+          if (coursediff > 30) {
+              FlightLogComment("CRS gnss.course differs from lat/lon change\r\n");
+          }
+        }
+#endif
+#endif
+#endif
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
     }
@@ -494,7 +511,6 @@ void normal()
       ThisAircraft.prevaltitude = ThisAircraft.altitude;
 
       // the new fix data
-      //ThisAircraft.gnsstime_ms = thistime_ms;
       ThisAircraft.gnsstime_ms = ref_time_ms;          /* last PPS, real or assumed */
       ThisAircraft.latitude = gnss.location.lat();
       ThisAircraft.longitude = gnss.location.lng();
@@ -518,7 +534,7 @@ void normal()
         }
       }
 
-      /* if no baro sensor, fill in ThisAircraft.vs with GPS data */
+      /* if no baro sensor, fill in ThisAircraft.vs based on GPS data */
       if (baro_chip == NULL) {
         /* only do this once every 4 seconds */
         static uint32_t time_to_estimate_climb = 0;
@@ -532,7 +548,7 @@ void normal()
 /* check timing */
 #include "WiFi.h"
       static uint32_t msthen = 0;
-      if ((settings->debug_flags & DEBUG_RESVD2) && udp_is_ready) {
+      if ((settings->debug_flags & DEBUG_DEEPER) && udp_is_ready) {
         uint32_t msnow = millis();
         if (msnow > msthen+10000) {
           msthen = msnow;
@@ -563,18 +579,20 @@ void normal()
 
       /* generate a random aircraft ID if necessary */
       /* doing it here (after some delay) allows use of millis() as seed for random ID */
-      if (ThisAircraft.addr == 0)
+      if (ThisAircraft.addr == 0)   // ADDR_TYPE_ANONYMOUS - do this once
         generate_random_id();
 
     }  /* end of if(new_fix) */
 
-    // check for newly received data, usually returns false
-    // >>> do this here too to ensure no incoming packets are missed
-    rx_tried = true;
-    rx_success = RF_Receive();
-    // if received a packet, postpone transmission until next time around the loop().
+    if ((settings->debug_flags & DEBUG_SIMULATE) == 0) {
 
-      if (!rx_success && RF_Transmit_Ready() && (RF_current_slot != 0 || !relay_waiting)) {
+      // check for newly received data, usually returns false
+      // >>> do this here too to ensure no incoming packets are missed
+      rx_tried = true;
+      rx_success = RF_Receive();
+      // if received a packet, postpone transmission until next time around the loop().
+
+      if (!rx_success && RF_Transmit_Ready() && (!relay_waiting || RF_current_slot != 0)) {
         // Don't bother with the encode() if can't transmit right now
         // Reserve slot 0 for relay message if any relaying is pending
         //   (this only happens once in 5 or more seconds)
@@ -590,6 +608,8 @@ void normal()
       }
       /* - this only actually transmits when some preset random time is reached */
 
+    }
+
   } else if (GNSSTimeMarker) {      /* not validfix but had fix before */
 
     static uint32_t badgps=0;
@@ -603,19 +623,23 @@ void normal()
     }
   }
 
-  // ensure receiver is re-activated
-  if (!rx_tried || tx_success)
-    rx_success = RF_Receive();
+  if ((settings->debug_flags & DEBUG_SIMULATE) == 0) {
+
+    // ensure receiver is re-activated
+    if (!rx_tried || tx_success)
+      rx_success = RF_Receive();
 
 //if (rx_success)
 //Serial.println("received packet...");
 
 #if DEBUG
-  rx_success = true;
+    rx_success = true;
 #endif
 
-  /* process received data - only if we know where we are */
-  if (rx_success && validfix)  ParseData();
+    /* process received data - only if we know where we are */
+    if (rx_success && validfix)  ParseData();
+
+  }
 
 #if defined(ENABLE_TTN)
   TTN_loop();
@@ -658,13 +682,17 @@ void normal()
 #if defined(ESP32)
 #if defined(USE_SD_CARD)
   if (settings->logflight != FLIGHT_LOG_NONE) {
-    if (isTimeToIGC()) {
+    // try and write to the flight log on the SD card between RF time slots (to avoid
+    //  contention for the SPI bus), but after the GNSS fix for the current second
+    uint32_t msnow = millis();
+    uint32_t ms_since_pps = (msnow - ref_time_ms);
+    if (msnow > IGCTimeMarker && ms_since_pps > 270 && ms_since_pps < 370) {
       if (validfix) {
           logFlightPosition();
           if (settings->logflight == FLIGHT_LOG_TRAFFIC)
               logCloseTraffic();
       }
-      IGCTimeMarker = millis();
+      IGCTimeMarker = ref_time_ms + (1000 << (settings->loginterval)) + 320;
     }
   }
 #endif

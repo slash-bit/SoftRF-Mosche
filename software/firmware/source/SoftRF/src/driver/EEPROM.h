@@ -140,7 +140,14 @@ enum
 	FLIGHT_LOG_AIRBORNE,
 	FLIGHT_LOG_TRAFFIC
 };
-#define FLIGHT_LOG_INTERVAL 4   // seconds
+
+enum
+{
+	LOG_INTERVAL_1S = 0,
+	LOG_INTERVAL_2S = 1,
+	LOG_INTERVAL_4S = 2,
+	LOG_INTERVAL_8S = 3
+};
 
 typedef struct __attribute__((packed)) Settings {
 
@@ -179,7 +186,7 @@ typedef struct __attribute__((packed)) Settings {
     uint8_t  gnss_pins:2;    // external GNSS added to T-Beam  // do not move
     uint8_t  sd_card:2;      // gpio pins for SD card adapter
     uint8_t  logflight:2;
-    uint8_t  resvd3:2;       // can use for flight logging interval choices
+    uint8_t  loginterval:2;
 
     int8_t   freq_corr; /* +/-, kHz */   // do not move
     uint8_t  relay:2;
@@ -248,5 +255,6 @@ extern bool default_settings_used;
 extern settings_t *settings;
 extern uint32_t baudrates[];
 extern bool do_alarm_demo;
+extern bool landed_out_mode;
 
 #endif /* EEPROMHELPER_H */

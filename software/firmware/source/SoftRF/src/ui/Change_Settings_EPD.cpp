@@ -109,8 +109,8 @@ set_entry directions[] = {
 set_entry relays[] = {
   {RELAY_OFF, "None"},
   {RELAY_LANDED, "Landed"},
-  {RELAY_ALL, "All"},
-  {RELAY_ONLY, "Only"},
+//{RELAY_ALL, "ADS-B"},
+//{RELAY_ONLY, "Only"},
   {-1, NULL}
 };
 

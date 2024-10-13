@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated Sep 1, 2024 to fit software version MB141
+This version last updated October 13, 2024 to fit software version MB145
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -95,7 +95,7 @@ A better antenna than the tiny whip that is included with these boards may be he
 
 Even when using an antenna with a cable, the T-Beam needs to be mounted with its antenna connector facing up, because there is a GNSS antenna attached to the board near there that needs to be horizontal and on top.  Unless one attaches an external GNSS antenna via the UFL connector on the board - that can improve GNSS signal reception (especially if that antenna is larger and includes a built-in LNA).  For example:  https://www.data-alliance.net/antenna-gps-lna-embedded-u-fl-sma/ (choose the 25x25mm version with 4-inch cable and U.FL connector).
 
-SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  It may take anywhere from a minute to 30 minutes to obtain a "fix" after a cold start.  The exact time may not be known for up to 12 more minutes, since the leap-second information is not transmitted by the satellites very often.  That may lead to lack of communications, or wrong positions being reported by OGN stations.  For that reason SoftRF queries the GNSS module (if it is a Ublox or AT65 type) whether the leap seconds are known, and does not transmit until they are.  (In some situations it may transmit briefly until it learns that the leap seconds are not known.)  During this time the GNSS red LED will blink once per seconds (meaning it knows the position) but the T-Beam's blue LED will blink 4 times per second (meaning it knows that the time is not known precisely enough to transmit).  After that operation should be normal (the blue LED will stay on and transmissions will happen).
+SoftRF will only transmit its location, interpret transmissions from other aircraft, and be visible on OGN, when a GNSS (GPS) fix has been acquired.  It may take anywhere from a minute to 30 minutes to obtain a "fix" after a cold start.  The exact time may not be known for up to 12 more minutes, since the leap-second information is not transmitted by the satellites very often.  That may lead to lack of communications, or wrong positions being reported by OGN stations.  For that reason SoftRF queries the GNSS module (if it is a Ublox type) whether the leap seconds are known, and does not transmit until they are.  (In some situations it may transmit briefly until it learns that the leap seconds are not known.)  During this time the GNSS red LED will blink once per seconds (meaning it knows the position) but the T-Beam's blue LED will blink 4 times per second (meaning it knows that the time is not known precisely enough to transmit).  It will also show '!' rather than '+' under "FIX" in the second info page on the OLED.  After the leap seconds are obtained, operation should be normal (the blue LED will stay on and transmissions will happen).
 
 The stock gps antenna is poor, it will not work indoors and needs a clear outdoor area to work.  Some units seem better than others.  With an add-on active antenna the performance is much better.  Some units seem slower than others to get a fix, and some seem to get slower after some use.  On the T-Beam only, there is now a button in the web interface (see below) to factory-reset the GNSS module settings and then cold-start it (and reboot the T-Beam).  The first fix following that will be slow, but this may restore more rapid fix acquisition afterwards.
 
@@ -159,12 +159,14 @@ The Web Interface (T-Beam only)
 
 After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the fourth (or fifth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, see whether the user settings have been restored, change settings, or update the firmware via WiFi.  This feature is NOT available on the T-Echo since it does not support WiFi.
 
-Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (on a T-Beam v1.0, v1.1 or v1.2) is to long-press the middle button - that turns Bluetooth off (until you reboot).  Wait until the T-Beam fully boots, then long-press the middle button (OLED will say "BT OFF"), and only then try and access the web page.
+After connecting to the web interface, the root page seen is the SoftRF Status page.  It shows some information, and offers buttons for launching several operations, such as viewing and changing settings, firmware update, downloading flight logs (if equipped with an SD card), etc.
+
+Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (on a T-Beam v1.0, v1.1 or v1.2) is to long-press the middle button - that turns Bluetooth off (until you reboot).  Wait until the T-Beam fully boots, then long-press the middle button (OLED will say "BT OFF"), and only then try and access the web page.  Note that after selecting landed-out mode (as mentioned above) BT will be turned off (due to the web access) - rebooting will restore BT but will exit landed-out mode.
 
 
 Choosing the operational settings
 
-Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings often don't quite do what you want.  The settings you choose are stored inside the device, and are not erased even when upgrading to a new version of the firmware - as long as the stored settings are in a format compatible with the firmware version.  If, for example, you upgrade from mainline v1.x to my version MBxxx, since my version has additional settings, the stored settings are erased and all the settings are reset to their defaults.  Both the OLED and the settings web page warn about that having happened.
+Once the firmware is installed, before actual use in an aircraft, one must choose various options.  The default settings often don't quite do what you want.  The settings you choose are stored inside the device, and are not erased even when upgrading to a new version of the firmware - as long as the stored settings are in a format compatible with the new firmware version.  If, for example, you upgrade from mainline v1.x to my version MBxxx, since my version has additional settings, the stored settings are erased and all the settings are reset to their defaults.  Both the OLED and the settings web page warn about that having happened.
 
 On the T-Beam, connect to the SoftRF status web page as described above.  Then click the "Settings" button at the lower left.  A new web page will load, where you can view and change the settings.  Once you have selected the settings you want, scroll to the bottom of the web page and click "Save".  A new page will show the saved settings (in a not-friendly format) and then the device will reboot.  Once it is done rebooting, re-connect to the SoftRF WiFi network, go to the Settings page again, and double-check that your chosen settings are indeed in effect.
 
@@ -254,7 +256,7 @@ Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF 
 
 Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".  Note: this feature currently supported only on T-Beam v1.0 and v1.1.
 
-Air Relay: Optional relaying by airborne aircraft of radio packets from other aircraft.  The relaying is transparent, and happens no more than once every 5 seconds in total, and once every 15 seconds for any given landed aircraft.  Packets are relayed one hop and not relayed again.  Recommended setting: "Landed", meaning aircraft that landed out (or back home) will be "seen" from farther away (and perhaps by an OGN ground station) if airborne traffic with SoftRF is in the area to relay the data.  Another option is to relay all aircraft that are more than 10 km away or 1 km lower (or landed).  Relaying is done in the old (pre-2024) protocol, that makes it visible to SoftRF and to OGN ground stations, but invisible to FLARMs.  In "relay only" mode, SoftRF (even if it is not airborne) relays other aircraft, but does not transmit its own position - use this mode for testing, or on the ground to augment an OGN station.
+Air Relay: Optional relaying by airborne aircraft of radio packets from other aircraft.  The relaying is transparent, and happens no more than once every 5 seconds in total, and once every 7 or more seconds for any given aircraft.  Packets are relayed one hop and not relayed again.  "Landed" means gliders that "landed out" (if they activated "landed out mode" via the web interface) - they will be "seen" from farther away (and perhaps by an OGN ground station) if airborne traffic with SoftRF is in the area to relay the data.  "ADS-B" also relays other aircraft that were received via ADS-B (if an ADS-B receiver module is installed), in addition to landed-out gliders.  Relaying of ADS-B traffic is done in the old (pre-2024) protocol, that makes it invisible to FLARMs, but visible to SoftRF and to OGN ground stations.  In "relay only" mode, SoftRF (even if it is not airborne) relays other aircraft, but does not transmit its own position - use this mode for testing, or on the ground to augment an OGN station.
 
 Stealth: if set to "On", your aircraft will not be shown on other aircraft' display, AND VICE VERSA (except at close range and in the case of collision danger).  This is opting out of long-range "FLARM RADAR" mutual visibility.
 
@@ -279,7 +281,7 @@ The settings displayed, and adjusted, within the T-Echo
 
 In the last display screen in the cycle of screens on the T-Echo, you will see something like this:
 
-Normal  Glider  _      < normal mode, aircraft type glider, relay landed aircraft
+Normal  Glider  _      < normal mode, aircraft type glider, relay landed-out aircraft
 US TX P:LAT A:LEG      < US region, full power, Latest protocol, Legacy alarm method
 Device: 60ABCD         < device ID (internal, cannot be changed)
 Aircft: A23456 >>      < aircraft ID - and this is transmitted (">>")         
@@ -310,7 +312,7 @@ The settings accessible via this method are:
 * RF PROTOCOL: LATEST, LEGACY, OGNTP, P3I, FANET.
 * RF BAND (REGION): EU, US, UK, AU, NZ, RU, CN, IN, IL, KR.  (UK only for P3I.)
 * Collision prediction algorithm: Legacy, Vector, Distance, None.
-* Relay mode: None, Landed, All.
+* Relay mode: None, Landed.
 * Display units: Metric, Imperial, Mixed.
 * Display orientation: Track Up, North Up.
 * New: aircraft ID and ID type (tedious).

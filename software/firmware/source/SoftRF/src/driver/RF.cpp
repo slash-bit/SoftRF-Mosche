@@ -285,7 +285,7 @@ byte RF_setup(void)
             && settings->rf_protocol == RF_PROTOCOL_P3I)
       settings->band == RF_BAND_UK;
 
-  RF_FreqPlan.setPlan(settings->band);
+  RF_FreqPlan.setPlan(settings->band, settings->rf_protocol);
 
   if (rf_chip) {
     rf_chip->setup();
@@ -434,7 +434,8 @@ void RF_loop()
     if (RF_FreqPlan.Plan == RF_BAND_AUTO) {
       if (ThisAircraft.latitude || ThisAircraft.longitude) {
         RF_FreqPlan.setPlan((int32_t)(ThisAircraft.latitude  * 600000),
-                            (int32_t)(ThisAircraft.longitude * 600000));
+                            (int32_t)(ThisAircraft.longitude * 600000),
+                            settings->rf_protocol);
         RF_ready = true;
       }
     } else {

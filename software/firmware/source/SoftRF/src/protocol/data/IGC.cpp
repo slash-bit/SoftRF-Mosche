@@ -30,6 +30,7 @@
 #include "../../driver/EEPROM.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/Baro.h"
+#include "../../driver/SDcard.h"
 #include "NMEA.h"
 #include "IGC.h"
 
@@ -62,8 +63,6 @@ static const char* CONFIG_DEFAULT_PILOT = "Chuck Yeager";
 static const char* CONFIG_DEFAULT_TYPE  = "ASW20";
 static const char* CONFIG_DEFAULT_REG   = "N12345";
 static const char* CONFIG_DEFAULT_CS    = "XXX";
-static const bool  CONFIG_DEFAULT_LIFTOFF_DETECT_ENABLE = true;
-static const int   CONFIG_DEFAULT_LOG_INTERVAL = FLIGHT_LOG_INTERVAL;
 
 static MD5_CTX md5_buf[8];   // or could malloc() it in PSRAM?
 static MD5_CTX *md5_a, *md5_b, *md5_c, *md5_d;
@@ -616,7 +615,7 @@ bool logFlightPosition()
 
     int galt = (int) ThisAircraft.altitude;
     int palt;
-    if (baro_chip != NULL)
+    if (baro_chip != NULL && ! (settings->debug_flags & DEBUG_SIMULATE))
         palt = (int) ThisAircraft.pressure_altitude;
     else
         palt = galt;
@@ -685,7 +684,6 @@ void test_final(MD5_CTX *md5)
 void MD5_test()
 {
     if (! (settings->debug_flags & DEBUG_SIMULATE))  return;
-    Serial.println("MD5 test:");
     //MD5::make_hash(md5_a, "abcdefghijklmnopqrstuvwxyz");
     //Serial.println("MD5 should be:   c3fcd3d76192e4007dfb496cca67e13b");
     //Serial.print("MD5 computed as: ");
@@ -693,8 +691,9 @@ void MD5_test()
     init_md5();
     File file = SD.open("/logs/TEST.TXT", FILE_READ);
     if (! file)  return;
+    Serial.println("MD5 test:");
     const char *cp;
-    char buf[80];
+    char buf[128];
     while (cp = getline(file, buf, sizeof(buf))) {
         MD5_update(cp, strlen(cp));
         yield();

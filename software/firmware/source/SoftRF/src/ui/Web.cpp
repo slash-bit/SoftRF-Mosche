@@ -363,7 +363,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
-  size_t size = 13100;
+  size_t size = 13400;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -402,7 +402,9 @@ void handleSettings() {
 </select>\
 </td>\
 </tr>"),
-  (default_settings_used? "Warning: reverted to default settings" : "Restored user settings on boot"),
+  ((settings->debug_flags & DEBUG_SIMULATE)? "Warning: simulation mode" :
+  (default_settings_used? "Warning: reverted to default settings" :
+    "Restored user settings on boot")),
   (settings->mode == SOFTRF_MODE_NORMAL ? "selected" : "") , SOFTRF_MODE_NORMAL,
   (settings->mode == SOFTRF_MODE_TXRX_TEST ? "selected" : ""), SOFTRF_MODE_TXRX_TEST,
   (settings->mode == SOFTRF_MODE_BRIDGE ? "selected" : ""), SOFTRF_MODE_BRIDGE,
@@ -1222,7 +1224,7 @@ void handleSettings() {
 <select name='relay'>\
 <option %s value='%d'>None</option>\
 <option %s value='%d'>Landed</option>\
-<option %s value='%d'>All</option>\
+<option %s value='%d'>ADS-B</option>\
 <option %s value='%d'>Only</option>\
 </select>\
 </td>\
@@ -1314,6 +1316,16 @@ void handleSettings() {
 <option %s value='%d'>Airborne</option>\
 <option %s value='%d'>Traffic</option>\
 </td>\
+</tr>\
+<tr>\
+<th align=left>Flight log interval:</th>\
+<td align=right>\
+<select name='loginterval'>\
+<option %s value='%d'>1 sec</option>\
+<option %s value='%d'>2 sec</option>\
+<option %s value='%d'>4 sec</option>\
+<option %s value='%d'>8 sec</option>\
+</td>\
 </tr>"),
   (settings->gnss_pins==EXT_GNSS_NONE  ? "selected" : ""), EXT_GNSS_NONE,
   (settings->gnss_pins==EXT_GNSS_39_4  ? "selected" : ""), EXT_GNSS_39_4,
@@ -1330,7 +1342,11 @@ void handleSettings() {
   (settings->logflight==FLIGHT_LOG_NONE     ? "selected" : ""), FLIGHT_LOG_NONE,
   (settings->logflight==FLIGHT_LOG_ALWAYS   ? "selected" : ""), FLIGHT_LOG_ALWAYS,
   (settings->logflight==FLIGHT_LOG_AIRBORNE ? "selected" : ""), FLIGHT_LOG_AIRBORNE,
-  (settings->logflight==FLIGHT_LOG_TRAFFIC  ? "selected" : ""), FLIGHT_LOG_TRAFFIC);
+  (settings->logflight==FLIGHT_LOG_TRAFFIC  ? "selected" : ""), FLIGHT_LOG_TRAFFIC,
+  (settings->loginterval==LOG_INTERVAL_1S ? "selected" : ""), LOG_INTERVAL_1S,
+  (settings->loginterval==LOG_INTERVAL_2S ? "selected" : ""), LOG_INTERVAL_2S,
+  (settings->loginterval==LOG_INTERVAL_4S ? "selected" : ""), LOG_INTERVAL_4S,
+  (settings->loginterval==LOG_INTERVAL_8S ? "selected" : ""), LOG_INTERVAL_8S);
     len = strlen(offset);
     offset += len;
     size -= len;
@@ -1427,7 +1443,9 @@ void handleRoot() {
   float vdd = Battery_voltage() ;
   bool low_voltage = (Battery_voltage() <= Battery_threshold());
 
-  time_t timestamp = ThisAircraft.timestamp;
+  //time_t timestamp = ThisAircraft.timestamp;
+  int hour   = gnss.time.hour();
+  int minute = gnss.time.minute();
   unsigned int sats = gnss.satellites.value(); // Number of satellites in use (u32)
   char str_lat[16];
   char str_lon[16];
@@ -1484,11 +1502,15 @@ void handleRoot() {
     <th align=left>Tx&nbsp;&nbsp;</th><td align=right>%u</td>\
     <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Rx&nbsp;&nbsp;</th><td align=right>%u</td>\
   </tr></table></td></tr>\
+ <tr><td align=left>\
+  <input type=button onClick=\"location.href='/landed_out'\" value='Landed-Out Mode'></td>\
+  <td align=right>%s</td>\
+ </tr>\
  </table>\
  <hr>\
  <h3 align=center>Most recent GNSS fix</h3>\
  <table width=100%%>\
-  <tr><th align=left>Time</th><td align=right>%u</td></tr>\
+  <tr><th align=left>UTC Time</th><td align=right>%02d:%02d</td></tr>\
   <tr><th align=left>Satellites</th><td align=right>%d</td></tr>\
   <tr><th align=left>Latitude</th><td align=right>%s</td></tr>\
   <tr><th align=left>Longitude</th><td align=right>%s</td></tr>\
@@ -1523,8 +1545,10 @@ void handleRoot() {
  %s\
 </body>\
 </html>"),
+    ((settings->debug_flags & DEBUG_SIMULATE)?
+       "<tr><td align=center><h4>(Warning: simulation mode (debug flag 20))</h4></td></tr>" :
     (default_settings_used ?
-       "<tr><td align=center><h4>(Warning: reverted to default settings)</h4></td></tr>" : ""),
+       "<tr><td align=center><h4>(Warning: reverted to default settings)</h4></td></tr>" : "")),
     (BTpaused ?
        "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>" : ""),
     ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
@@ -1538,7 +1562,8 @@ void handleRoot() {
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
     low_voltage ? "red" : "green", str_Vcc,
     tx_packets_counter, rx_packets_counter,
-    timestamp, sats, str_lat, str_lon, str_alt,
+    (landed_out_mode? "reboot to cancel" : "tap to start"),
+    hour, minute, sats, str_lat, str_lon, str_alt,
     ((hw_info.model == SOFTRF_MODEL_PRIME_MK2) ?
  "<tr><td align=middle>\
   <input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'>\
@@ -1718,6 +1743,8 @@ void handleInput() {
       settings->sd_card = server.arg(i).toInt();
     } else if (server.argName(i).equals("logflight")) {
       settings->logflight = server.arg(i).toInt();
+    } else if (server.argName(i).equals("loginterval")) {
+      settings->loginterval = server.arg(i).toInt();
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -2285,6 +2312,12 @@ void Web_setup()
     serve_P_html(about_html);
   } );
 
+  server.on( "/landed_out", []() {
+    landed_out_mode = true;
+    OLED_msg("LANDED", "OUT");
+    server.send(200, textplain, "LANDED-OUT MODE STARTED");
+  } );
+
   server.on( "/gps_reset", []() {
     Serial.println(F("Factory Reset GNSS..."));
     gnss_needs_reset = true;
@@ -2385,7 +2418,9 @@ void Web_setup()
 
   server.on("/update", HTTP_POST, [](){
     SoC->swSer_enableRx(false);
+#if defined(USE_SD_CARD)
     closeFlightLog();
+#endif /* USE_SD_CARD */
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), "*");
     server.send(200, textplain, (Update.hasError())?"UPDATE FAILED":"UPDATE DONE, REBOOTING");

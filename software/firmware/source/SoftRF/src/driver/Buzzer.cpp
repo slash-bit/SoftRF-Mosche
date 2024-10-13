@@ -101,8 +101,16 @@ void Buzzer_setup(void)
 
   if (settings->volume == BUZZER_EXT) {
       pinMode(buzzer1pin, OUTPUT);
-      ext_buzzer(true);   // turn buzzer on briefly for self-test
-      delay(200);
+      ext_buzzer(true);   // sound buzzer briefly for self-test
+      delay(300);
+      ext_buzzer(false);
+      delay(100);
+      ext_buzzer(true);
+      delay(300);
+      ext_buzzer(false);
+      delay(100);
+      ext_buzzer(true);
+      delay(300);
       ext_buzzer(false);
   } else {
       if (ESP32_pin_reserved(buzzer2pin, false, "Buzzer")) {
