@@ -248,11 +248,10 @@ void WiFi_setup()
 {
 #if 0
   // Initialize file system.
-  if (!SPIFFS.begin())
-  {
-    Serial.println(F("Failed to mount file system"));
-    return;
-  }
+  //if (!SPIFFS.begin()) {
+  //  Serial.println(F("Failed to mount file system"));
+  //  return;
+  //}
 
   // Load wifi connection information.
   if (! loadConfig(&station_ssid, &station_psk))

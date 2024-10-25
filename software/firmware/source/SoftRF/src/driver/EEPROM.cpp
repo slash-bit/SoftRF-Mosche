@@ -44,6 +44,7 @@ settings_t *settings;
 
 bool do_alarm_demo = false;        // activated by middle button on T-Beam
 bool landed_out_mode = false;      // activated by button in status web page
+int8_t geoid_from_setting = 0;
 
 uint32_t baudrates[8] = 
 {
@@ -112,7 +113,7 @@ void EEPROM_setup()
 
   SoC->EEPROM_extension(cmd);
 
-  settings->alarm_demo = false;   // since it is commented out in Web.cpp
+  geoid_from_setting = descale(settings->geoid, 5, 1, 1) - 10;
 
   Serial.println(F("Settings:"));
   show_settings_serial();
@@ -217,6 +218,8 @@ void EEPROM_defaults()
 #if !defined(EXCLUDE_D1090)
     settings->d1090      = DEST_NONE;
 #endif
+
+    settings->logalarms  = false;
   }
   // otherwise keep those settings from the previous version
 
@@ -238,6 +241,8 @@ void EEPROM_defaults()
     settings->logflight = FLIGHT_LOG_NONE;
     settings->loginterval = LOG_INTERVAL_4S;
     settings->rx1090    = ADSB_RX_NONE;
+    settings->geoid     = 10;
+    geoid_from_setting  = 0;
 
     //strncpy(settings->ssid, MY_ACCESSPOINT_SSID, sizeof(settings->ssid)-1);
     settings->ssid[0] = '\0';   // default is empty string - speeds up booting
@@ -255,8 +260,6 @@ void EEPROM_defaults()
                                            POWER_SAVE_NORECEIVE : POWER_SAVE_NONE;
   settings->power_external = 0;
   settings->altpin0     = false;
-  settings->alarm_demo  = false;
-  settings->logalarms   = false;
   settings->debug_flags = 0;      // if and when debug output will be turned on - 0x3F for all
 
   settings->igc_key[0] = 0;
@@ -279,7 +282,6 @@ void show_settings_serial()
     Serial.print(F(" Tx Power "));Serial.println(settings->txpower);
     Serial.print(F(" Volume "));Serial.println(settings->volume);
     Serial.print(F(" Strobe "));Serial.println(settings->strobe);
-    //Serial.print(F(" Alarm Demo "));Serial.println(settings->alarm_demo);
     Serial.print(F(" LED pointer "));Serial.println(settings->pointer);
     Serial.print(F(" Voice "));Serial.println(settings->voice);
     Serial.print(F(" Baud 1 "));Serial.println(settings->baud_rate);
@@ -317,6 +319,7 @@ void show_settings_serial()
     Serial.print(F(" Power save "));Serial.println(settings->power_save);
     Serial.print(F(" Power external "));Serial.println(settings->power_external);
     Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
+    Serial.print(F(" Geoid separation "));Serial.println(geoid_from_setting);
     Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
     Serial.print(F(" GNSS pins "));Serial.println(settings->gnss_pins);
     Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);

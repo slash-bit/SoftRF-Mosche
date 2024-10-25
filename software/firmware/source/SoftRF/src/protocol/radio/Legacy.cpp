@@ -333,7 +333,7 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
 
     int alt = descale(pkt->alt,12,1,0) - 1000;
 //Serial.printf("altitude: %d\n", alt);
-    fop->altitude = (float) alt - this_aircraft->geoid_separation;
+    fop->altitude = (float) alt;        // was  - this_aircraft->geoid_separation;
 
     float ref_lat = this_aircraft->latitude;
     float ref_lon = this_aircraft->longitude;
@@ -598,7 +598,7 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     fop->latitude  = lat - (offset * cos_approx(course2));
     fop->longitude = lon - (offset * sin_approx(course2) * InvCosLat());
 
-    fop->altitude = (float) alt - this_aircraft->geoid_separation;
+    fop->altitude = (float) alt;   // was  - this_aircraft->geoid_separation;
     fop->speed = (1.0 / (4.0 * _GPS_MPS_PER_KNOT)) * speed4;
     fop->aircraft_type = pkt->aircraft_type;
     fop->course = course;
@@ -709,7 +709,7 @@ Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
     else
         pkt->lon = (((uint32_t) (lon * 1e7) + (d>>1)) / d) & 0x0FFFFF;
 
-    int32_t alt = (int32_t) (aircraft->altitude + ThisAircraft.geoid_separation);
+    int32_t alt = (int32_t) aircraft->altitude;    // was   + ThisAircraft.geoid_separation
     pkt->alt = enscale(alt+1000,12,1,0);  // 13 bits total, unsigned (with offset)
 
     int32_t turnrate = (int32_t) (20.0 * aircraft->turnrate);
@@ -783,7 +783,7 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
 
     float lat = aircraft->latitude;
     float lon = aircraft->longitude;
-    int16_t alt = (int16_t) (aircraft->altitude + ThisAircraft.geoid_separation);
+    int16_t alt = (int16_t) aircraft->altitude;    // was   + ThisAircraft.geoid_separation
 
     float course = aircraft->course;
     float speedf = aircraft->speed * _GPS_MPS_PER_KNOT; /* m/s */

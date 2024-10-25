@@ -27,6 +27,8 @@
 #include "esp_heap_caps.h"
 #endif
 
+#include "SPIFFS.h"
+
 #if !defined(CONFIG_IDF_TARGET_ESP32S2)
 #include <esp_bt.h>
 #include <BLEDevice.h>
@@ -747,19 +749,6 @@ static void ESP32_setup()
         Wire1.endTransmission();
     }
 
-#if 0
-// for experiment:
-Serial.println(">>> press button for 2s now to ______");
-delay(1500);
-if (has_axp) {
-pinMode(SOC_GPIO_PIN_TBEAM_V08_BUTTON, INPUT);
-if (digitalRead(SOC_GPIO_PIN_TBEAM_V08_BUTTON) == LOW)  button_pressed = true;
-} else {
-pinMode(SOC_GPIO_PIN_TBEAM_V05_BUTTON, INPUT);
-if (digitalRead(SOC_GPIO_PIN_TBEAM_V05_BUTTON) == LOW)  button_pressed = true;
-}
-#endif
-
     lmic_pins.rst  = SOC_GPIO_PIN_TBEAM_RF_RST_V05;
     lmic_pins.busy = SOC_GPIO_PIN_TBEAM_RF_BUSY_V08;
 
@@ -1118,6 +1107,15 @@ if (digitalRead(SOC_GPIO_PIN_TBEAM_V05_BUTTON) == LOW)  button_pressed = true;
   Serial.begin(SERIAL_OUT_BR, SERIAL_OUT_BITS);
 #endif /* ARDUINO_USB_CDC_ON_BOOT && (CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3) */
 
+  delay(300);
+  if (SPIFFS.begin(true)) {
+      Serial.print(F("\r\n\r\nSPIFFS mounted, total space: "));
+      Serial.print(SPIFFS.totalBytes());
+      Serial.print(F(", used space: "));
+      Serial.println(SPIFFS.usedBytes());
+  } else {
+      Serial.println(F("An Error has occurred while mounting SPIFFS"));
+  }
 //ESP_LOGI(TAG, "ESP32_setup() done");
 }
 

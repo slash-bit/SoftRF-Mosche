@@ -29,7 +29,9 @@ void SD_log(const char * message);
 void closeSDlog();
 
 extern File SIMfile;
+extern File TARGETfile;
 extern bool SIMfileOpen;
+extern bool TARGETfileOpen;
 
 #endif // USE_SD_CARD
 

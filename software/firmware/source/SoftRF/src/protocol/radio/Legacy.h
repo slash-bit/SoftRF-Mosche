@@ -184,4 +184,7 @@ bool latest_decode(void *, ufo_t *, ufo_t *);
 size_t legacy_encode(void *, ufo_t *);
 size_t latest_encode(void *, ufo_t *);
 
+unsigned int enscale( int value, unsigned int mbits, unsigned int ebits, unsigned int sbits);
+int descale( unsigned int value, unsigned int mbits, unsigned int ebits, unsigned int sbits);
+
 #endif /* PROTOCOL_LEGACY_H */

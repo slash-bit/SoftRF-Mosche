@@ -445,6 +445,7 @@ struct rst_info {
 //#define USE_BLE_MIDI
 //#define USE_GDL90_MSL
 #define USE_OGN_ENCRYPTION
+#define USE_EGM96           /* geoid lookup table in SPIFFS file */
 
 //#define EXCLUDE_GNSS_UBLOX    /* Neo-6/7/8 */
 #define ENABLE_UBLOX_RFS        /* revert factory settings (when necessary)  */
@@ -452,6 +453,7 @@ struct rst_info {
 //#define EXCLUDE_GNSS_AT65     /* 'fake Neo-6/8' on some 2018 T-Beam boards */
 #define EXCLUDE_GNSS_SONY
 #define EXCLUDE_GNSS_MTK
+
 
 #define EXCLUDE_CC13XX
 //#define EXCLUDE_SOFTRF_HEARTBEAT

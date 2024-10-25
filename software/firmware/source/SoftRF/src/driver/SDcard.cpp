@@ -18,7 +18,9 @@ static uint8_t cardType = CARD_NONE;
 static File SDfile;
 static bool SDfileOpen = false;
 File SIMfile;
+File TARGETfile;
 bool SIMfileOpen = false;
+bool TARGETfileOpen = false;
 
 // check for firmware update file
 // if found, do update, then delete the file and reboot
@@ -180,6 +182,18 @@ void SD_setup() {
       } else {
           SIMfileOpen = true;
           Serial.println("File SD/logs/simulate.txt found");
+      }
+      // also try to open file with simulated traffic packets
+      TARGETfile = SD.open("/logs/target.txt", FILE_READ);
+      if (! TARGETfile) {
+          Serial.println("File SD/logs/target.txt not found");
+      } else if (TARGETfile.size() == 0) {
+          TARGETfile.close();
+          SD.remove("/logs/target.txt");
+          Serial.println("Empty SD/logs/target.txt deleted");
+      } else {
+          TARGETfileOpen = true;
+          Serial.println("File SD/logs/target.txt found");
       }
   }
 }

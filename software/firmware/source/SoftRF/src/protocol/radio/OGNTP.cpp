@@ -136,7 +136,7 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
 
   fop->latitude  = ogn_rx_pkt.Packet.DecodeLatitude() * 0.0001/60;
   fop->longitude = ogn_rx_pkt.Packet.DecodeLongitude() * 0.0001/60;
-  fop->altitude  = (float) ogn_rx_pkt.Packet.DecodeAltitude();
+  fop->altitude  = (float) ogn_rx_pkt.Packet.DecodeAltitude() + this_aircraft->geoid_separation;  // MSL -> ellipsoid
   fop->pressure_altitude = (float) ogn_rx_pkt.Packet.DecodeStdAltitude();
   fop->aircraft_type = ogn_rx_pkt.Packet.Position.AcftType;
   fop->course    = ogn_rx_pkt.Packet.DecodeHeading() * 0.1;
@@ -158,7 +158,7 @@ size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
 
   pos.Latitude  = (int32_t) (this_aircraft->latitude * 600000);
   pos.Longitude = (int32_t) (this_aircraft->longitude * 600000);
-  pos.Altitude  = (int32_t) (this_aircraft->altitude * 10);
+  pos.Altitude  = (int32_t) ((this_aircraft->altitude - this_aircraft->geoid_separation) * 10);  // ellipsoid -> MSL
 
   uint8_t aircraft_type = this_aircraft->aircraft_type;
   if (aircraft_type == AIRCRAFT_TYPE_WINCH) {

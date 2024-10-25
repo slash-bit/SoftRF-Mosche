@@ -561,7 +561,7 @@ void this_airborne()
 #if defined(ESP32)
       // restart alarm log on first takeoff after boot
       if (AlarmLogOpen==false && settings->logalarms) {
-        if (SPIFFS.begin(true)) {
+        //if (SPIFFS.begin(true)) {
           bool append = false;
           if (SPIFFS.exists("/alarmlog.txt") && SPIFFS.totalBytes() - SPIFFS.usedBytes() > 10000)
               append = true;
@@ -575,9 +575,9 @@ void this_airborne()
           } else {
               Serial.println(F("Failed to open alarmlog.txt"));
           }
-        } else {
-            Serial.println(F("Failed to start SPIFFS"));
-        }
+        //} else {
+        //    Serial.println(F("Failed to start SPIFFS"));
+        //}
       }
 #if defined(USE_SD_CARD)
       if (settings->logflight == FLIGHT_LOG_AIRBORNE

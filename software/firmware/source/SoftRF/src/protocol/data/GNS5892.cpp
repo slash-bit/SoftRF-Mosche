@@ -460,11 +460,6 @@ static void update_traffic_position()
         *cip = EmptyFO;
         cip->addr = fo1090.addr;
         cip->altitude  = fo1090.altitude;
-        // altitude is still pressure altitude, try and correct
-        if (baro_chip != NULL)
-            cip->altitude += ThisAircraft.baro_alt_diff;
-        else
-            cip->altitude += average_baro_alt_diff;
         cip->timerelayed = 0;
     } else {
         // this ID already tracked, just update some fields
@@ -668,6 +663,11 @@ static bool parse_position()
     if (mm.type <= 18) {     // baro alt
         mm.alt_type = 0;
         fo1090.altitude = decode_ac12_field();
+        // altitude is pressure altitude, try and approximate GNSS altitude
+        if (baro_chip != NULL)
+            fo1090.altitude += ThisAircraft.baro_alt_diff;
+        else
+            fo1090.altitude += average_baro_alt_diff;
     } else {      // GNSS alt, rare
         mm.alt_type = 1;
         mm.msgtype = 'G';

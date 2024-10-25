@@ -7,6 +7,7 @@ DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity aware
 
 ### Latest additions:
 
+* vMB146: latest, revised handling of altitudes
 * vMB140: supports SD card & flight logging, on the T-Beam
 * vMB138: supports using add-on GNSS modules, on the T-Beam
 * vMB130: supports the GNS5892R ADS-B receiver module, on the T-Beam

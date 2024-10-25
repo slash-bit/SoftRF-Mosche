@@ -244,7 +244,7 @@ static void *msgType10and20(ufo_t *aircraft)
     altitude = (int)((aircraft->altitude + altDiff) * _GPS_FEET_PER_METER);
   } else {
     /* If there are no any choice - report GNSS AMSL altitude as pressure altitude */
-    altitude = (int)(aircraft->altitude * _GPS_FEET_PER_METER);
+    altitude = (int)((aircraft->altitude - ThisAircraft.geoid_separation) * _GPS_FEET_PER_METER);
   }
   altitude = (altitude + 1000) / 25; /* Resolution = 25 feet */
 
@@ -326,15 +326,15 @@ static void *msgOwnershipGeometricAltitude(ufo_t *aircraft)
    * the geometric altitude (height above WGS-84 ellipsoid),
    * encoded using 5-foot resolution
    */
-  uint16_t altitude = (int16_t)((aircraft->altitude + aircraft->geoid_separation) *
-                        _GPS_FEET_PER_METER / 5);
+  uint16_t altitude = (int16_t)(aircraft->altitude *    /*  was  + aircraft->geoid_separation */
+                        (_GPS_FEET_PER_METER / 5));
 #else
   /*
    * Vast majority of EFBs deviates from Rev A of GDL90 ICD (2007) specs
    * and uses MSL altitude here.
    * SkyDemon is the only known exception which uses WGS-84 altitude still.
    */
-  uint16_t altitude = (int16_t)(aircraft->altitude * _GPS_FEET_PER_METER / 5);
+  uint16_t altitude = (int16_t)((aircraft->altitude - ThisAircraft.geoid_separation) * _GPS_FEET_PER_METER / 5);
 #endif /* USE_GDL90_MSL */
 
   GeometricAltitude.geo_altitude  = ((altitude & 0x00FF) << 8) | ((altitude & 0xFF00) >> 8) ;

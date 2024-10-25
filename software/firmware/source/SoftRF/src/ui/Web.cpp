@@ -182,6 +182,20 @@ Copyright (C) 2015-2021 &nbsp;&nbsp;&nbsp; Linar Yusupov\
 </body>\
 </html>";
 
+#if defined(USE_EGM96)
+static const char egm96_upload_html[] PROGMEM =
+"<html>\
+ <head>\
+ <meta http-equiv='Content-Type' content='text/html; charset=utf-8'>\
+ </head>\
+ <p>Select and upload egm96s.dem</p>\
+ <form method='POST' action='/doegmupld' enctype='multipart/form-data'>\
+ <input type='file' name='name'><input type='submit' value='Upload' title='Upload'>\
+ </form>\
+ </html>";
+#endif
+
+#if defined(ESP32)
 static const char wav_upload_html[] PROGMEM =
 "<html>\
  <head>\
@@ -192,6 +206,7 @@ static const char wav_upload_html[] PROGMEM =
  <input type='file' name='name'><input type='submit' value='Upload' title='Upload'>\
  </form>\
  </html>";
+#endif
 
 static const char log_upload_html[] PROGMEM =
 "<html>\
@@ -213,29 +228,31 @@ void anyUpload(bool toSD)
 
   if(uploading.status == UPLOAD_FILE_START)
   {
+    String filename = uploading.filename;
 #if defined(USE_SD_CARD)
     if (toSD) {
-        String filename = uploading.filename;
         if (filename.startsWith("/"))
             filename = "/logs" + filename;
         else
             filename = "/logs/" + filename;
-        Serial.print(F("uploading file: "));
+        Serial.print(F("uploading into SD: "));
         Serial.println(filename);
         UploadFile = SD.open(filename.c_str(), FILE_WRITE);
         if(! UploadFile)
             Serial.println(F("Failed to open file for writing on SD"));
     } else
 #endif
+#if defined(ESP32)
     {
-        Serial.println(F("Replacing waves.tar in SPIFFS..."));
-        clear_waves();
-        //SPIFFS.remove("/waves.tar");
-        UploadFile = SPIFFS.open("/waves.tar", "w");
-           // ignore the source file name, always save it in SPIFFS as waves.tar
+        if (! filename.startsWith("/"))
+            filename = "/" + filename;
+        Serial.print(F("uploading into SPIFFS: "));
+        Serial.println(filename);
+        UploadFile = SPIFFS.open(filename.c_str(), FILE_WRITE);
         if(! UploadFile)
-            Serial.println(F("Failed to create waves.tar in SPIFFS..."));
+            Serial.println(F("Failed to open file for writing in SPIFFS"));
     }
+#endif
   }
   else if (uploading.status == UPLOAD_FILE_WRITE)
   {
@@ -258,12 +275,27 @@ void anyUpload(bool toSD)
       server.send(500, textplain, "500: couldn't create file");
     }
   }
-  yield();
+  //yield();
+  delay(30);
 }
 
+#if defined(USE_EGM96)
+void egmUpload()   // into SPIFFS
+{
+    //Serial.println(F("Loading egm96s.dem into SPIFFS..."));
+    anyUpload(false);
+}
+#else
+void egmUpload()
+{
+    Serial.println(F("egm96s.dem ignored..."));
+}
+#endif
 
 void wavUpload()   // into SPIFFS
 {
+    //Serial.println(F("Replacing waves.tar in SPIFFS..."));
+    clear_waves();
     anyUpload(false);
 }
 
@@ -285,7 +317,7 @@ void alarmlogfile(){
         server.send(404, textplain, "Alarm log file does not exist");
         return;
     }
-    AlarmLog = SPIFFS.open("/alarmlog.txt", "r");
+    AlarmLog = SPIFFS.open("/alarmlog.txt", FILE_READ);
     if (AlarmLog) {
       server.sendHeader("Content-Type", "text/text");
       server.sendHeader("Content-Disposition", "attachment; filename=alarmlog.txt");
@@ -363,7 +395,7 @@ void handleSettings() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
-  size_t size = 13400;
+  size_t size = 14000;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -1202,6 +1234,12 @@ void handleSettings() {
 </td>\
 </tr>\
 <tr>\
+<th align=left>Geoid Separation (m)</th>\
+<td align=right>\
+<INPUT type='number' name='geoid' min='-104' max='84' value='%d'>\
+</td>\
+</tr>\
+<tr>\
 <th align=left>Power save</th>\
 <td align=right>\
 <select name='power_save'>\
@@ -1243,6 +1281,7 @@ void handleSettings() {
 <input type='radio' name='no_track' value='1' %s>On\
 </td>\
 </tr>"),
+  geoid_from_setting,
   (settings->power_save == POWER_SAVE_NONE ? "selected" : ""), POWER_SAVE_NONE,
   (settings->power_save == POWER_SAVE_WIFI ? "selected" : ""), POWER_SAVE_WIFI,
 //(settings->power_save == POWER_SAVE_GNSS ? "selected" : ""), POWER_SAVE_GNSS,
@@ -1452,7 +1491,8 @@ void handleRoot() {
   char str_alt[16];
   char str_Vcc[8];
 
-  char *Root_temp = (char *) malloc(3500);
+  size_t size = 3900;
+  char *Root_temp = (char *) malloc(size);
   if (Root_temp == NULL) {
     Serial.println(F(">>> not enough RAM"));
     return;
@@ -1460,10 +1500,10 @@ void handleRoot() {
 
   dtostrf(ThisAircraft.latitude,  8, 4, str_lat);
   dtostrf(ThisAircraft.longitude, 8, 4, str_lon);
-  dtostrf(ThisAircraft.altitude,  7, 1, str_alt);
+  dtostrf(ThisAircraft.altitude-ThisAircraft.geoid_separation, 7, 1, str_alt);   // MSL
   dtostrf(vdd, 4, 2, str_Vcc);
 
-  snprintf_P ( Root_temp, 3500,
+  snprintf_P ( Root_temp, size,
     PSTR("<html>\
  <head>\
   <meta name='viewport' content='width=device-width, initial-scale=1'>\
@@ -1514,7 +1554,7 @@ void handleRoot() {
   <tr><th align=left>Satellites</th><td align=right>%d</td></tr>\
   <tr><th align=left>Latitude</th><td align=right>%s</td></tr>\
   <tr><th align=left>Longitude</th><td align=right>%s</td></tr>\
-  <tr><td align=left><b>Altitude</b>&nbsp;&nbsp;(above MSL)</td><td align=right>%s</td></tr>\
+  <tr><td align=left><b>Altitude</b>&nbsp;&nbsp;(%s)</td><td align=right>%s</td></tr>\
   %s\
  </table>\
  <hr>&nbsp;<br>\
@@ -1530,8 +1570,11 @@ void handleRoot() {
  <table width=100%%>\
   <tr>\
    <td>%d WAV files found</td>\
+   %s\
+  </tr>\
+  <tr>\
    <td><input type=button onClick=\"location.href='/wavupload'\" value='Upload waves.tar'></td>\
-   <td><input type=button onClick=\"location.href='/format'\" value='Clear ALL files'></td>\
+   <td><input type=button onClick=\"location.href='/format'\" value='Clear ALL files from SPIFFS'></td>\
   </tr>\
  </table>\
  <hr>\
@@ -1563,18 +1606,28 @@ void handleRoot() {
     low_voltage ? "red" : "green", str_Vcc,
     tx_packets_counter, rx_packets_counter,
     (landed_out_mode? "reboot to cancel" : "tap to start"),
-    hour, minute, sats, str_lat, str_lon, str_alt,
+    hour, minute, sats, str_lat, str_lon,
+    (isValidGNSSFix() ?
+          (ThisAircraft.geoid_separation==0 ? "above ellipsoid - MSL n.a."
+           : "above MSL")
+           : "no valid fix"),
+    str_alt,
     ((hw_info.model == SOFTRF_MODEL_PRIME_MK2) ?
  "<tr><td align=middle>\
   <input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'>\
  </td></tr>"
           : ""),
     num_wav_files,
+#if defined(USE_EGM96)
+ "<td><input type=button onClick=\"location.href='/egmupload'\" value='Upload egm96s.dem'></td>",
+#else
+ "",
+#endif
 #if defined(USE_SD_CARD)
- "  <hr>\
+ "<hr>\
+ Flight Logs:\
  <table width=100%%>\
   <tr>\
-   <td>Flight Logs:</td>\
    <td><input type=button onClick=\"location.href='/listlogs'\" value='List'></td>\
    <td><input type=button onClick=\"location.href='/flightlog'\" value='Download Latest'></td>\
    <td><input type=button onClick=\"location.href='/clearlogs'\" value='Clear'></td>\
@@ -1595,10 +1648,10 @@ void handleRoot() {
   SoC->swSer_enableRx(true);
   free(Root_temp);
   Serial.println(F("Files in SPIFFS:"));
-  if (!SPIFFS.begin(true)) {
-      Serial.println(F("Failed to start SPIFFS"));
-      return;
-  }
+//  if (!SPIFFS.begin(true)) {
+//      Serial.println(F("Error mounting SPIFFS"));
+//      return;
+//  }
   File root = SPIFFS.open("/");
   if (! root) {
       Serial.println(F("Cannot open SPIFFS root"));
@@ -1607,7 +1660,7 @@ void handleRoot() {
   File file = root.openNextFile();
   while(file){
       Serial.print("... ");
-      Serial.println(file.name());
+      Serial.print(file.name());
       Serial.print("  [");
       Serial.print(file.size());
       Serial.println(" bytes]");
@@ -1745,6 +1798,11 @@ void handleInput() {
       settings->logflight = server.arg(i).toInt();
     } else if (server.argName(i).equals("loginterval")) {
       settings->loginterval = server.arg(i).toInt();
+    } else if (server.argName(i).equals("geoid")) {
+      geoid_from_setting = server.arg(i).toInt();
+      if (geoid_from_setting >   84)  geoid_from_setting =   84;
+      if (geoid_from_setting < -104)  geoid_from_setting = -104;
+      settings->geoid = enscale(geoid_from_setting+10, 5, 1, 1);
     } else if (server.argName(i).equals("debug_flags")) {
       server.arg(i).toCharArray(idbuf, 3);
       settings->debug_flags = strtoul(idbuf, NULL, 16) & 0x3F;
@@ -1926,7 +1984,7 @@ void handleInput() {
       settings->txpower == RF_TX_POWER_FULL;
 
   /* show new settings before rebooting */
-  size_t size = 3800;
+  size_t size = 3900;
   char *Input_temp = (char *) malloc(size);
   if (Input_temp != NULL) {
     snprintf_P ( Input_temp, size,
@@ -2244,6 +2302,13 @@ bool handleFlightLogs(bool trash)
         oldpath = "/logs/old/";
         oldpath += cp;
         if (move) {            // move large files
+            if (SD.exists(oldpath)) {
+                if (SD.remove(oldpath))
+                    Serial.print("removed: ");    // old file with same name
+                else
+                    Serial.print("failed to remove: ");
+                Serial.println(oldpath);
+            }
             if (SD.rename(logpath,oldpath))
                 Serial.print("moved: ");
             else
@@ -2337,6 +2402,15 @@ void Web_setup()
     wavUpload                         // Receive and save the file
   );
 
+  server.on ( "/egmupload", []() {
+    serve_P_html(egm96_upload_html);
+  } );
+
+  server.on("/doegmupld", HTTP_POST,  // if the client posts to the upload page
+    [](){ server.send(200); },        // Send 200 to tell the client we are ready to receive
+    egmUpload                         // Receive and save the file
+  );
+
 #if defined(USE_SD_CARD)
   server.on ( "/logupload", []() {
     serve_P_html(log_upload_html);
@@ -2409,7 +2483,8 @@ void Web_setup()
     </td>\
   </tr>\
  </table>\
- <h3 align=center>Be patient...</h3>\
+ <h4 align=center>Tap [Browse], select file, and then</h4>\
+ <h4 align=center>tap [Update] and wait patiently...</h4>\
 </body>\
 </html>")
     );

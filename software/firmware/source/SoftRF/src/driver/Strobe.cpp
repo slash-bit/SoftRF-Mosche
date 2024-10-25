@@ -166,7 +166,7 @@ void Strobe_loop(void)
     /* not currently flashing, flash again after pause */
 
       uint32_t t = millis() - SetupTimeMarker;
-      bool self_test = ((settings->alarm_demo || do_alarm_demo)
+      bool self_test = (do_alarm_demo
                          && t < (1000*STROBE_INITIAL_RUN)
                          && t > (1000*(STROBE_INITIAL_RUN-3)));
       if (self_test)

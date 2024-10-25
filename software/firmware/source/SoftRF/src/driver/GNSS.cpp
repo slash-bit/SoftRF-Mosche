@@ -24,6 +24,7 @@
 #include <TimeLib.h>
 
 #include "../system/SoC.h"
+#include "../TrafficHelper.h"
 #include "GNSS.h"
 #include "EEPROM.h"
 #include "SDcard.h"
@@ -34,9 +35,14 @@
 #include "Battery.h"
 #include "../protocol/data/D1090.h"
 
-#if !defined(EXCLUDE_EGM96)
-#include <egm96s.h>
-#endif /* EXCLUDE_EGM96 */
+#if defined(USE_EGM96)
+//#include <egm96s.h>
+#if defined(ESP32)    // need SPIFFS
+#include "SPIFFS.h"
+// #include <FS.h>
+#endif
+static float geo_sep_from_file = 0.0;
+#endif
 
 //#define DO_GNSS_DEBUG
 
@@ -1367,12 +1373,38 @@ bool isValidGNSSFix()
   //return leap_seconds_valid();
 }
 
+// variables for $PFSIM
+TinyGPSCustom P_timestamp;
+TinyGPSCustom P_addr;
+TinyGPSCustom P_addrtype;
+TinyGPSCustom P_actype;
+TinyGPSCustom P_lat;
+TinyGPSCustom P_lon;
+TinyGPSCustom P_alt;
+TinyGPSCustom P_speed;
+TinyGPSCustom P_course;
+TinyGPSCustom P_vs;
+TinyGPSCustom P_turnrate;
+
 byte GNSS_setup() {
 
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */)
       is_prime_mk2 = true;
 
-  if (settings->debug_flags & DEBUG_SIMULATE) {
+  if (is_prime_mk2 && settings->debug_flags & DEBUG_SIMULATE) {
+      const char *psrf_p = "PFSIM";
+      int term_num = 1;
+      P_timestamp.begin (gnss, psrf_p, term_num++);   // for "target" data sentences
+      P_addr.begin      (gnss, psrf_p, term_num++);
+      P_addrtype.begin  (gnss, psrf_p, term_num++);
+      P_actype.begin    (gnss, psrf_p, term_num++);
+      P_lat.begin       (gnss, psrf_p, term_num++);
+      P_lon.begin       (gnss, psrf_p, term_num++);
+      P_alt.begin       (gnss, psrf_p, term_num++);
+      P_speed.begin     (gnss, psrf_p, term_num++);
+      P_course.begin    (gnss, psrf_p, term_num++);
+      P_vs.begin        (gnss, psrf_p, term_num++);
+      P_turnrate.begin  (gnss, psrf_p, term_num++);
       GNSS_cnt = 0;
       gnss_chip = &generic_nmea_ops;
       return GNSS_MODULE_NMEA;
@@ -1593,9 +1625,94 @@ void GNSSTimeSync()
   }
 }
 
+int int2digits(const char *p)
+{
+    return (10*(p[0]-'0') + (p[1]-'0'));
+}
+
+static struct {
+    uint32_t hms;
+    uint32_t addr;
+    float lat;
+    float lon;
+    float alt;
+    float speed;
+    float course;
+    float vs;
+    float turnrate;
+    uint8_t addrtype;
+    uint8_t actype;
+    //uint8_t hour;
+    //uint8_t minute;
+    //uint8_t second;
+    bool waiting;
+} pfsim;
+
+void add_pfsim_traffic()
+{
+    if (! pfsim.waiting)
+        return;
+    uint32_t hour   = (uint32_t) gnss.time.hour();
+    uint32_t minute = (uint32_t) gnss.time.minute();
+    uint32_t second = (uint32_t) gnss.time.second();
+    uint32_t gnss_hms = (second + 60 * (minute + 60 * hour));
+    if (pfsim.hms < gnss_hms) {
+        pfsim.waiting = false;   // too late
+        return;
+    }
+    if (pfsim.hms > gnss_hms)    // too early
+        return;
+    fo = EmptyFO;
+    fo.protocol = RF_PROTOCOL_LATEST;
+    fo.addr_type = pfsim.addrtype;
+    fo.timestamp = OurTime;
+    fo.addr = pfsim.addr;
+    fo.latitude = pfsim.lat;
+    fo.longitude = pfsim.lon;
+    fo.altitude = pfsim.alt;   // was  - ThisAircraft.geoid_separation;
+    fo.course = pfsim.course;
+    fo.speed = (1.0 / _GPS_MPS_PER_KNOT) * pfsim.speed;
+    fo.vs = pfsim.vs * (_GPS_FEET_PER_METER * 60.0);
+    fo.gnsstime_ms = millis();
+    fo.turnrate = pfsim.turnrate;
+    fo.aircraft_type = pfsim.actype;
+    fo.airborne = 1;
+    fo.circling = (fo.turnrate < 10.0) ? -1 : ((fo.turnrate > 10.0) ? 1 : 0);
+    fo.callsign[0] = 'S';
+    fo.callsign[1] = 'I';
+    fo.callsign[2] = 'M';
+    AddTraffic(&fo);
+    pfsim.waiting = false;
+}
+
+void process_pfsim_sentence()
+{
+    if (! (settings->debug_flags & DEBUG_SIMULATE))
+        return;
+    if (! P_timestamp.isUpdated())
+        return;
+    const char *p = P_timestamp.value();
+    uint32_t hour   = int2digits(&p[0]);
+    uint32_t minute = int2digits(&p[2]);
+    uint32_t second = int2digits(&p[4]);
+    pfsim.hms = (second + 60 * (minute + 60 * hour));
+    pfsim.addr = strtol(P_addr.value(),NULL,16);
+    pfsim.lat = atof(P_lat.value());
+    pfsim.lon = atof(P_lon.value());
+    pfsim.alt = atof(P_alt.value());
+    pfsim.speed = atof(P_speed.value());
+    pfsim.course = atof(P_course.value());
+    pfsim.vs = atof(P_vs.value());
+    pfsim.turnrate = atof(P_turnrate.value());
+    pfsim.addrtype = atoi(P_addrtype.value());
+    pfsim.actype = atoi(P_actype.value());
+    pfsim.waiting = true;
+    add_pfsim_traffic();   // will turn pfsim.waiting off unless too early
+}
+
 // determine in one place (here) when a "new fix" is obtained
 // - no longer need to handle this in SoftRF.ino and in Time.cpp
-bool Try_GNSS_sentence() {
+uint8_t Try_GNSS_sentence() {
 
     static uint32_t prev_fix_ms = 0;
     static uint32_t new_gga_ms  = 0;
@@ -1605,10 +1722,12 @@ bool Try_GNSS_sentence() {
     char c = GNSSbuf[GNSS_cnt];
     if (c == '$')
         ndx = GNSS_cnt;
-    bool isValidSentence = gnss.encode(c);
-    if (!isValidSentence || ndx+6>GNSS_cnt || GNSSbuf[ndx+1]!='G')
-        return isValidSentence;
+    if (gnss.encode(c) == false)
+        return 0;
+    if (GNSS_cnt < ndx+6)
+        return 0;
 
+    // if got here, gnss.encode said it is a valid sentence
     size_t write_size = GNSS_cnt;
     if (c=='\r' || c=='\n') {
         --write_size;
@@ -1620,12 +1739,29 @@ bool Try_GNSS_sentence() {
     char *gb = (char *) &GNSSbuf[ndx];
     ndx = sizeof(GNSSbuf)-2;             // anticipating next sentence
 
-    bool is_gga = (gb[3]=='G' && gb[4]=='G' && gb[5]=='A' && gb[6]==',');
+    if (gb[1]!='G' && gb[1]!='P')
+        return 0;        // neither GNSS sentence nor SoftRF sentence
+    if (gb[1]=='P' && gb[2]=='G')
+        return 0;        // ignore $PGRMZ
+    if (gb[6] != ',')
+        return 0;        // not $GPGGA, $GPRMC, etc nor $PFSIM, $PSRF* or $PSKVC
+
+    bool is_gga = (gb[1]=='G' && gb[3]=='G' && gb[4]=='G' && gb[5]=='A');
+    if (! is_gga) {
+        if (gb[1]=='P' && gb[3]=='S' && gb[4]=='I' && gb[5]=='M') {
+            process_pfsim_sentence();
+            GNSSbuf[GNSS_cnt+1] = '\0';
+            Serial.println(gb);
+            return 2;
+        }
+    }
 
     uint32_t now_ms = millis();
     if (now_ms > prev_fix_ms + 600) {           // expect one fix per second
       gnss_new_fix = gnss_new_time = false;     // withdraw what was not consumed
-      bool is_rmc = (gb[3]=='R' && gb[4]=='M' && gb[5]=='C' && gb[6]==',');
+      bool is_rmc = false;
+      if (! is_gga)
+          is_rmc = (gb[1]=='G' && gb[3]=='R' && gb[4]=='M' && gb[5]=='C');
       if ((is_gga && new_gga_ms != 0) || (is_rmc && new_rmc_ms != 0)
                  || (latest_Commit_Time != 0 && now_ms > latest_Commit_Time + 600)) {
           // other sentence failed to arrive within same second - start over
@@ -1700,8 +1836,7 @@ bool Try_GNSS_sentence() {
      * given by some Chinese GNSS chipsets
      */
 #if defined(USE_NMEALIB)
-    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 && is_gga
-           && gnss.separation.meters() == 0.0) {
+    if (is_gga && gnss.separation.meters() == 0.0) {
          if (settings->nmea_g || settings->nmea2_g)
              NMEA_GGA();
             // GGA is output either indirectly (via NMEA_GGA()) or directly (below).
@@ -1713,7 +1848,7 @@ bool Try_GNSS_sentence() {
         if (settings->nmea_g || settings->nmea2_g)
             NMEA_Outs(settings->nmea_g, settings->nmea2_g, gb, write_size, true);
     }
-    return true;
+    return 1;
 }
 
 void PickGNSSFix()
@@ -1723,8 +1858,34 @@ void PickGNSSFix()
   if (is_prime_mk2) {
 
     if (settings->debug_flags & DEBUG_SIMULATE) {
+      static uint8_t SentenceType = 0;
+#if defined(USE_SD_CARD)
+      if (TARGETfileOpen && GNSS_cnt == 0) {
+        add_pfsim_traffic();   // if any waiting and its time has arrived
+        while (! pfsim.waiting) {
+          //if (millis() < next_burst)     // pause until next simulated second
+          //  break;
+          if (!TARGETfile.available()) {
+            GNSS_cnt = 0;
+            break;
+          }
+          c = TARGETfile.read();
+          GNSSbuf[GNSS_cnt] = c;
+          SentenceType = Try_GNSS_sentence();
+          if (c=='\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
+            GNSS_cnt = 0;
+            if (SentenceType)   // got valid sentence
+                return;         // allow main loop to report, will get back here later
+          } else {
+            GNSS_cnt++;
+            yield();
+          }
+        }
+      }
+#endif
       static uint8_t d = 0;
-      // read simulated GNSS sentences from either a file or the main serial port
+      static bool pfsim_sentence = false;
+      // read simulated GNSS or PFSIM sentences from either a file or the serial port
       static uint32_t burst_start = 0;
       static uint32_t next_burst = 40200;   // start sim running 40s after boot
 //Serial.printf("PickGNSSFix(): millis %d next_burst %d\r\n", millis(), next_burst);
@@ -1746,10 +1907,11 @@ void PickGNSSFix()
             return;
         }
         if (GNSS_cnt == 0) {
+          SentenceType = 0;
           if (c == '.' || c == '\r' || c == '\n') {
             // a blank line or starting with '.' means: wait for next second
             if (burst_start != 0) {
-                next_burst = ref_time_ms + 1200;  // 200 ms after next simulated PPS
+                next_burst = ref_time_ms + 1100;  // 100 ms after next simulated PPS
                 burst_start = 0;
             } else if (c == '.') {
                 next_burst += 1000;               // ".." for a 2-sec delay, etc
@@ -1761,15 +1923,17 @@ void PickGNSSFix()
                 d = c;
             return;
           }
-          // else if (c == 'B') process IGC B-record as sim input
+          // else if (c == 'B') process IGC B-record as sim input ?
         }
         d = 0;
         if (isPrintable(c) || c == '\r' || c == '\n') {
           if (burst_start == 0)
               burst_start = millis();
           GNSSbuf[GNSS_cnt] = c;
-          bool isValidSentence = Try_GNSS_sentence();
-          //if (isValidSentence) {
+          uint8_t rval = Try_GNSS_sentence();
+          if (rval != 0)
+              SentenceType = rval;
+          //if (SentenceType) {
           //    GNSSbuf[GNSS_cnt+1] = '\n';
           //    GNSSbuf[GNSS_cnt+2] = '\0';
           //    Serial.print("sim> ");
@@ -1777,6 +1941,8 @@ void PickGNSSFix()
           //}
           if (c=='\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
             GNSS_cnt = 0;
+            if (SentenceType == 2)   // PFSIM
+                return;              // break to allow main loop to report
           } else {
             GNSS_cnt++;
             yield();
@@ -1927,9 +2093,10 @@ void PickGNSSFix()
     }
 #endif /* ENABLE_GNSS_STATS2 */
 
-    if (Try_GNSS_sentence()) {
+    if (Try_GNSS_sentence() == 1) {
 #if defined(USE_NMEA_CFG)
-      if (GNSSbuf[1]!='G')
+      //if (GNSSbuf[1]!='G')
+      if (GNSSbuf[1]=='P')
           NMEA_Process_SRF_SKV_Sentences();
           // if it was a valid sentence but not a GNSS sentence
 #endif /* USE_NMEA_CFG */
@@ -1974,11 +2141,10 @@ void PickGNSSFix()
 
 }
 
-#if !defined(EXCLUDE_EGM96)
+#if defined(USE_EGM96)
 /*
  *  Algorithm of EGM96 geoid offset approximation was taken from XCSoar
  */
-
 static float AsBearing(float angle)
 {
   float retval = angle;
@@ -1992,8 +2158,9 @@ static float AsBearing(float angle)
   return retval;
 }
 
-int LookupSeparation(float lat, float lon)
+void LookupSeparation(float lat, float lon)
 {
+#if defined(ESP32)    // need SPIFFS
   int ilat, ilon;
 
   ilat = round((90.0 - lat) / 2.0);
@@ -2001,12 +2168,58 @@ int LookupSeparation(float lat, float lon)
 
   int offset = ilat * 180 + ilon;
 
-  if (offset >= egm96s_dem_len)
-    return 0;
+  if (offset >= 90*180)
+    return;
 
   if (offset < 0)
-    return 0;
+    return;
 
-  return (int) pgm_read_byte(&egm96s_dem[offset]) - 127;
+  int retval = -1;
+  File egm96file = SPIFFS.open("/egm96s.dem", "r");
+  if (!egm96file) {
+      Serial.println(F("File egm96s.dem not found in SPIFFS"));
+      return;
+  } else {
+      if (! egm96file.seek(offset, SeekSet))
+          Serial.println(F("Failed to seek to offset in egm96s.dem"));
+      else
+          retval = (int) egm96file.read();
+      egm96file.close();
+  }
+  if (retval < 0)   // not read from file
+      return;
+  retval -= 127;
+  if (retval < -120 || retval > 120) {
+      Serial.print(F("LookupSeparation(): invalid value"));
+      return;
+  }
+  geo_sep_from_file = (retval? (float) retval : 0.1);    // exactly zero means n.a.
+  Serial.print(F("LookupSeparation() retrieved: "));
+  Serial.print(retval);
+  Serial.print(F(" from offset: "));
+  Serial.println(offset);
+#endif
 }
-#endif /* EXCLUDE_EGM96 */
+
+float EGM96GeoidSeparation()
+{
+    if (geoid_from_setting != 0)                  // zero means n.a.
+        return (float) geoid_from_setting;
+    static uint32_t when_loaded = 0;
+    if ((when_loaded == 0 || millis() > when_loaded + 1200000)    // every 20 minutes
+             && isValidGNSSFix()) {
+        LookupSeparation (ThisAircraft.latitude, ThisAircraft.longitude);
+        when_loaded = millis();
+    }
+    return geo_sep_from_file;
+}
+
+#else
+float EGM96GeoidSeparation()
+{
+    float rval = (float) geoid_from_setting;
+    if (geoid_from_setting == 0)
+        rval += 0.1;                   // zero means n.a.
+    return rval;
+}
+#endif /* USE_EGM96 */

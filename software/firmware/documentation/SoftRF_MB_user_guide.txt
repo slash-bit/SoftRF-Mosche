@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated October 13, 2024 to fit software version MB145
+This version last updated October 24, 2024 to fit software version MB146
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -252,6 +252,8 @@ GDL90 output: this is for a different local data transfer protocol, usually leav
 
 Dump1090: yet another local data output protocol, usually leave Off.
 
+Geoid Separation: Most users can ignore this.  Some GNSS modules do not report the "geoid separation".  For example, some older T-Beam versions (v0.7).  If this is the case, the status web page says "above ellipsoid - MSL n.a." next to "Altitude".  That has no effect on SoftRF operation in the "Latest" protocol, but it means the altitude reported to connected glide computers is slightly wrong, as is the altitude transmitted in some other protocols.  One way to fix that is to enter the "geoid separation" here manually - an integer between -104 and +84 (meters).  (If 0 is correct, enter 1.)  Alternatively, leave this setting as zero, and upload the file "egm96s.dem" using the button for that in the status page.  Then SoftRF will look up the needed number based on the location.  That file is available here: https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/source/libraries/Geoid/egm96s.dem
+
 Power save: leaving the WiFi on shortens the battery runtime.  Select "WiFi OFF (10 min.)" to turn the WiFi off after allowing 10 minutes for connecting to change settings, etc.  Leave Power save "disabled" to keep the WiFi on - e.g., if you are sending data throughout the flight to a connected device via WiFi.
 
 Shutdown if no external power: select "Yes" if you want automatic turn-off some time after external power is disconnected from a device that also has an internal battery - see "How to power the SoftRF device" section above.  If no internal battery is installed, can leave this setting as "No".  Note: this feature currently supported only on T-Beam v1.0 and v1.1.
@@ -398,13 +400,13 @@ ASW20
 N1234
 CY
 
-Once the card is installed, you will normally not need to physically access it (other than for firmware updates, but those can normally be done via wifi instead).  The web interface allows you to list the flight logs (which are kept in the "logs" folder), download the latest flight log or any file in the list, and to clear the flight logs to keep the list uncluttered. (Clearing moves them to a subfolder, click "empty trash" to delete.)  To upload an updated IGC_CONF.TXT to the SD card through the web interface, enter the URL 192.168.1.1/logupload and then select the file and click "upload".
+Once the card is installed, you will normally not need to physically access it (other than for firmware updates, but those can normally be done via wifi instead).  The web interface allows you to list the flight logs (which are kept in the "logs" folder), download the latest flight log or any file in the list, and to clear the flight logs to keep the list uncluttered.  (Clearing moves them to an "old" subfolder, click "empty trash" to delete all files in the subfolder.)  To upload an updated IGC_CONF.TXT to the SD card through the web interface, enter the URL 192.168.1.1/logupload and then select the file and click "upload".
 
 Flight logging can be done in two different modes.  In the "Airborne" mode the file is started when a takeoff is detected, and finalized upon landing - a new file is created upon the next takeoff.  In the "Always" mode data is collected continuously into one file.  The "Traffic" mode is same as "Airborne" but also outputs data about nearby aircraft as comments in the flight log file.
 
 If the T-Beam is shut down via the pushbutton (on v1.x boards - or if the alarm-demo is activated on a v0.7 board via long-press of the button), or if any of the related web-interface buttons are clicked, the flight log (if still active) will be finalized.  If the power supply is simply disconnected, the flight log will be valid, but missing the last few minutes of data.
 
-The flight log files are secured and will be accepted as valid on Weglide and OLC.  But they are not IGC-certified, so cannot be used for badges and records.
+The flight log files are "secured" and will be accepted as valid on Weglide and OLC.  But they are not IGC-certified, so cannot be used for badges and records.
 
 Types of SD card adapters
 
@@ -500,6 +502,8 @@ Here are step by step instructions for OTA firmware update:
 * Re-connect to the SoftRF Wi-Fi Access Point and inspect the firmware version listed on the status page.  It should now show the new version.  The version is also shown on the OLED, along with whether the user settings have been preserved, or replaced with the defaults.
 
 * Check and restore your settings if necessary.  Depending on the old and new firmware versions, some, all, or none of your settings will still be remembered (where different from the defaults).
+
+Note: if you are using the wifi network created by SoftRF, and there is a strong signal from an external network which offers internet connection, your PC/Tablet/Cellphone may switch to the other network in the middle of the update.  In that case the update will not complete - the OLED display will stop incrementing the "UPDATE" count.  Try again with a different device, or farther from the external network, or turn the external network off, or change SoftRF's settings so that it will connect to the external network instead of creating its own.
 
 If this firmware update method fails (and it always fails if starting from the "rc9" firmware version), proceed to the first-time firmware installation procedure (via USB) mentioned above in this document.  That usually works, even if the T-Beam is unable to boot after a failed update.
 

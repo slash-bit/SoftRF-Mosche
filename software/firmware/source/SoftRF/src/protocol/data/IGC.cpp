@@ -613,7 +613,7 @@ bool logFlightPosition()
     }
     *bp++ = *gp;
 
-    int galt = (int) ThisAircraft.altitude;
+    int galt = (int) ThisAircraft.altitude;   // assumes this is height above ellipsoid
     int palt;
     if (baro_chip != NULL && ! (settings->debug_flags & DEBUG_SIMULATE))
         palt = (int) ThisAircraft.pressure_altitude;

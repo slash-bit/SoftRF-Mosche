@@ -67,7 +67,10 @@ void GNSS_loop       (void);
 void GNSS_fini       (void);
 void GNSSTimeSync    (void);
 void PickGNSSFix     (void);
-int LookupSeparation (float, float);
+#if !defined(EXCLUDE_EGM96)
+void LookupSeparation (float, float);
+float EGM96GeoidSeparation();
+#endif
 bool leap_seconds_valid(void);
 
 extern const gnss_chip_ops_t *gnss_chip;  // added

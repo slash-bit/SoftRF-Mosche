@@ -607,12 +607,9 @@ static void parseNMEA(const char *str, int len)
      * When geoidal separation is zero or not available - use approx. EGM96 value
      */
     if (ThisAircraft.geoid_separation == 0.0) {
-      ThisAircraft.geoid_separation = (float) LookupSeparation(
-                                                ThisAircraft.latitude,
-                                                ThisAircraft.longitude
-                                              );
+      ThisAircraft.geoid_separation = (float) EGM96GeoidSeparation();
       /* we can assume the GPS unit is giving ellipsoid height */
-      ThisAircraft.altitude -= ThisAircraft.geoid_separation;
+      // ThisAircraft.altitude -= ThisAircraft.geoid_separation;
     }
   }
 }

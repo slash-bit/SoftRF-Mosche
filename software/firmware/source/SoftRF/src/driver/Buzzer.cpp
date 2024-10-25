@@ -102,16 +102,16 @@ void Buzzer_setup(void)
   if (settings->volume == BUZZER_EXT) {
       pinMode(buzzer1pin, OUTPUT);
       ext_buzzer(true);   // sound buzzer briefly for self-test
-      delay(300);
+      delay(80);
       ext_buzzer(false);
-      delay(100);
+      delay(40);
       ext_buzzer(true);
-      delay(300);
+      delay(80);
       ext_buzzer(false);
-      delay(100);
-      ext_buzzer(true);
-      delay(300);
-      ext_buzzer(false);
+//      delay(100);
+//      ext_buzzer(true);
+//      delay(200);
+//      ext_buzzer(false);
   } else {
       if (ESP32_pin_reserved(buzzer2pin, false, "Buzzer")) {
           settings->volume = BUZZER_OFF;
@@ -228,9 +228,8 @@ void Buzzer_loop(void)
     return;
   }
 
-#if 1
   /* strobe does a self test, do something similar with buzzer */
-  if ((settings->alarm_demo || do_alarm_demo) && BuzzerTimeMarker == 0) {
+  if (do_alarm_demo && BuzzerTimeMarker == 0) {
       delay(1000);
       uint32_t t = millis() - SetupTimeMarker;
       if (t < (1000*STROBE_INITIAL_RUN)) {
@@ -243,15 +242,6 @@ void Buzzer_loop(void)
           do_alarm_demo = false;
       }
   }
-#else
-  // demo each alarm sound after booting
-  static uint8_t buzzer_demo = 0;
-  if (settings->alarm_demo && buzzer_demo < 3 && BuzzerTimeMarker == 0) {
-      delay(500);
-      Buzzer_Notify(buzzer_demo+2, false);
-      ++buzzer_demo;
-  }
-#endif
 }
 
 void Buzzer_fini(void)

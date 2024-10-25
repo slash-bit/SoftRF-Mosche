@@ -524,7 +524,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
   Serial.print(dest);
   Serial.print("): ", dest);
   Serial.write(buf, size);
-  if (nl) Serial.write('\n');
+  if (nl) Serial.print("\r\n");
 #endif
 
   if (dest == NMEA_Source)          // do not echo NMEA back to its source
@@ -540,11 +540,11 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (SoC->UART_ops) {
         SoC->UART_ops->write((const byte*) buf, size);
         if (nl)
-          SoC->UART_ops->write((const byte *) "\n", 1);
+          SoC->UART_ops->write((const byte *) "\r\n", 2);
       } else {
         Serial.write(buf, size);
         if (nl)
-          Serial.write('\n');
+          Serial.write((const byte *) "\r\n",2);
       }
     }
     break;
@@ -553,7 +553,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (has_serial2) {
         Serial2.write(buf, size);
         if (nl)
-          Serial2.write('\n');
+          Serial2.write((const byte *) "\r\n",2);
       }
     }
     break;
@@ -561,15 +561,16 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
     {
       size_t udp_size = size;
 
-      if (size >= sizeof(UDPpacketBuffer))
-        udp_size = sizeof(UDPpacketBuffer) - 1;
+      if (size > sizeof(UDPpacketBuffer) - 2)
+        udp_size = sizeof(UDPpacketBuffer) - 2;
       memcpy(UDPpacketBuffer, buf, udp_size);
 
-      if (nl)
-        UDPpacketBuffer[udp_size] = '\n';
+      if (nl) {
+        UDPpacketBuffer[udp_size++] = '\r';
+        UDPpacketBuffer[udp_size++] = '\n';
+      }
 
-      SoC->WiFi_transmit_UDP(UDP_NMEA_Output_Port, (byte *) UDPpacketBuffer,
-                              nl ? udp_size + 1 : udp_size);
+      SoC->WiFi_transmit_UDP(UDP_NMEA_Output_Port, (byte *) UDPpacketBuffer, udp_size);
     }
     break;
   case DEST_TCP:
@@ -578,7 +579,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (TCP_active) {
         WiFi_transmit_TCP(buf, size);
         if (nl)
-          WiFi_transmit_TCP("\n", 1);
+          WiFi_transmit_TCP("\r\n", 2);
       }
 #endif
     }
@@ -588,7 +589,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (SoC->USB_ops) {
         SoC->USB_ops->write((const byte *) buf, size);
         if (nl)
-          SoC->USB_ops->write((const byte *) "\n", 1);
+          SoC->USB_ops->write((const byte *) "\r\n", 2);
       }
     }
     break;
@@ -597,7 +598,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
       if (BTactive && SoC->Bluetooth_ops) {
         SoC->Bluetooth_ops->write((const byte *) buf, size);
         if (nl)
-          SoC->Bluetooth_ops->write((const byte *) "\n", 1);
+          SoC->Bluetooth_ops->write((const byte *) "\r\n", 2);
       }
     }
     break;
@@ -1314,8 +1315,8 @@ void NMEA_Position()    // only called in txrx_test() mode (and maybe from RPi)
     info.longitude = ((int) ThisAircraft.longitude) * 100.0;
     info.longitude += (ThisAircraft.longitude - (int) ThisAircraft.longitude) * 60.0;
     info.speed = ThisAircraft.speed * _GPS_KMPH_PER_KNOT;
-    info.elevation = ThisAircraft.altitude; /* above MSL */
-    info.height = LookupSeparation(ThisAircraft.latitude, ThisAircraft.longitude);
+    info.height = ThisAircraft.geoid_separation;
+    info.elevation = ThisAircraft.altitude - info.height; /* above MSL */
     info.track = ThisAircraft.course;
 
 #if 0
@@ -1402,7 +1403,7 @@ void NMEA_GGA()
   info.height = gnss.separation.meters();
 
   if (info.height == 0.0 && info.sig != (NmeaSignal) Invalid) {
-    info.height = LookupSeparation(latitude, longitude);
+    info.height = EGM96GeoidSeparation();
     info.elevation -= info.height;
   }
 
@@ -1425,7 +1426,6 @@ void NMEA_GGA()
     NMEA_Outs(settings->nmea_g, settings->nmea2_g, nmealib_buf.buffer, gen_sz, false);
   }
 }
-
 #endif /* USE_NMEALIB */
 
 #if defined(USE_NMEA_CFG)

@@ -298,6 +298,10 @@ bool word2wav(const char *word) {
 
     for (int i=0; i<17; i++) {
         if (strcmp(word,words[i])==0 && offsets[i] > 0) {
+            //if (!SPIFFS.begin(true)) {
+            //    Serial.println(F("An Error has occurred while mounting SPIFFS"));
+            //    break;
+            //}
             tarfile = SPIFFS.open("/waves.tar", "r");
             if (!tarfile) {
                 Serial.println(F("Failed to open waves.tar"));
@@ -433,10 +437,10 @@ int parse_wav_tar()
 
     clear_waves();
 
-    if (!SPIFFS.begin(true)) {
-        Serial.println(F("An Error has occurred while mounting SPIFFS"));
-        return 0;
-    }
+    //if (!SPIFFS.begin(true)) {
+    //    Serial.println(F("An Error has occurred while mounting SPIFFS"));
+    //    return 0;
+    //}
 
     if (!SPIFFS.exists("/waves.tar")) {
         Serial.println(F("waves.tar not present in SPIFFS"));

@@ -456,6 +456,12 @@ void normal()
     static float prev_lat = 0;
     static float prev_lon = 0;
     if (firstfix) {
+        if (gnss.separation.meters()==0) {
+            Serial.println(F("Warning: GNSS gives ellipsoid altitude and no geoid & MSL"));
+        } else {
+            Serial.print(F("GNSS reported geoid separation: "));
+            Serial.println(gnss.separation.meters());
+        }
         SetupTimeMarker = millis();
         prev_lat = gnss.location.lat();
         prev_lon = gnss.location.lng();
@@ -514,7 +520,9 @@ void normal()
       ThisAircraft.gnsstime_ms = ref_time_ms;          /* last PPS, real or assumed */
       ThisAircraft.latitude = gnss.location.lat();
       ThisAircraft.longitude = gnss.location.lng();
-      ThisAircraft.altitude = gnss.altitude.meters();
+      ThisAircraft.geoid_separation = gnss.separation.meters();
+      ThisAircraft.altitude = gnss.altitude.meters() + ThisAircraft.geoid_separation;
+             // - converts MSL altitude in GGA to altitude above ellipsoid
       if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
         /* for "winch" aircraft type, elevate above ground */
         ThisAircraft.altitude += ((ThisAircraft.timestamp & 0x03) * 100) + 100;
@@ -522,7 +530,6 @@ void normal()
       ThisAircraft.course = gnss.course.deg();
       ThisAircraft.speed = gnss.speed.knots();
       ThisAircraft.hdop = (uint16_t) gnss.hdop.value();
-      ThisAircraft.geoid_separation = gnss.separation.meters();
 
       /* allow knowing when there was a good fix for 30 sec */
       if (initial_time == 0) {
@@ -561,19 +568,19 @@ void normal()
       }
 #endif
 
-#if !defined(EXCLUDE_EGM96)
+// excluding the EGM96 lookup means the altitude reported to external devices in GGA sentences
+// will be ellipsoid rather than MSL - but only in the rare cases of "fake" GPS units
+// and this has no effect on the internal SoftRF calculations nor what it transmits.
+
       /*
        * When geoidal separation is zero or not available - use approx. EGM96 value
        */
       if (ThisAircraft.geoid_separation == 0.0) {
-        ThisAircraft.geoid_separation = (float) LookupSeparation(
-                                                  ThisAircraft.latitude,
-                                                  ThisAircraft.longitude
-                                                );
+        ThisAircraft.geoid_separation = EGM96GeoidSeparation();
         /* we can assume the GPS unit is giving ellipsoid height */
-        ThisAircraft.altitude -= ThisAircraft.geoid_separation;
+        /* we now store ellipsoid altitude - so leave it alone */
+        //ThisAircraft.altitude -= ThisAircraft.geoid_separation;
       }
-#endif /* EXCLUDE_EGM96 */
 
       Estimate_Wind();      // estimate wind from present and past GNSS data
 
@@ -650,6 +657,28 @@ void normal()
     Traffic_loop();
   }
 
+#if defined(ESP32)
+#if defined(USE_SD_CARD)
+  if (settings->logflight != FLIGHT_LOG_NONE) {
+    // Try and write to the flight log on the SD card between RF time slots (to avoid
+    //  contention for the SPI bus), but after the GNSS fix for the current second.
+    // This is not an issue in simulation mode since the radio is not being used.
+    // Too tight a limit on the reporting time window results in some missing reports.
+    uint32_t msnow = millis();
+    uint32_t ms_since_pps = (msnow - ref_time_ms);
+    if (msnow > IGCTimeMarker && ms_since_pps > 270
+            && ms_since_pps < ((settings->debug_flags & DEBUG_SIMULATE)? 800 : 370)) {
+      if (validfix) {
+          logFlightPosition();
+          if (settings->logflight == FLIGHT_LOG_TRAFFIC)
+              logCloseTraffic();
+      }
+      IGCTimeMarker = ref_time_ms + (1000 << (settings->loginterval)) + 320;
+    }
+  }
+#endif
+#endif
+
   if (isTimeToDisplay()) {
     if (validfix) {
       LED_DisplayTraffic();
@@ -678,25 +707,6 @@ void normal()
     }
     ExportTimeMarker = millis();
   }
-
-#if defined(ESP32)
-#if defined(USE_SD_CARD)
-  if (settings->logflight != FLIGHT_LOG_NONE) {
-    // try and write to the flight log on the SD card between RF time slots (to avoid
-    //  contention for the SPI bus), but after the GNSS fix for the current second
-    uint32_t msnow = millis();
-    uint32_t ms_since_pps = (msnow - ref_time_ms);
-    if (msnow > IGCTimeMarker && ms_since_pps > 270 && ms_since_pps < 370) {
-      if (validfix) {
-          logFlightPosition();
-          if (settings->logflight == FLIGHT_LOG_TRAFFIC)
-              logCloseTraffic();
-      }
-      IGCTimeMarker = ref_time_ms + (1000 << (settings->loginterval)) + 320;
-    }
-  }
-#endif
-#endif
 
   // Handle Air Connect
   NMEA_loop();
