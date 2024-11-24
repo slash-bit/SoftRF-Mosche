@@ -35,11 +35,12 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB146"
+#define SOFTRF_FIRMWARE_VERSION "MB147"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
 #define ENTRY_EXPIRATION_TIME  17 /* seconds */
+#define NONDIR_EXPIRATION       5 /* seconds */
 #define ENTRY_RELAY_TIME       15 /* seconds */
 #define ANY_RELAY_TIME          5 /* seconds */
 #define LED_EXPIRATION_TIME     5 /* seconds */
@@ -128,6 +129,7 @@ typedef struct UFO {
 #endif
 
     uint8_t   protocol;
+    uint8_t   tx_type;
     uint8_t   addr_type;
     int8_t    alarm_level;
     int8_t    alert_level;
@@ -155,9 +157,11 @@ typedef struct UFO {
 /*  float     prevspeed;  */  /* previous speed */
     float     prevaltitude;   /* previous altitude */
     float     distance;       // meters
+    float     mindist;
     float     bearing;
     float     turnrate;       // ground reference
     float     alt_diff;
+    float     maxrssirelalt;
     float     adj_alt_diff;
     float     adj_distance;
 
@@ -185,12 +189,31 @@ typedef struct UFO {
 
     uint16_t  hdop; /* cm */
     uint16_t  last_crc;
-    int8_t    rssi; /* SX1276 only */
+    int8_t    rssi;
+    int8_t    mindistrssi;
+    int8_t    maxrssi;
 
     /* ADS-B (ES, UAT, GDL90) specific data */
     uint8_t   callsign[10];    /* size of mdb.callsign + 1 */
+    uint32_t  positiontime;
+    uint32_t  velocitytime;
+    uint32_t  mode_s_time;
 
 } ufo_t;
+
+// only the fields needed for processing ADS-B messages:
+typedef struct ADSBFO {
+    uint32_t  addr;
+    float     latitude;      // signed decimal-degrees
+    float     longitude;
+    float     altitude;      // meters, changed to store altitude above ellipsoid
+    float     distance;       // meters
+    float     bearing;
+    int32_t   dx;        // EW distance to this other aircraft, in meters
+    int32_t   dy;        // NS distance
+    uint8_t   tx_type;
+    //int8_t    rssi;
+} adsfo_t;
 
 typedef struct hardware_info {
     byte  model;

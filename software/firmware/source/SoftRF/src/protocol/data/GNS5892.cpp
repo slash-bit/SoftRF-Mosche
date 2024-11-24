@@ -16,52 +16,46 @@
 #include "../../ApproxMath.h"
 #include "../../../SoftRF.h"
 #include "../../system/SoC.h"
+#include "../../system/Time.h"
 #include "../../driver/EEPROM.h"
 #include "../../driver/Baro.h"
+#include "../../driver/GNSS.h"
 #include "../../TrafficHelper.h"
 #include "../radio/Legacy.h"
 #include "NMEA.h"
 #include "GNS5892.h"
 
-static ufo_t fo1090;
+static adsfo_t fo1090, EmptyFO1090;
 static char buf1090[256];
 static unsigned char msg[14];
 
 typedef struct mmstruct {
     // variables filled in by message parsing:
-    int frame;     // DF
-    int type;      // TC
-    int sub;       // subtype
-    char msgtype;  // I, P or V
-    int fflag;     // odd/even
     uint32_t cprlat;    // 17-bit relative representation
     uint32_t cprlon;
-    // the rest kept out of fo1090:
-    uint32_t  positiontime;
-    uint32_t  velocitytime;
-    uint8_t   alt_type;
-    int16_t   ewv;
-    int16_t   nsv;
-    uint8_t   track_is_valid;
-    uint8_t   heading_is_valid;
-    int16_t   airspeed;
-    uint8_t   airspeed_type;
-    uint8_t   vert_rate_source;
-    uint8_t   rssi;
+    int16_t  ewv;
+    int16_t  nsv;
+    int16_t  airspeed;
+    uint8_t  alt_type;
+    uint8_t  rssi;
+    uint8_t  frame;     // DF
+    uint8_t  type;      // TC
+    uint8_t  sub;       // subtype
+    uint8_t  fflag;     // odd/even
 } mm_t;
 static mm_t mm, EmptyMsg;
 
 static uint8_t ac_type_table[16] =
 {
-    AIRCRAFT_TYPE_UNKNOWN,    // 0x0 unknown
+    AIRCRAFT_TYPE_UFO,        // 0x0 unknown   // AIRCRAFT_TYPE_UKNOWN is handled as "landed out"
     AIRCRAFT_TYPE_GLIDER,     // 0x1 glider
     AIRCRAFT_TYPE_BALLOON,    // 0x2 LTA 
     AIRCRAFT_TYPE_PARACHUTE,  // 0x3 parachute 
     AIRCRAFT_TYPE_HANGGLIDER, // 0x4 hang glider
-    AIRCRAFT_TYPE_UNKNOWN,    // 0x5 reserved
+    AIRCRAFT_TYPE_UFO,        // 0x5 reserved
     AIRCRAFT_TYPE_UAV,        // 0x6 UAV
     AIRCRAFT_TYPE_UFO,        // 0x7 spacecraft
-    AIRCRAFT_TYPE_UNKNOWN,    // 0x8 not used
+    AIRCRAFT_TYPE_UFO,        // 0x8 not used
     AIRCRAFT_TYPE_POWERED,    // 0x9 light 
     AIRCRAFT_TYPE_JET,        // 0xA med1
     AIRCRAFT_TYPE_JET,        // 0xB med2
@@ -72,6 +66,59 @@ static uint8_t ac_type_table[16] =
 };
 
 uint32_t adsb_packets_counter = 0;
+
+// truncated CRC table, for 56 bit messages only, and skipped the CRC bits, leaving 32
+static uint32_t mode_s_checksum_table[] = {
+  0x018567, 0xff38b7, 0x80665f, 0xbfc92b, 0xa01e91, 0xaff54c, 0x57faa6, 0x2bfd53,
+  0xea04ad, 0x8af852, 0x457c29, 0xdd4410, 0x6ea208, 0x375104, 0x1ba882, 0x0dd441,
+  0xf91024, 0x7c8812, 0x3e4409, 0xe0d800, 0x706c00, 0x383600, 0x1c1b00, 0x0e0d80,
+  0x0706c0, 0x038360, 0x01c1b0, 0x00e0d8, 0x00706c, 0x003836, 0x001c1b, 0xfff409
+};
+
+static uint32_t mode_s_checksum( int n ) {
+  int bits = n * 8;
+  if (bits != 56) {
+//Serial.println("no CRC - bits!=56");
+      return 0;
+  }
+  uint32_t crc = 0;
+  int j;
+  bits -= 24;   // skip the CRC bits
+  int byte = 0;
+  int bitmask = (1 << 7);
+  for(j = 0; j < bits; /*j++*/) {
+    if (msg[byte] & bitmask)
+      crc ^= mode_s_checksum_table[j];
+    j++;
+    if ((j & 0x7) == 0) {
+      byte++;
+      bitmask = (1 << 7);
+    } else {
+      bitmask >>= 1;
+    }
+  }
+  return crc;
+}
+
+uint32_t addr_from_crc( int n )
+{
+  static uint32_t last_crc = 0;
+  static uint32_t last_val = 0;
+  // CRC is always the last three bytes.
+  uint32_t crc = (((uint32_t)msg[n-3]) << 16) |
+                  (((uint32_t)msg[n-2]) << 8) |
+                  (uint32_t)msg[n-1];
+  // some aircraft send bursts of identical (?) messages
+  if (crc == last_crc)          // very likely same aircraft at same altitude
+      return last_val;          // save CPU cycles, return the same ICAO ID
+  last_crc = crc;
+  uint32_t crc2 = mode_s_checksum(n);
+  if (crc2 != 0) {
+      last_val = (crc ^ crc2);   // should result overlaid ICAO ID
+      return last_val;
+  }
+  return 0;
+}
 
 //
 // Compact Position Reporting decoding
@@ -205,6 +252,9 @@ static uint32_t ourcprlonPlus[2], ourcprlonMinus[2];
 //
 static bool decodeCPRrelative()
 {
+    if (reflat == 0)
+        return false;                     // pre-comp has not happened
+
     // convert incoming cprlxx values to the "fractions" (how far into current zone)
     float fractional_lat = mm.cprlat * 7.629394531e-6;  // = 1/131072 = 2^-17
     float fractional_lon = mm.cprlon * 7.629394531e-6;
@@ -221,7 +271,7 @@ static bool decodeCPRrelative()
     float degsdiff = fabs(rlat - reflat);
     if (degsdiff > dLatHalf) {
       if (degsdiff > 0.5 * dLat[mm.fflag])   // more precise test
-        return (false);                     // Time to give up - Latitude error
+        return false;                       // Time to give up - Latitude error
     }
 
     // 'NL' is the number of logitude zones for the target's latitude.
@@ -272,12 +322,12 @@ static bool decodeCPRrelative()
     degsdiff = fabs(rlon - reflon);
     if (degsdiff > dLonHalf) {
       if (degsdiff > 0.5 * dLon2)    // more precise test
-        return (false);             // Time to give up - Longitude error
+        return false;               // Time to give up - Longitude error
     }
 
     fo1090.latitude  = rlat;
     fo1090.longitude = rlon;
-    return (true);
+    return true;
 }
 
 
@@ -299,14 +349,14 @@ static void CPRRelative_precomp()
     // float modlon[2];   // mod(reflon,dLon)/dLon = reflon/dLon - flrlon[] - i.e., fraction
     // uint32_t cprlon    // the "fraction" times 2^17
 
+    if (! GNSSTimeMarker)        // wait until 30 sec after GNSS fix
+        return;
+
     // The exact reference location is not important, just not too far away
     // - except that the early filtering of "too far" targets is based on it, not our actual location
-    if (fabs(reflat-ThisAircraft.latitude)  < 0.15
-    &&  fabs(reflon-ThisAircraft.longitude) < 0.21)    // about 9 nm
+    if (fabs(ThisAircraft.latitude  - reflat) < 0.15
+    &&  fabs(ThisAircraft.longitude - reflon) < 0.21)    // about 9 nm
         return;
-    // - this also returns while there is no GNSS fix yet
-
-    play5892();  // try and capture a #49 response
 
     reflat = ThisAircraft.latitude;
     reflon = ThisAircraft.longitude;
@@ -384,7 +434,7 @@ static void CPRRelative_setup()
     dLatHalf = 0.5 * dLat[0];
     // first-cut range limit (along each axis):
     maxcprdiff = 9000;   // about 25nm = 9nm pre-computation threshold + 16nm pre-filtering range
-    // a squared scaled version for slant distance
+    // a squared scaled version for 2D distance
     maxcprdiff_sq = (maxcprdiff >> 4) * (maxcprdiff >> 4);
     
     // compute what does depend on reflat, reflon
@@ -403,7 +453,7 @@ static int find_traffic_by_addr(uint32_t addr)
         if (Container[i].addr == addr) {
             if (Container[i].protocol == RF_PROTOCOL_ADSB_1090)
                 return i;      // found
-            if (ThisAircraft.timestamp - Container[i].timestamp <= ENTRY_EXPIRATION_TIME)
+            if (OurTime <= Container[i].timestamp + ENTRY_EXPIRATION_TIME)
                 return -1;     // already tracked via other means
             // was tracked via other means, but expired - clear this slot
             Container[i].addr = 0;
@@ -425,15 +475,16 @@ static int add_traffic_by_dist(float distance)
     }
     // replace an expired object if found
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (ThisAircraft.timestamp - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+      if (OurTime > Container[i].timestamp + ENTRY_EXPIRATION_TIME) {
         return i;
       }
     }
     // may replace a non-expired object: identify a less important one
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (Container[i].distance > distance
-       && Container[i].alarm_level == ALARM_LEVEL_NONE
-       && Container[i].addr != settings->follow_id) {
+      ufo_t *cip = &Container[i];
+      if (cip->distance > distance
+       && cip->alarm_level == ALARM_LEVEL_NONE
+       && cip->addr != settings->follow_id) {
             return i;
       }
     }
@@ -443,43 +494,51 @@ static int add_traffic_by_dist(float distance)
 // fill in certain fields from each message type
 // anything not filled-in stays as all zeros
 
-static void update_traffic_position()
+static void update_traffic_position(int index)
 {
     // Find in table, or try and create a new entry
     // Only position messages create a traffic table entry
     //   - and only if not too far or high
+
+    //already done by parse_position():
+    //int index = find_traffic_by_addr(fo1090.addr);
+    //if (index < 0)        // already tracked via other means
+    //    return;
+
     ufo_t *cip;
-    int i = find_traffic_by_addr(fo1090.addr);
-    if (i < 0)        // already tracked via other means
-        return;
-    if (i == MAX_TRACKING_OBJECTS) {  // not found
-        i = add_traffic_by_dist(fo1090.distance);
-        if (i == MAX_TRACKING_OBJECTS)    // no room
+    if (index == MAX_TRACKING_OBJECTS) {  // not found
+        index = add_traffic_by_dist(fo1090.distance);
+        if (index == MAX_TRACKING_OBJECTS)    // no room
             return;
-        cip = &Container[i];
+        cip = &Container[index];
         *cip = EmptyFO;
         cip->addr = fo1090.addr;
-        cip->altitude  = fo1090.altitude;
+        cip->addr_type = ADDR_TYPE_ICAO;
+        icao_to_n(cip);                           // compute USA N-number from ICAO ID
+        cip->protocol  = RF_PROTOCOL_ADSB_1090;
+        cip->aircraft_type = AIRCRAFT_TYPE_UFO;   // will be updated by identity message
+        cip->tx_type   = fo1090.tx_type;
+        cip->airborne  = 1;          // we only process airborne traffic (mm.type 9-22)
+        cip->circling  = 0;
         cip->timerelayed = 0;
     } else {
         // this ID already tracked, just update some fields
-        cip = &Container[i];
+        cip = &Container[index];
+        //if (fo1090.tx_type > cip->tx_type)
+        //    cip->tx_type = fo1090.tx_type;     // already done
         cip->prevaltitude = cip->altitude;
-        cip->altitude = fo1090.altitude;
-        if (baro_chip != NULL)
-            cip->altitude += ThisAircraft.baro_alt_diff;
-        else if (cip->baro_alt_diff != 0)        // from a velocity message
-            cip->altitude += cip->baro_alt_diff;
-        else
-            cip->altitude += average_baro_alt_diff;
         cip->prevtime_ms = cip->gnsstime_ms;
     }
-    if (cip->protocol != RF_PROTOCOL_ADSB_1090) {
-        cip->protocol  = RF_PROTOCOL_ADSB_1090;
-        cip->addr_type = ADDR_TYPE_ICAO;
-        cip->airborne  = 1;          // we only process airborne traffic (mm.type 9-22)
-        cip->circling  = 0;
+    // convert pressure altitude to GNSS ellipsoid altitude
+    if (mm.alt_type == 0) {               // not GPS altitude
+      if (cip->baro_alt_diff != 0)        // from a velocity message
+        fo1090.altitude += cip->baro_alt_diff;
+      else if (baro_chip != NULL)
+        fo1090.altitude += ThisAircraft.baro_alt_diff;
+      else
+        fo1090.altitude += average_baro_alt_diff;
     }
+    cip->altitude  = fo1090.altitude;
     cip->latitude  = fo1090.latitude;
     cip->longitude = fo1090.longitude;
     cip->distance  = fo1090.distance;
@@ -487,17 +546,28 @@ static void update_traffic_position()
     cip->dy        = fo1090.dy;
     cip->bearing   = fo1090.bearing;
     cip->alt_diff  = cip->altitude - ThisAircraft.altitude;
-    cip->timestamp   = ThisAircraft.timestamp;
-    cip->gnsstime_ms = millis();
+    cip->rssi      = mm.rssi;
+    cip->timestamp    = OurTime;
+    cip->positiontime = OurTime;
+    cip->gnsstime_ms  = millis();
+    Traffic_Update(cip);
 
+/* also send data out via NMEA */
+if (settings->debug_flags & DEBUG_DEEPER) {
+  if (settings->nmea_d || settings->nmea2_d) {
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      PSTR("$PSADS,%06X,%d,%d,%d\r\n"),
+      cip->addr, (int)cip->alt_diff, (int)cip->distance, mm.rssi);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+  }
+}
+
+    // relay some traffic - only if we are airborne (or in "relay only" mode)
     if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
-        // relay some traffic - only if we are airborne (or in "relay only" mode)
         if (settings->relay != RELAY_OFF && settings->relay != RELAY_LANDED
         && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
             air_relay(cip);
     }
-
-    mm.positiontime = ThisAircraft.timestamp;
 }
 
 
@@ -517,7 +587,7 @@ static void update_traffic_position()
 // CA: 3 bits
 // ICAO ID: 24 bits
 // ME (message body): 56 bits
-// PI (CRC etc): 24 bits - can ignore?
+// PI (CRC etc): 24 bits
 
 // assume the data is always valid and uppercase
 //int hex2bin(char c) {
@@ -579,8 +649,8 @@ static float decode_ac12_field() {
         alt = GillhamDecode(dab, c);
         if (alt == 0)
             return 0;
-        if (mm.msgtype == 'P')
-            mm.msgtype = 'H';
+        //if (mm.msgtype == 'P')
+        //    mm.msgtype = 'H';
 
     } else {
         // N is the 11 bit integer resulting from the removal of bit Q
@@ -588,20 +658,182 @@ static float decode_ac12_field() {
         alt = alt*25-1000;
     }
 
-    return (float)((alt * 2497) >> 13);   // meters
+    return 0.3048 * (float) alt;   // meters
 }
 
-static bool parse_identity()
+// this function based on sampling of GNS5892 reception,
+// on the ground for one specific antenna arrangement
+// and is a compromise since the distance spread is large
+// - ideally this should be calibrated for the specific aircraft
+//   using actually received ADS-B data over time
+float estimate_distance_from_rssi(uint8_t rssi)
+{
+// based on dump5892, quarter-wave wire as antenna, on the ground:
+    if (rssi < 29)
+        return ALARM_ZONE_NONE;           // 15 km, will not be reported at all
+    if (rssi < 33)                        // for RSSI 29+
+        return 2*ALARM_ZONE_CLOSE;        // estimate as 3000m, not reported in PFLAA
+    if (rssi < 36)                        // for RSSI 33+
+        return 2*ALARM_ZONE_LOW;          // report as 2000m, report, but still no alarm
+    if (rssi < 39)                        // for RSSI 36+
+        return ALARM_ZONE_IMPORTANT+100;  // report as 800m, generate alarm level LOW
+    return ALARM_ZONE_URGENT+100;         // 500m, alarm level IMPORTANT for RSSI 39+
+
+/* based on limited data from ground-based SoftRF reception of ADS-B DF17
+    if (rssi < 26)
+        return ALARM_ZONE_NONE;           // 15 km, will not be reported at all
+    if (rssi < 28)                        // for RSSI 26+
+        return 2*ALARM_ZONE_CLOSE;        // estimate as 3000m, not reported in PFLAA
+    if (rssi < 30)                        // for RSSI 28+
+        return 2*ALARM_ZONE_LOW;          // report as 2000m, report, but still no alarm
+    if (rssi < 33)                        // for RSSI 30+
+        return ALARM_ZONE_IMPORTANT+100;  // report as 800m, generate alarm level LOW
+    return ALARM_ZONE_URGENT+100;         // 500m, alarm level IMPORTANT for RSSI 33+
+*/
+}
+
+// Mode S altitude replies - only altitude & ICAO ID
+void update_mode_s_traffic(int i)
+{
+    // Find in table, or try and create a new entry
+    //already done by parse_mode_s_altitude():
+    //int i = find_traffic_by_addr(fo1090.addr);
+    //if (i < 0)        // already tracked via other means
+    //    return;
+    ufo_t *cip;
+    if (i == MAX_TRACKING_OBJECTS) {  // not found
+        i = add_traffic_by_dist(fo1090.distance);
+        if (i == MAX_TRACKING_OBJECTS)    // no room
+            return;
+        cip = &Container[i];
+        *cip = EmptyFO;
+        cip->addr = fo1090.addr;
+        cip->addr_type = ADDR_TYPE_ICAO;
+        icao_to_n(cip);                   // compute USA N-number from ICAO ID
+        cip->protocol  = RF_PROTOCOL_ADSB_1090;
+        cip->aircraft_type = AIRCRAFT_TYPE_UFO;
+        cip->tx_type   = fo1090.tx_type;
+    } else {
+        // this ID already tracked, just update some fields
+        cip = &Container[i];
+        if (fo1090.tx_type > cip->tx_type)
+            cip->tx_type = fo1090.tx_type;
+        cip->prevaltitude = cip->altitude;
+        cip->prevtime_ms = cip->gnsstime_ms;
+    }
+    // convert pressure altitude to GNSS ellipsoid altitude
+    if (mm.alt_type == 0) {               // not GPS altitude
+      if (cip->baro_alt_diff != 0)        // from a velocity message
+        fo1090.altitude += cip->baro_alt_diff;
+      else if (baro_chip != NULL)
+        fo1090.altitude += ThisAircraft.baro_alt_diff;
+      else
+        fo1090.altitude += average_baro_alt_diff;
+    }
+    cip->altitude = fo1090.altitude;
+    cip->alt_diff  = cip->altitude - ThisAircraft.altitude;
+    if (cip->tx_type <= TX_TYPE_S) {       // no ADS-B position data
+        cip->distance = fo1090.distance;   // estimated from RSSI
+        cip->bearing  = 0;                 // non-directional
+    }
+    cip->rssi = mm.rssi;
+    cip->timestamp   = OurTime;
+    cip->mode_s_time = OurTime;
+    cip->gnsstime_ms = millis();
+    Traffic_Update(cip);
+if (settings->debug_flags & DEBUG_DEEPER) {
+Serial.print(cip->addr, HEX);
+Serial.print(" Mode S altitude (ft): ");
+Serial.print((int)(3.2808*cip->altitude));
+if (cip->tx_type <= TX_TYPE_S)
+Serial.print(" rough distance: ");
+else
+Serial.print(" ADS-B distance: ");
+Serial.print((int)cip->distance);  // may be filled in by a too-far ADS-B message
+Serial.print(" RSSI: ");
+Serial.print(mm.rssi);
+Serial.print(" tx_type: ");
+Serial.println(cip->tx_type);
+}
+}
+
+// decode altitude from surveillance responses (DF 0 and 4)
+static bool parse_mode_s_altitude(int index)
+{
+/*
+byte 0-based:  0   1   2   3
+bit, 0-based:  0   8   16  24-31
+bit, 1-based:  1   9   17  25-32
+               HH  HH  HH  HH----|
+                       v         |
+                       17   21   v
+                       BBBB BBBB BBBB BBBB
+altitude bits:            ^ ^^^^ ^^^^ ^^^^
+                                  M Q
+                      A     1 2  4       
+                      B            1  2 4
+                      C   1  2 4        
+                      D                2 4
+*/
+    uint32_t alt;
+    if (msg[3]==0 && (msg[2] & 1) == 0) {  // altitude not available
+        alt = 0;
+        return false;
+    } else if ((msg[3] & 0x40) != 0) {     // M bit set - metric altitude
+        // N is the 12 bit integer resulting from the removal of the M bit
+        alt = ((msg[2]&0x1F)<<7) | ((msg[3]&0x80) >> 1) | (msg[3] & 0x3F);
+if (settings->debug_flags & DEBUG_DEEPER) {
+Serial.print("metric altitude: ");
+Serial.println(alt);
+}
+        // convert altitude from meters into feet            
+        //alt *= 3360;
+        //alt >>= 10;
+        // >>> this can't be right, since with 12 bits it is limited to 4095 meters
+        alt = 0;
+        return false;
+    } else if ((msg[3] & 0x10) == 0) {     // q_bit not set - high altitude - Gray code
+        // http://www.ccsinfo.com/forum/viewtopic.php?p=140960
+        // C1 C2 C4 (MSB to LSB):
+        int c = ((msg[2] & 0x10)>>2) | ((msg[2] & 0x04)>>1) | (msg[2] & 0x01);
+        int dab = ((msg[3] & 0x04)<<5) | ((msg[3] & 0x01)<<6) |
+                  ((msg[2] & 0x08)<<2) | ((msg[2] & 0x02)<<3) | ((msg[3] & 0x80)>>4) |
+                  ((msg[3] & 0x20)>>3) | ((msg[3] & 0x08)>>2) | ((msg[3] & 0x02)>>1);
+        alt = GillhamDecode(dab, c);
+        if (alt == 0)               // not available
+            return false;
+    } else {
+        // N is the 11 bit integer resulting from the removal of M & Q bits
+        alt = ((msg[2]&0x1F)<<6) | ((msg[3]&0x80) >> 2) | ((msg[3]&0x20) >> 1) | (msg[3] & 0x0F);
+        // altitude in feet
+        alt = alt*25-1000;
+    }
+    fo1090.altitude = 0.3048 * (float) alt;    // convert altitude from feet into meters
+    if (fabs(fo1090.altitude-ThisAircraft.altitude) > 2000) {
+        if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+               && fo1090.addr != settings->follow_id)
+            return false;
+    }
+    update_mode_s_traffic(index);
+    ++adsb_packets_counter;
+    return true;
+}
+
+static bool parse_identity(int i)
 {
     // do not create a new entry for an identity message,
     //   wait until a position message arrives
-    int i = find_traffic_by_addr(fo1090.addr);
-    if (i == MAX_TRACKING_OBJECTS)  // not found
-        return false;
-    if (i < 0)                      // already tracked via other means
-        return false;
+    //int i = find_traffic_by_addr(fo1090.addr);
+    //if (i == MAX_TRACKING_OBJECTS)  // not found
+    //    return false;
+    //if (i < 0)                      // already tracked via other means
+    //    return false;
 
     ufo_t *cip = &Container[i];
+
+    //if (fo1090.tx_type > cip->tx_type)
+    //    cip->tx_type = fo1090.tx_type;
+    // - may be adding aircraft type (& callsign) to what is still Mode S traffic
 
     uint8_t ac_type = 0;
     if (mm.sub != 0 && mm.type > 2)
@@ -622,24 +854,25 @@ static bool parse_identity()
         // 0xD heavy
         // 0xE high perf
         // 0xF rotorcraft
+    cip->aircraft_type = ac_type_table[ac_type];
 
-    if (ac_type != 0)
-        cip->aircraft_type = ac_type_table[ac_type];
     //if (settings->debug_flags & DEBUG_RESVD1) {
-    //    if (cip->aircraft_type == AIRCRAFT_TYPE_UNKNOWN)
+    //    if (cip->aircraft_type == AIRCRAFT_TYPE_UFO)
     //        Serial.printf("mm.type=%d  mm.sub=%d  msg[4]=%d  ac_type=%d\r\n",
     //            mm.type, mm.sub, msg[4], ac_type);
     //}
 
-    if (cip->callsign[0])   // callsign already known
+    if (cip->callsign[0]!='\0' && cip->callsign[9]!='?')   // received callsign already recorded
         return true;
 
     //raw_callsign = last 6 bytes
     // decode callsign
     static const char *ais_charset = "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?";
     // Note that mapping 6-bit binary values into this table always results in a printable character.
-    // That is why callsign[0]!=0 is a valid check for having received an identity message.
-    cip->callsign[0] = ais_charset[msg[5]>>2];
+    char c = ais_charset[msg[5]>>2];
+    if (c == ' ')                       // received callsign is blank
+        return true;
+    cip->callsign[0] = c;
     cip->callsign[1] = ais_charset[((msg[5]&3)<<4)|(msg[6]>>4)];
     cip->callsign[2] = ais_charset[((msg[6]&15)<<2)|(msg[7]>>6)];
     cip->callsign[3] = ais_charset[msg[7]&63];
@@ -647,13 +880,26 @@ static bool parse_identity()
     cip->callsign[5] = ais_charset[((msg[8]&3)<<4)|(msg[9]>>4)];
     cip->callsign[6] = ais_charset[((msg[9]&15)<<2)|(msg[10]>>6)];
     cip->callsign[7] = ais_charset[msg[10]&63];
-    cip->callsign[8] = '\0';
+    if (cip->callsign[7]==' ') { cip->callsign[7]='\0';
+    if (cip->callsign[6]==' ') { cip->callsign[6]='\0';
+    if (cip->callsign[5]==' ') { cip->callsign[5]='\0';
+    if (cip->callsign[4]==' ') { cip->callsign[4]='\0';
+    }}}} else cip->callsign[8] = '\0';
+    cip->callsign[9] = '\0';                 // marks as a received callsign, not computed
 
     return true;
 }
 
-static bool parse_position()
+static bool parse_position(int index)
 {
+    if (index < MAX_TRACKING_OBJECTS) {       // found
+        // mark as transmitting ADS-B, even if rejected below (too far, etc)
+        if (fo1090.tx_type > Container[index].tx_type) {
+            if (fo1090.tx_type > Container[index].tx_type)
+                Container[index].tx_type = fo1090.tx_type;
+        }
+    }
+
     // Most receiveable signals are from farther away than we may be interested in.
     // An efficient way to filter them out at this early stage will save a lot of CPU cycles.
 
@@ -661,22 +907,19 @@ static bool parse_position()
 
     // altitude is in msg[5] & MSnibble of msg[6]
     if (mm.type <= 18) {     // baro alt
-        mm.alt_type = 0;
-        fo1090.altitude = decode_ac12_field();
-        // altitude is pressure altitude, try and approximate GNSS altitude
-        if (baro_chip != NULL)
-            fo1090.altitude += ThisAircraft.baro_alt_diff;
-        else
-            fo1090.altitude += average_baro_alt_diff;
+        //mm.alt_type = 0;
+        fo1090.altitude = decode_ac12_field();   // meters
     } else {      // GNSS alt, rare
         mm.alt_type = 1;
-        mm.msgtype = 'G';
+        //mm.msgtype = 'G';
         fo1090.altitude = (float)((msg[5] << 4) | ((msg[6] >> 4) & 0x0F));   // meters!
     }
 
     // filter by altitude, but always include "followed" aircraft
+    // show all altitudes in debug-deeper mode for testing
     if (fabs(fo1090.altitude - ThisAircraft.altitude) > 2000) {
-        if (fo1090.addr != settings->follow_id)
+        if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+               && fo1090.addr != settings->follow_id)
             return false;
     }
 
@@ -684,7 +927,7 @@ static bool parse_position()
 
     mm.fflag = ((msg[6] & 0x4) >> 2);
     //tflag = msg[6] & 0x8;
-    mm.cprlat = ((msg[6] & 3) << 15) | (msg[7] << 7) | (msg[8] >> 1);
+    mm.cprlat = ((msg[6]&3) << 15) | (msg[7] << 7) | (msg[8] >> 1);
     mm.cprlon = ((msg[8]&1) << 16) | (msg[9] << 8) | msg[10];
 
     int32_t m = (int32_t) mm.cprlat;
@@ -699,8 +942,11 @@ static bool parse_position()
     int32_t cprlatdiff = m - r;
     int32_t abslatdiff = abs(cprlatdiff);
     if (abslatdiff > maxcprdiff) {        // since even just lat diff is too far
-      if (fo1090.addr != settings->follow_id)
-        return false;                     // no need to compute slant distance
+        if (fo1090.addr != settings->follow_id) {
+            if (index < MAX_TRACKING_OBJECTS)    // found
+                Container[index].distance = 99999;
+            return false;                // no need to compute slant distance
+        }
     }
 
     // identify the NL zone, ours, an adjacent one, or beyond
@@ -747,22 +993,29 @@ static bool parse_position()
     if (adjacent) {
       if (fo1090.addr != settings->follow_id) {
         // reject some too-far traffic based on lon-diff alone
-        if (abslondiff > maxcprdiff)
+        if (abslondiff > maxcprdiff && fo1090.addr != settings->follow_id) {
+            if (index < MAX_TRACKING_OBJECTS)     // found
+                Container[index].distance = 99999;
             return false;
+        }
         // weed out remaining too-far using pre-computed squared-hypotenuse
         // - no need to compute the un-squared distance at this point
-        // - will compute more exact distance later using hypotenus-approximation
-        //   & relative to this aircraft's actual location rather than reference
+        // - will compute more exact distance below using hypotenus-approximation
+        //   & relative to this target's actual location rather than reference
         abslatdiff >>= 4;
         abslondiff >>= 4;
-        if (abslatdiff*abslatdiff + abslondiff*abslondiff > maxcprdiff_sq)
+        if (abslatdiff*abslatdiff + abslondiff*abslondiff > maxcprdiff_sq
+                                       && fo1090.addr != settings->follow_id) {
+            if (index < MAX_TRACKING_OBJECTS)    // found
+                Container[index].distance = 99999;
             return false;
+        }
       }
     }
 
     yield();
 
-    if (decodeCPRrelative() < 0)        // error decoding lat/lon
+    if (decodeCPRrelative() == false)        // error decoding lat/lon
         return false;
 
     // compute more exact distance, from this aircraft's actual location
@@ -771,9 +1024,14 @@ static bool parse_position()
     fo1090.dx = x;
     fo1090.dy = y;
     fo1090.distance = (float)iapproxHypotenuse1(x, y);
-    if (fo1090.addr != settings->follow_id) {
-        if (fo1090.distance > (15*1852))   // 15 nm
+    if (fo1090.distance > (15*1852)) {    // 15 nm
+        if (fo1090.addr != settings->follow_id && (settings->debug_flags & DEBUG_DEEPER) == 0) {
+            if (index < MAX_TRACKING_OBJECTS)   // found
+                Container[index].distance = 39999;
             return false;
+        }
+        // else, if DEBUG_DEEPER, then continue here
+        // - meaning a few targets 15nm-25nm away will be kept
     }
     if (fo1090.distance == 0) {
         fo1090.bearing = 0;
@@ -783,25 +1041,45 @@ static bool parse_position()
             fo1090.bearing += 360;
     }
 
-    update_traffic_position();
-
+if (settings->debug_flags & DEBUG_DEEPER) {
+Serial.print(fo1090.addr, HEX);
+Serial.print(" ADS-B altitude (ft): ");
+Serial.print((int)(3.2808*fo1090.altitude));
+Serial.print(" distance (m): ");
+int d = (int)fo1090.distance;
+if (d < 10000)  Serial.print("0");
+if (d < 1000)   Serial.print("0");
+Serial.print(d);
+Serial.print(" bearing: ");
+Serial.print((int)fo1090.bearing);
+Serial.print(" RSSI: ");
+Serial.println(mm.rssi);
+}
+    update_traffic_position(index);
     ++adsb_packets_counter;
-
     return true;
 }
 
-
-static bool parse_velocity()
-{
+static bool parse_velocity(int i)
+{    
     // do not create a new entry for a velocity message,
     //   wait until position message arrives
-    int i = find_traffic_by_addr(fo1090.addr);
-    if (i == MAX_TRACKING_OBJECTS)  // not found
-        return false;
-    if (i < 0)                      // already tracked via other means
-        return false;
+    //int i = find_traffic_by_addr(fo1090.addr);
+    //if (i == MAX_TRACKING_OBJECTS)  // not found
+    //    return false;
+    //if (i < 0)                      // already tracked via other means
+    //    return false;
 
     ufo_t *cip = &Container[i];
+
+    // if the aircraft sends velocity too often, don't process more than once per second
+    if (cip->velocitytime == OurTime)
+        return false;
+    cip->velocitytime = OurTime;
+
+    //if (fo1090.tx_type > cip->tx_type)
+    //    cip->tx_type = fo1090.tx_type;
+    // - only process velocity messages after position is known
 
     int ew_dir;
     int ew_velocity;
@@ -840,10 +1118,10 @@ static bool parse_velocity()
           // We don't want negative values but a 0-360 scale.
           if (cip->course < 0)
               cip->course += 360;
-          mm.track_is_valid = 1;
+          //mm.track_is_valid = 1;
       } else {
           cip->course = 0;
-          mm.track_is_valid=0;
+          //mm.track_is_valid=0;
       }
 
       // the following fields are absent from a groundspeed message type
@@ -851,12 +1129,12 @@ static bool parse_velocity()
 
     } else if (mm.sub == 3 || mm.sub == 4) {   // air speed (rare) (not processed here)
 
-      mm.heading_is_valid = ((msg[5] & 4) >> 2);
+      //mm.heading_is_valid = ((msg[5] & 4) >> 2);
       cip->prevheading = cip->heading;
       int16_t iheading = (((msg[5] & 3) << 5) | ((msg[6] >> 3) & 0x1F));
       //cip->heading = (360.0/128) * iheading;
       cip->heading = ((iheading * 360 + 180) >> 7);
-      mm.airspeed_type = (((msg[7]) >> 7) & 1);
+      //mm.airspeed_type = (((msg[7]) >> 7) & 1);
       mm.airspeed = ((msg[7]&0x7F) << 3) | (((msg[8]) >> 5) & 0x07);  // if 0, no info
       if (mm.airspeed > 0)        // zero means not available
           mm.airspeed -= 1;
@@ -867,7 +1145,7 @@ static bool parse_velocity()
       //ewv=0; nsv=0; groundspeed=0; track=0; track_is_valid=0;
     }
 
-    mm.vert_rate_source = (msg[8]&0x10) >> 4;   // 0=GNSS, 1=baro
+    //mm.vert_rate_source = (msg[8]&0x10) >> 4;   // 0=GNSS, 1=baro
     int vert_rate_sign = (msg[8]&0x8) >> 3;
     int raw_vert_rate = ((msg[8]&7) << 6) | ((msg[9]&0xfc) >> 2);
     cip->vs = (float)((raw_vert_rate - 1) << 6);    // fpm
@@ -879,64 +1157,61 @@ static bool parse_velocity()
     if (alt_diff_sign)  raw_alt_diff = -raw_alt_diff;  // GNSS altitude is below baro altitude
     cip->baro_alt_diff = (float)raw_alt_diff;
 
+    // if altitude is very different from ours then ignore baro_alt_diff
+    if (fabs(cip->altitude - ThisAircraft.altitude) > 2000)
+        return true;
+
     // keep an average estimate of baro alt diff as reporterd from nearby aircraft
     static uint32_t prev_addr = 0;
     static int8_t prev_count = 127;
     if (average_baro_alt_diff == 0) {
         average_baro_alt_diff = cip->baro_alt_diff;
     } else if (--prev_count <= 0 || fo1090.addr != prev_addr) {
-        average_baro_alt_diff = 0.75 * average_baro_alt_diff + 0.25 * cip->baro_alt_diff;
+        average_baro_alt_diff = 0.8 * average_baro_alt_diff + 0.2 * cip->baro_alt_diff;
         prev_addr = fo1090.addr;
         prev_count = 127;
     }
 
-    mm.velocitytime = ThisAircraft.timestamp;
-
     return true;
 }
-
 
 // assume the n chars in buf[] include the starting '*' but not the ending ';'
 
 static bool parse(char *buf, int n)
 {
     mm = EmptyMsg;      // start with a clean slate of all zeros
-    mm.msgtype = ' ';
-    int k=0;
-    int i=1;
+    //int k=0;
+    int i;
     if (buf[0] == '*') {
         if (n != 29)
             return false;     // not a 112-bit ES
-        mm.rssi = 0;
+        //mm.rssi = 0;
+        i = 1;    // point to DF
     } else
     if (buf[0] == '+') {
-        if (n != 31)
-            return false;     // not a 112-bit ES
+        if (settings->mode_s) {
+            if (n != 31 && n != 17)
+                return false;     // not a 112-bit ES nor 56-bit Mode-S
+        } else {
+            if (n != 31)
+                return false;
+        }
         mm.rssi = (hex2bin(buf[1]) << 4) | hex2bin(buf[2]);
         i = 3;    // point to DF
     }
-    else
+    else {
         return false;     // not a valid GNS5892 sentence
-
-    // parse just the first 4 bytes for now
-    int j=0;
-    while (j < 4) {
-        msg[j++] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
-        i += 2;
     }
+
+    // parse just the first byte for now (DF, CF)
+    msg[0] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
+    i += 2;
 
     mm.frame = msg[0]>>3;    // Downlink Format
-
-    if (mm.frame != 17 && mm.frame != 18)
-        return false;
-
-    // convert the rest of the message from hex to binary
-    n -= 6;               // skip the PI (checksum field)
-    j=4;
-    while (i < n) {
-        msg[j++] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
-        i += 2;
-    }
+//Serial.print("DF ");
+//Serial.print(mm.frame);
+//Serial.print(" with RSSI ");
+//Serial.println(mm.rssi);
 
 /*
 To determine whether you receive an ADS-B message or a TIS-B message you should start
@@ -963,50 +1238,155 @@ https://aviation.stackexchange.com/questions/17610/what-icao-codes-are-reserved-
             // status messages, discard
             return false;
         default:
+if (settings->debug_flags & DEBUG_DEEPER) {
+Serial.print("DF18 with unusual CF=");
+Serial.println((int)(msg[0] & 7));
+}
             // treat the same as DF17
             break;
         }
     }
 
-    fo1090 = EmptyFO;   // start with a clean slate of all zeros
+    int j=1;
+    uint32_t addr;       // ICAO address
 
-    // ICAO address
-    fo1090.addr = (msg[1] << 16) | (msg[2] << 8) | msg[3];
-    if (fo1090.addr == ThisAircraft.addr)        // somehow seeing ourselves
-        return false;
-    if (fo1090.addr == settings->ignore_id)      // ID told in settings to ignore
-        return false;
+    if (mm.frame == 0 || mm.frame == 4) {    // Mode S altitude replies
 
-    yield();
+        if (! settings->mode_s)
+            return false;
+
+        float distance = estimate_distance_from_rssi(mm.rssi);
+        if ((settings->debug_flags & DEBUG_DEEPER) == 0) {
+            if (distance > 2*ALARM_ZONE_LOW)       // ignore weak signals
+                return false;
+        }
+        static uint32_t lasttime = 0;
+        uint32_t thistime = millis();
+        if (thistime < lasttime + 300) {       // some aircraft send bursts of messages
+if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+Serial.println("throttling Mode S message burst");
+            return false;
+        }
+        lasttime = thistime;
+
+        // convert the rest of the message from hex to binary
+        while (i < n) {
+            msg[j++] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
+            i += 2;
+        }
+        addr = addr_from_crc( j );           // assume checksum OK, extract overlayed ICAO ID
+        if (addr == 0)
+            return false;
+        if (addr == ThisAircraft.addr)       // somehow seeing ourselves
+            return false;
+        if (addr == settings->ignore_id)     // ID told in settings to ignore
+            return false;
+
+        // save CPU cycles: don't process if data will not be used
+        int index = find_traffic_by_addr(addr);
+        if (index < 0)                       // already tracked via other means
+            return false;
+        if (index < MAX_TRACKING_OBJECTS) {   // found
+            ufo_t *cip = &Container[index];
+            // if the aircraft has recently sent ADS-B position, don't process Mode S
+            if (cip->positiontime == OurTime) {
+if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+Serial.println("ignoring S - have recent P");
+                return false;
+            }
+            // if the aircraft sends Mode S altitudes too often, don't process more than once per second
+            if (cip->mode_s_time == OurTime)
+                return false;
+        }
+
+        fo1090 = EmptyFO1090;
+        fo1090.addr = addr;
+        fo1090.tx_type = TX_TYPE_S;
+        fo1090.distance = distance;
+
+        return parse_mode_s_altitude(index);
+    }
+
+    if (mm.frame != 17 && mm.frame != 18) {
+        // all other DFs
+        return false;
+    }
 
     // parsing of the 56-bit ME - just DF 17-18:
+
+    // parse the next 3 bytes (ICAO ID)
+    while (j < 4) {
+        msg[j++] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
+        i += 2;
+    }
+    addr = (msg[1] << 16) | (msg[2] << 8) | msg[3];
+    if (addr == ThisAircraft.addr)        // somehow seeing ourselves
+        return false;
+    if (addr == settings->ignore_id)      // ID told in settings to ignore
+        return false;
+
+    // save CPU cycles: don't process if data will not be used
+    int index = find_traffic_by_addr(addr);
+    if (index < 0)                        // already tracked via other means
+        return false;
+
+    // convert the rest of the message from hex to binary
+    n -= 6;                               // skip the CRC
+    while (i < n) {
+        msg[j++] = (hex2bin(buf[i]) << 4) | hex2bin(buf[i+1]);
+        i += 2;
+    }
+
+    if (j != 11)    // 112 bits minus the CRC
+        return false;
+
+    // start with a clean slate
+    fo1090 = EmptyFO1090;
+    fo1090.addr = addr;
+
+    if (tisb)
+        fo1090.tx_type = TX_TYPE_TISB;
+    else if (adsr)
+        fo1090.tx_type = TX_TYPE_ADSR;
+    //else if (mm.frame < 17)
+    //    fo1090.tx_type = TX_TYPE_S;
+    else
+        fo1090.tx_type = TX_TYPE_ADSB;
+
+    yield();
 
     mm.type = msg[4] >> 3;   // Extended squitter message type.
     mm.sub = msg[4] & 7;     // Extended squitter message subtype.
 
     if (mm.type >= 1 && mm.type <= 4) {
 
-        mm.msgtype = 'I';  // Aircraft Identification and Category
-        return parse_identity();
+        if (index == MAX_TRACKING_OBJECTS)   // not found
+            return false;
+
+        return parse_identity(index);     // may add aircraft type to Mode S
 
     } else if (mm.type >= 9 && mm.type <= 22 && mm.type != 19) {
 
-        if (adsr)
-            mm.msgtype = 'R';
-        else if (tisb)
-            mm.msgtype = 'T';
-        else
-            mm.msgtype = 'P';  // Airborne position Message
-        return parse_position();
+        if (index < MAX_TRACKING_OBJECTS) {   // found
+            // if the aircraft sends positions too often, don't process more than once per second
+            if (Container[index].positiontime == OurTime)
+                return false;
+        }
+
+        return parse_position(index);
 
     } else if (mm.type == 19 && (mm.sub == 1 || mm.sub == 2)) {
 
-        mm.msgtype = 'V';  // Airborne Groundspeed Message
-        return parse_velocity();
+        if (index == MAX_TRACKING_OBJECTS)            // not found
+            return false;
+        if (Container[index].tx_type < TX_TYPE_TISB)  // no position - ignore velocity
+            return false;
+
+        return parse_velocity(index);
 
     }
 
-    //Serial.printf("Not processed: DF=%d type=%d sub=%d\r\n", mm.frame, mm.type, mm.sub);
+//Serial.printf("Not processed: DF=%d type=%d sub=%d\r\n", mm.frame, mm.type, mm.sub);
 
     return false;
 }
@@ -1020,9 +1400,12 @@ static void send5892(const char *cmd)
 
 void play5892()
 {
-    send5892("#49-03");
+    if (settings->mode_s)
+        send5892("#49-82");                     // all DFs, with RSSI
+    else
+        send5892("#49-03");                     // only DF 17 and 18, no RSSI
     //paused = false;
-    Serial.println("(GNS5892 un-paused)");
+    //Serial.println("(GNS5892 un-paused)");
 }
 
 static void pause5892()
@@ -1030,15 +1413,18 @@ static void pause5892()
     send5892("#49-00");
     //paused = true;
     Serial.println("(GNS5892 paused)");
+    while (Serial2.available()) {
+        Serial2.read();
+        yield();
+    }
 }
 
 static void reset5892()
 {
     Serial.println("(resetting GNS5892...)");
     send5892("#FF");
-    delay(1200);
-    play5892();
-    delay(300);
+    //play5892();
+    //delay(300);
 }
 
 void gns5892_setup()
@@ -1052,8 +1438,18 @@ void gns5892_setup()
   pause5892();
   delay(200);
   reset5892();
+  delay(1200);
+  pause5892();
 }
 
+
+void gns5892_test_mode()
+{
+    settings->mode_s = test_mode;
+    pause5892();
+    delay(200);
+    play5892();
+}
 
 // called from NMEA.cpp NMEA_loop() when appropriate
 void gns5892_loop()
@@ -1061,7 +1457,18 @@ void gns5892_loop()
   //if (has_serial2 == false)
   //    return;
 
-  CPRRelative_precomp();   // usually does nothing
+  CPRRelative_precomp();   // only precomputes upon first fix or big change in position
+
+  static uint32_t playtime = 0;
+  // do not unpause GNS5892 until CPRRelative_precomp() has set reflat
+  if ((playtime == 0 || millis() > playtime + 57700) && reflat != 0) {
+      if (settings->debug_flags & DEBUG_DEEPER) {
+        Serial.printf("ThisAircraft.baro_alt_diff = %.0f\r\n", ThisAircraft.baro_alt_diff);
+        Serial.printf("OthAcfts Avg baro_alt_diff = %.0f\r\n", average_baro_alt_diff);
+      }
+      play5892();            // start GNS5892, and try and capture a #49 response
+      playtime = millis();
+  }
 
   int avail = Serial2.available();
   if (avail <= 0)
@@ -1099,12 +1506,12 @@ void gns5892_loop()
       (void) parse(buf1090, n);
       yield();
   } else if (buf1090[0] == '#') {                  // response to commands
-      if (rx1090found == false) {
-        if (buf1090[1]=='4' && buf1090[2]=='9' && buf1090[5]=='3') {  // response to "play"
+      //if (rx1090found == false) {
+        if (buf1090[1]=='4' && buf1090[2]=='9') {  // response to "play"
             rx1090found = true;
-            Serial.println(">>> GNS5892 module responded");
+            Serial.println(">>> GNS5892 module responded:");
         }
-      }
+      //}
       Serial.write(buf1090, n);           // copy to console
       Serial.println("");
   }

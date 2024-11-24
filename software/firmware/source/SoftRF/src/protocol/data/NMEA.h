@@ -32,16 +32,19 @@
 #define NMEA_CALLSIGN_SIZE  (3 /* prefix */ + 1 /* _ */ + 6 /* ICAO */ + 1 /* EOL */)
 
 #define PSRFC_VERSION       1
-#define MAX_PSRFC_LEN       64
+#define MAX_PSRFC_LEN       96
 
 #define PSRFD_VERSION       1
-#define MAX_PSRFD_LEN       64
+#define MAX_PSRFD_LEN       96
+
+#define PSRFF_VERSION       1
+#define MAX_PSRFF_LEN       96
 
 #define PSRFS_VERSION       1
-#define MAX_PSRFS_LEN       64
+#define MAX_PSRFS_LEN       96
 
 #define PSKVC_VERSION       1
-#define MAX_PSKVC_LEN       64
+#define MAX_PSKVC_LEN       96
 
 void NMEA_setup(void);
 void NMEA_loop(void);

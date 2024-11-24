@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated October 24, 2024 to fit software version MB146
+This version last updated November 21, 2024 to fit software version MB147
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -182,7 +182,7 @@ Because these methods of adjusting the settings on the T-Echo are not easy, I've
 
 Description of the settings:
 
-Mode: normally select "Normal".
+Mode: normally select "Normal".  GNSS Bridge mode lets one communicate with the GNSS module directly from the USB port, for diagnostics (e.g., using the Ublox U-Center program).  On the T-Echo, can enter this mode via NMEA config, escape this mode with a double-click.
 
 Device ID: this is unique to each device.  You cannot change it.
 
@@ -245,6 +245,8 @@ Aux Serial Port Logic: "Normal" to connect to TTL serial devices or a chip that 
 UDP Port for NMEA output: can choose 10111 instead of the default 10110.
 
 Internal ADS-B Receiver: here can activate use of a GNS5892 ADS-B receiver module if installed. See the section below about connecting an ADS-B receiver.
+
+Include Mode S: the GNS5892 module can also receive Mode S (but not Mode C) transponder messages.  These only report altitude, not position.  A non-directional alarm may be generated based on signal strength.  Use this setting to activate processing of Mode S messages.  In high traffic areas this may interfere somewhat with the processing of messages from the 868/915 MHz radio, so keep this off unless your area has a lot of Mode S traffic that lacks ADS-B output capability.
 
 GDL90 input: this is for importing data from an external ADS-B receiver, else leave Off.  GDL90 uses UDP port 4000, while NMEA uses 10110.  Cannot use the same port for both input and output.
 

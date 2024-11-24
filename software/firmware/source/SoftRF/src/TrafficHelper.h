@@ -65,6 +65,18 @@ enum
 	TRAFFIC_ALARM_LEGACY
 };
 
+enum
+{
+    TX_TYPE_NONE,
+    TX_TYPE_A,
+    TX_TYPE_C,
+    TX_TYPE_S,
+    TX_TYPE_TISB,
+    TX_TYPE_ADSR,
+    TX_TYPE_ADSB,
+    TX_TYPE_FLARM
+};
+
 #define TRAFFIC_ALERT_SOUND   1
 
 bool air_relay(ufo_t *fop);
@@ -76,7 +88,7 @@ void ClearExpired(void);
 void Traffic_Update(ufo_t *fop);
 int  Traffic_Count(void);
 void logCloseTraffic(void);
-
+void icao_to_n(ufo_t *fop);
 int  traffic_cmp_by_distance(const void *, const void *);
 float Adj_alt_diff(ufo_t *, ufo_t *);
 void generate_random_id(void);

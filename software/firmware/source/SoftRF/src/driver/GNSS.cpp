@@ -267,7 +267,7 @@ const uint8_t setNav5[] PROGMEM = {0xFF, 0xFF, 0x07, 0x03, 0x00, 0x00, 0x00, 0x0
  /* CFG-RST */
 const uint8_t CFG_RST[12] PROGMEM = { 0xb5, 0x62, 0x06, 0x04,
                                       0x04, 0x00,     // payload is 4 bytes
-                                      0x00, 0x00,     // navBbrMask
+                                      0x00, 0x00,     // navBbrMask (hot start)
                                       0x01,           // resetMode   
                                       0x00, 0x0F, 0x66};
 
@@ -279,6 +279,8 @@ const uint8_t CFG_RST[12] PROGMEM = { 0xb5, 0x62, 0x06, 0x04,
 //                                           0x00, 0xC6, 0x8B };
 
 const uint8_t CFG_RST_COLD[] PROGMEM = { 0xFF, 0xB9, 0x00, 0x00 };
+const uint8_t CFG_RST_WARM[] PROGMEM = { 0x01, 0x00, 0x00, 0x00 };
+const uint8_t CFG_RST_HOT[]  PROGMEM = { 0x00, 0x00, 0x00, 0x00 };
 
 const uint8_t RXM_PMREQ_OFF[16] PROGMEM = {0xb5, 0x62, 0x02, 0x41, 0x08, 0x00,
                                            0x00, 0x00, 0x00, 0x00, 0x02, 0x00,
@@ -852,7 +854,7 @@ int getAck(uint8_t requestedClass, uint8_t requestedID)
 }
 #endif
 
-static bool ublox_factory_reset()
+static bool ublox_factory_reset(bool coldstart)
 {
   // reset GPS to factory settings
   //for (int i = 0; i < sizeof(factoryUBX); i++) {
@@ -889,16 +891,20 @@ static bool ublox_factory_reset()
 
   delay(600);
 
-  // Cold Start (Forced Watchdog)
-  Serial.println("Cold-starting GNSS module...");
+  if (coldstart) {
+    // Cold Start (Forced Watchdog)
+    Serial.println("Cold-starting GNSS module...");
   //for (int i = 0; i < sizeof(CFG_RST_COLD); i++) {
   //  Serial_GNSS_Out.write(pgm_read_byte(&CFG_RST_COLD[i]));
   //}
 //  Serial_GNSS_In.write(CFG_RST_COLD, sizeof(CFG_RST_COLD));
-  msglen = makeUBXCFG(0x06, 0x04, sizeof(CFG_RST_COLD), CFG_RST_COLD);
-  sendUBX(GNSSbuf, msglen);
-
-  delay(1000);
+    msglen = makeUBXCFG(0x06, 0x04, sizeof(CFG_RST_COLD), CFG_RST_COLD);
+    sendUBX(GNSSbuf, msglen);
+  } else {  // warm start
+    msglen = makeUBXCFG(0x06, 0x04, sizeof(CFG_RST_WARM), CFG_RST_WARM);
+    sendUBX(GNSSbuf, msglen);
+  }
+  delay(2000);
 
   return true;
 }
@@ -914,7 +920,7 @@ static void reset_gnss()
           hw_info.gnss == GNSS_MODULE_U8) {
 
             Serial.println("Ublox factory reset...");
-            if (ublox_factory_reset())
+            if (ublox_factory_reset(true))
                 Serial.println("... done");
             else
                 Serial.println("... failed");
@@ -1279,6 +1285,7 @@ static bool at65_setup()
       Serial_GNSS_Out.write("$PCAS04,5*1C\r\n"); /* GPS + GLONASS */     
     //Serial_GNSS_Out.write("$PCAS04,7*1E\r\n"); /* GPS + GLONASS + BEIDOU */
   delay(250);
+  Serial_GNSS_Out.write("$PCAS02,1000*2E\r\n");  /* set positioning frequency to 1Hz */
 #if defined(NMEA_TCP_SERVICE)
   /* GGA,RMC and GSA */
   Serial_GNSS_Out.write("$PCAS03,1,0,1,0,1,0,0,0,0,0,,,0,0*03\r\n"); delay(250);
@@ -1430,14 +1437,19 @@ byte GNSS_setup() {
               (gnss_chip = &sony_ops,         gnss_chip->probe()) : gnss_id);
 #endif /* EXCLUDE_GNSS_SONY */
 
-  gnss_id = (gnss_id == GNSS_MODULE_NONE ?
-              (gnss_chip = &generic_nmea_ops, gnss_chip->probe()) : gnss_id);
+  if (gnss_id == GNSS_MODULE_NONE) {               // not Sony, listen for $G sentences
+      gnss_id = generic_nmea_ops.probe();
+      if (gnss_id == GNSS_MODULE_NONE) {           // no NMEA sentences seen, try again
+          delay(500);
+          gnss_id = generic_nmea_ops.probe();
+      }
+  }
 
-  gnss_id = (gnss_id == GNSS_MODULE_NONE ?   // no NMEA sentences seen - try again
-              (gnss_chip = &generic_nmea_ops, gnss_chip->probe()) : gnss_id);
-
-  gnss_id = (gnss_id == GNSS_MODULE_NONE ?   // still no NMEA sentences seen - try again
-              (gnss_chip = &generic_nmea_ops, gnss_chip->probe()) : gnss_id);
+//  gnss_id = (gnss_id == GNSS_MODULE_NONE ?
+//              (gnss_chip = &generic_nmea_ops, gnss_chip->probe()) : gnss_id);
+//  if (gnss_id == GNSS_MODULE_NONE)  delay(500);
+//  gnss_id = (gnss_id == GNSS_MODULE_NONE ?   // no NMEA sentences seen - try again
+//              (gnss_chip = &generic_nmea_ops, gnss_chip->probe()) : gnss_id);
 
   if (gnss_id == GNSS_MODULE_NONE) {     // no NMEA sentences seen in 3 trials
 
@@ -1451,18 +1463,30 @@ byte GNSS_setup() {
           version == GNSS_MODULE_U7 ||
           version == GNSS_MODULE_U8) {
 
+        gnss_chip = &ublox_ops;
+
         Serial.println(F("WARNING: Misconfigured UBLOX GNSS detected!"));
-        Serial.print(F("Reset to factory default state: "));
+        gnss_id = generic_nmea_ops.probe();    // try one more time, following UBX response
+        if (gnss_id == GNSS_MODULE_NMEA) {
 
-        (void) ublox_factory_reset();
+            gnss_id = (gnss_id_t) version;     // third time's the charm
+            Serial.println(F("... OK after ublox_version()"));   // and fall through to probe() call below
 
-        gnss_id = generic_nmea_ops.probe();
+        } else {
 
-        if (gnss_id == GNSS_MODULE_NONE) {
-          Serial.println(F("FAILURE"));
-          return (byte) gnss_id;
+          Serial.print(F("Reset UBLOX GNSS to factory default config: "));
+
+          //(void) ublox_factory_reset(true);    // reset config, and do a coldstart
+          (void) ublox_factory_reset(false);   // reset config, but do a warmstart
+
+          gnss_id = generic_nmea_ops.probe();   // try one more time
+
+          if (gnss_id == GNSS_MODULE_NONE) {
+            Serial.println(F("FAILURE"));
+            return (byte) gnss_id;
+          }
+          Serial.println(F("SUCCESS"));    // and fall through to probe() call below
         }
-        Serial.println(F("SUCCESS"));    // and fall through to probe() call below
 
       } else {
         Serial.println(F("WARNING: no NMEA and Ublox GNSS not detected!"));
@@ -1681,6 +1705,8 @@ void add_pfsim_traffic()
     fo.callsign[0] = 'S';
     fo.callsign[1] = 'I';
     fo.callsign[2] = 'M';
+    //fo.callsign[3] = '\0';
+    fo.tx_type = TX_TYPE_FLARM;
     AddTraffic(&fo);
     pfsim.waiting = false;
 }
@@ -1718,6 +1744,7 @@ uint8_t Try_GNSS_sentence() {
     static uint32_t new_gga_ms  = 0;
     static uint32_t new_rmc_ms  = 0;
     static int ndx = sizeof(GNSSbuf)-2;
+    static char old_sec = '\0';
 
     char c = GNSSbuf[GNSS_cnt];
     if (c == '$')
@@ -1769,8 +1796,9 @@ uint8_t Try_GNSS_sentence() {
           new_gga_ms  = 0;
           new_rmc_ms  = 0;
       }
-      if (is_gga) {
+      if (is_gga && gb[12] != old_sec) {   // extra check that it's a new second
           new_gga_ms = now_ms;
+          old_sec = gb[12];
           if (! latest_Commit_Time) {
               latest_Commit_Time = now_ms - gnss.time.age();  // for use by Time_loop()
               // age() should be small since we just now did gnss.encode().

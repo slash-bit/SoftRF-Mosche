@@ -173,22 +173,23 @@ typedef struct __attribute__((packed)) Settings {
     bool     stealth:1;      // do not move
     bool     no_track:1;     // do not move
 
-    uint8_t  gdl90:3;    // output destination
+    uint8_t  gdl90:3;      // output destination
     uint8_t  d1090:3;
-    uint8_t  json:2;
+    uint8_t  json:1;       // was 2 bits
+    bool     resvd2:1;
 
     uint8_t  pointer:2;
     uint8_t  power_save:2;
     uint8_t  power_external:1;  /* if nonzero, shuts down if battery is not full */
-    uint8_t  rx1090:2;    // attached ADS-B receiver module    // do not move
-    bool     resvd2:1;
+    uint8_t  rx1090:2;       // attached ADS-B receiver module    // do not move
+    bool     mode_s:1;
 
-    uint8_t  gnss_pins:2;    // external GNSS added to T-Beam  // do not move
+    uint8_t  gnss_pins:2;    // external GNSS added to T-Beam     // do not move
     uint8_t  sd_card:2;      // gpio pins for SD card adapter
     uint8_t  logflight:2;
     uint8_t  loginterval:2;
 
-    int8_t   freq_corr; /* +/-, kHz */   // do not move
+    int8_t   freq_corr; /* +/-, kHz */   // <<< limited to +-30, so can liberate two bits
     uint8_t  relay:2;
     uint8_t  gdl90_in:3;    // data from this port will be interpreted as GDL90
     uint8_t  alt_udp:1;     // if 1 then use 10111 instead of 10110
@@ -251,10 +252,12 @@ void EEPROM_setup(void);
 void EEPROM_defaults(void);
 void EEPROM_store(void);
 void show_settings_serial(void);
+void do_test_mode(void);
 extern bool default_settings_used;
 extern settings_t *settings;
 extern uint32_t baudrates[];
 extern bool do_alarm_demo;
+extern bool test_mode;
 extern bool landed_out_mode;
 extern int8_t geoid_from_setting;
 

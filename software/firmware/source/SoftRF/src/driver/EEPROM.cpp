@@ -45,6 +45,17 @@ settings_t *settings;
 bool do_alarm_demo = false;        // activated by middle button on T-Beam
 bool landed_out_mode = false;      // activated by button in status web page
 int8_t geoid_from_setting = 0;
+bool test_mode = false;            // activated by double-clicking middle button on T-Beam
+
+// first the variable test_mode is toggled, then
+// this is called, whether test_mode is on or off
+// put custom code here for debugging, for example:
+#include "../protocol/data/GNS5892.h"
+void do_test_mode()
+{
+    if (settings->rx1090)
+        gns5892_test_mode();
+}
 
 uint32_t baudrates[8] = 
 {
@@ -241,6 +252,7 @@ void EEPROM_defaults()
     settings->logflight = FLIGHT_LOG_NONE;
     settings->loginterval = LOG_INTERVAL_4S;
     settings->rx1090    = ADSB_RX_NONE;
+    settings->mode_s    = false;
     settings->geoid     = 10;
     geoid_from_setting  = 0;
 
@@ -310,6 +322,7 @@ void show_settings_serial()
     Serial.print(F(" NMEA2 Debug "));Serial.println(settings->nmea2_d);
     Serial.print(F(" NMEA2 External "));Serial.println(settings->nmea2_e);
     Serial.print(F(" ADS-B Receiver "));Serial.println(settings->rx1090);
+    Serial.print(F(" Mode S included "));Serial.println(settings->mode_s);
     Serial.print(F(" GDL90 in "));Serial.println(settings->gdl90_in);
     Serial.print(F(" GDL90 out "));Serial.println(settings->gdl90);
     Serial.print(F(" DUMP1090 "));Serial.println(settings->d1090);

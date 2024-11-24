@@ -54,6 +54,7 @@ void Web_fini()     {}
 #include "../protocol/data/IGC.h"
 #include "../protocol/data/GDL90.h"
 #include "../protocol/data/D1090.h"
+#include "../protocol/data/GNS5892.h"
 
 #if defined(ENABLE_AHRS)
 #include "../driver/AHRS.h"
@@ -1118,6 +1119,15 @@ void handleSettings() {
 </tr>\
 </tr>\
 <tr>\
+<th align=left>Mode S:</th>\
+<td align=right>\
+<select name='mode_s'>\
+<option %s value='%d'>Excluded</option>\
+<option %s value='%d'>Included</option>\
+</select>\
+</td>\
+</tr>\
+<tr>\
 <th align=left>GDL90 Input</th>\
 <td align=right>\
 <select name='gdl90_in'>\
@@ -1129,6 +1139,8 @@ void handleSettings() {
 <option %s value='%d'>TCP</option>"),
   (settings->rx1090 == ADSB_RX_NONE    ? "selected" : ""), ADSB_RX_NONE,
   (settings->rx1090 == ADSB_RX_GNS5892 ? "selected" : ""), ADSB_RX_GNS5892,
+  (!settings->mode_s ? "selected" : ""), 0,
+  ( settings->mode_s ? "selected" : ""), 1,
   (settings->gdl90_in == DEST_NONE  ? "selected" : ""), DEST_NONE,
   (settings->gdl90_in == DEST_UART  ? "selected" : ""), DEST_UART,
   (settings->gdl90_in == DEST_UART2 ? "selected" : ""), DEST_UART2,
@@ -1503,6 +1515,12 @@ void handleRoot() {
   dtostrf(ThisAircraft.altitude-ThisAircraft.geoid_separation, 7, 1, str_alt);   // MSL
   dtostrf(vdd, 4, 2, str_Vcc);
 
+  char rx_counts[48];   // %u&nbsp;+&nbsp;%u
+  if (settings->rx1090 == ADSB_RX_NONE)
+    snprintf(rx_counts, 48, "&nbsp;&nbsp;%u", rx_packets_counter);
+  else
+    snprintf(rx_counts, 48, "%u&nbsp;+&nbsp;ADS-B&nbsp;%u", rx_packets_counter, adsb_packets_counter);
+
   snprintf_P ( Root_temp, size,
     PSTR("<html>\
  <head>\
@@ -1538,14 +1556,13 @@ void handleRoot() {
  </table>\
  <table width=100%%>\
   <tr><th align=left>Packets</th>\
-   <td align=right><table><tr>\
-    <th align=left>Tx&nbsp;&nbsp;</th><td align=right>%u</td>\
-    <th align=left>&nbsp;&nbsp;&nbsp;&nbsp;Rx&nbsp;&nbsp;</th><td align=right>%u</td>\
-  </tr></table></td></tr>\
- <tr><td align=left>\
-  <input type=button onClick=\"location.href='/landed_out'\" value='Landed-Out Mode'></td>\
-  <td align=right>%s</td>\
- </tr>\
+   <td align=middle>Tx&nbsp;%u</td>\
+   <td align=right>Rx&nbsp;%s</td>\
+  </tr>\
+  <tr><td align=left>\
+   <input type=button onClick=\"location.href='/landed_out'\" value='Landed-Out Mode'></td>\
+   <td align=right>%s</td>\
+  </tr>\
  </table>\
  <hr>\
  <h3 align=center>Most recent GNSS fix</h3>\
@@ -1604,7 +1621,7 @@ void handleRoot() {
 #endif /* ENABLE_AHRS */
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
     low_voltage ? "red" : "green", str_Vcc,
-    tx_packets_counter, rx_packets_counter,
+    tx_packets_counter, rx_counts,
     (landed_out_mode? "reboot to cancel" : "tap to start"),
     hour, minute, sats, str_lat, str_lon,
     (isValidGNSSFix() ?
@@ -1756,6 +1773,8 @@ void handleInput() {
       settings->alt_udp = server.arg(i).toInt();
     } else if (server.argName(i).equals("rx1090")) {
       settings->rx1090 = server.arg(i).toInt();
+    } else if (server.argName(i).equals("mode_s")) {
+      settings->mode_s = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90_in")) {
       settings->gdl90_in = server.arg(i).toInt();
     } else if (server.argName(i).equals("gdl90")) {
@@ -2381,6 +2400,20 @@ void Web_setup()
     landed_out_mode = true;
     OLED_msg("LANDED", "OUT");
     server.send(200, textplain, "LANDED-OUT MODE STARTED");
+  } );
+
+  server.on( "/testmode", []() {
+      test_mode = !test_mode;
+      if (test_mode) {
+          OLED_msg("TEST",   " MODE");
+          Serial.println("Test Mode on");
+          server.send(200, textplain, "TEST MODE ON");
+      } else {
+          OLED_msg("NOTEST", " MODE");
+          Serial.println("Test Mode off");
+          server.send(200, textplain, "TEST MODE OFF");
+      }
+      do_test_mode();
   } );
 
   server.on( "/gps_reset", []() {

@@ -43,7 +43,9 @@ function UpdateChecksum()
       + document.getElementById("invert2").value + ","
       + document.getElementById("extern1").value + ","
       + document.getElementById("extern2").value + ","
-      + document.getElementById("altpin0").value;
+      + document.getElementById("altpin0").value + ","
+      + document.getElementById("voice").value + ","
+      + document.getElementById("strobe").value;
 
   // Compute the checksum by XORing all the character values in the string.
   var checksum = 0;
@@ -111,6 +113,20 @@ function SelPin0()
 {
   var pin0 = document.getElementById("Pin0");
   document.getElementById("altpin0").value = pin0.options[pin0.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelVoice()
+{
+  var voice = document.getElementById("Voice");
+  document.getElementById("voice").value = voice.options[voice.selectedIndex].value;
+  UpdateChecksum();
+}
+
+function SelStrobe()
+{
+  var strobe = document.getElementById("Strobe");
+  document.getElementById("strobe").value = strobe.options[strobe.selectedIndex].value;
   UpdateChecksum();
 }
 
@@ -277,6 +293,8 @@ function InitSettings()
   document.getElementById("extern1").value     = 0;
   document.getElementById("extern2").value     = 0;
   document.getElementById("relay1").value      = 1;
+  document.getElementById("voice").value       = 0;
+  document.getElementById("strobe").value      = 0;
 
   UpdateChecksum();
 }
@@ -504,6 +522,29 @@ If you are affected - please, consider to update
 </td>
 </tr>
 
+<tr>
+<th align=left>Voice</th>
+<td align=right>
+<select id="Voice" onchange="SelVoice()">
+<option selected value=0>Off</option>
+<option value=1>Internal</option>
+<option value=2>External</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<th align=left>Strobe</th>
+<td align=right>
+<select id="Strobe" onchange="SelStrobe()">
+<option selected value=0>Off</option>
+<option value=1>Alarm</option>
+<option value=2>Airborne</option>
+<option value=3>Always</option>
+</select>
+</td>
+</tr>
+
 </table>
 
 <!-- Method:    --><input type="hidden" id="id_method" size="1">
@@ -527,6 +568,8 @@ If you are affected - please, consider to update
 <!-- Relay:     --><input type="hidden" id="relay1" size="1">
 <!-- Extern1:   --><input type="hidden" id="extern1" size="1">
 <!-- Extern2:   --><input type="hidden" id="extern2" size="1">
+<!-- Voice:     --><input type="hidden" id="voice" size="1">
+<!-- Strobe:    --><input type="hidden" id="strobe" size="1">
 
 <h4 align=center>NMEA control sentence:</h4>
 <hr>

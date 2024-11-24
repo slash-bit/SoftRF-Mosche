@@ -1227,7 +1227,7 @@ static void nRF52_EEPROM_extension(int cmd)
 
 #endif /* USE_WEBUSB_SETTINGS */
 
-      if (settings->mode != SOFTRF_MODE_NORMAL
+      if (settings->mode != SOFTRF_MODE_GPSBRIDGE
 #if !defined(EXCLUDE_TEST_MODE)
           &&
           settings->mode != SOFTRF_MODE_TXRX_TEST
@@ -1638,7 +1638,12 @@ void handleEvent(AceButton* button, uint8_t eventType,
       if (button == &button_1) {
 
 #if defined(USE_EPAPER)
-        if (EPD_view_mode == VIEW_MODE_CONF) {
+        if (settings->mode == SOFTRF_MODE_GPSBRIDGE) {
+            settings->mode = SOFTRF_MODE_NORMAL;
+            Serial.println(F("Switching to normal mode..."));
+            EPD_Message("NORMAL", "MODE");
+            delay(600);
+        } else if (EPD_view_mode == VIEW_MODE_CONF) {
             EPD_view_mode = VIEW_CHANGE_SETTINGS;
             //Serial.println(F("Switching to change-settings screen..."));
 

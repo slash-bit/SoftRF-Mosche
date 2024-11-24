@@ -440,8 +440,10 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     if (fop->addr == settings->ignore_id)
          return false;                 /* ID told in settings to ignore */
 
-    if (fop->addr == ThisAircraft.addr)
-         return false;                 /* same ID as this aircraft - ignore */
+    if (fop->addr == ThisAircraft.addr) {
+         Serial.println("warning: received same ID as this aircraft");
+         return false;
+    }
 
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr == fop->addr) {

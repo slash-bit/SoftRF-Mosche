@@ -27,6 +27,7 @@
 #include "driver/GNSS.h"
 #include "driver/Buzzer.h"
 #include "driver/Strobe.h"
+#include "driver/SDcard.h"
 #include "ui/Web.h"
 #include "protocol/radio/Legacy.h"
 #include "protocol/data/NMEA.h"
@@ -61,6 +62,115 @@ float average_baro_alt_diff = 0;
 static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
 
 static uint32_t Alarm_timer = 0;
+
+// Compute registration-number from ICAO ID - USA and Canada only
+
+static void icao_canadian(ufo_t *fop)
+{
+    uint32_t icao = fop->addr;
+    char *buf = (char *) fop->callsign;
+    buf[0] = 'C';
+    buf[1] = '-';
+    icao -= 0xC00001;
+    uint32_t dig, rem;
+    dig = icao/(26*26*26);
+    rem = icao - dig*(26*26*26);
+    if (dig==2) dig=3;   // H is skipped, use I
+    buf[2] = dig+'F';
+    dig = rem/(26*26);
+    rem = rem - dig*(26*26);
+    buf[3] = dig+'A';
+    dig = rem/26;
+    rem = rem - dig*26;
+    buf[4] = dig+'A';
+    buf[5] = rem+'A';
+    buf[6] = '?';
+    buf[7] = '\0';
+    buf[9] = '?';
+if (settings->debug_flags & DEBUG_DEEPER) {
+Serial.print("computed registration: ");
+Serial.println(buf);
+}
+}
+
+// For USA based on:   https://github.com/guillaumemichel/icao-nnumber_converter
+
+static const char nnumberchars[]  = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+#define LETTERSET_SIZE 25     // 24 letters (alphabet without I and O) + 1
+#define suffix_size    601
+#define bucket4_size   35
+#define bucket3_size   951
+#define bucket2_size   10111
+#define bucket1_size   101711
+
+static void get_suffix(uint32_t offset, char *buf)
+{
+    if (offset != 0) {
+        uint32_t i0 = (offset-1)/LETTERSET_SIZE;
+        *buf++ = nnumberchars[i0];
+        uint32_t rem = (offset-1) - i0*LETTERSET_SIZE;
+        if (rem != 0)
+            *buf++ = nnumberchars[rem-1];
+    }
+    *buf++ = '?';
+    *buf = '\0';
+    return;
+}
+
+void icao_to_n(ufo_t *fop)
+{
+    if (fop->addr_type != ADDR_TYPE_ICAO)
+        return;
+    if (settings->band != RF_BAND_US)   // this is only for US-registered aircraft
+        return;
+    char *buf = (char *) fop->callsign;
+    if (buf[0] != '\0' && buf[0] != ' ')        // already have a callsign
+        return;
+    uint32_t icao = fop->addr;
+    if (icao > 0xC00000 && icao < 0xC0CDF9) {   // a valid Canadian ICAO ID
+        icao_canadian(fop);
+        return;
+    }
+    if (icao < 0xA00001 || icao > 0xADF7C7)     // not a valid US ICAO ID
+        return;
+    buf[9] = '?';    // past the trailing null char, marks as computed, not received
+    icao -= 0xA00001;
+    buf[0] = 'N';
+    buf[1] = '\0';
+    char *output = &buf[1];
+    uint32_t dig, rem;
+    dig = icao/bucket1_size;        // digit 1 minus 1
+    rem = icao - dig*bucket1_size;
+    *output++ = dig+'1';
+    if (rem < suffix_size)
+        get_suffix(rem, output);
+    else {
+    rem -= suffix_size;             // shift for digit 2
+    dig = rem/bucket2_size;
+    rem = rem - dig*bucket2_size;
+    *output++ = dig+'0';
+    if (rem < suffix_size)
+        get_suffix(rem, output);
+    else {
+    rem -= suffix_size;             // shift for digit 3
+    dig = rem/bucket3_size;
+    rem = rem - dig*bucket3_size;
+    *output++ = dig+'0';
+    if (rem < suffix_size)
+        get_suffix(rem, output);
+    else {
+    rem -= suffix_size;             // shift for digit 4
+    dig = rem/bucket4_size;
+    rem = rem - dig*bucket4_size;
+    *output++ = dig+'0';
+    if (rem)
+        *output++ = nnumberchars[rem-1];   // find last character
+    *output++ = '?';       // this becomes part of the "callsign" string
+    *output = '\0';
+    }}}
+Serial.print("computed registration: ");
+Serial.println(buf);
+}
 
 /*
  * No any alarms issued by the firmware.
@@ -140,6 +250,9 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
  */
 static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
 {
+  if (fop->tx_type <= TX_TYPE_S)
+    return Alarm_Distance(this_aircraft, fop);    // non-directional target
+
   int8_t rval = ALARM_LEVEL_NONE;
 
   if (fop->gnsstime_ms - fop->prevtime_ms > 3000)   /* also catches prevtime_ms == 0 */
@@ -277,6 +390,12 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
     return ALARM_LEVEL_NONE;
     /* save CPU cycles */
   }
+
+  if (fop->tx_type <= TX_TYPE_S)
+    return Alarm_Distance(this_aircraft, fop);    // non-directional target
+
+  if (fop->tx_type == TX_TYPE_TISB)
+    return (Alarm_Vector(this_aircraft, fop));
 
   float v2 = fop->speed + this_aircraft->speed;
   if (fop->distance > v2 * (ALARM_TIME_LOW * _GPS_MPS_PER_KNOT)) {
@@ -605,7 +724,7 @@ void logCloseTraffic()
         if (fop->adj_distance > 1000  // meters, adjusted for altitude difference
                 && fop->alarm_level == ALARM_LEVEL_NONE)
             continue;
-        if ((ThisAircraft.timestamp - fop->timestamp) > 3 /*seconds*/ )
+        if (OurTime > fop->timestamp + 3 /*seconds*/ )
             continue;
         logOneTraffic(fop, "LPLTT");
     }
@@ -614,42 +733,69 @@ void logCloseTraffic()
 
 void Traffic_Update(ufo_t *fop)
 {
-  /* use an approximation for distance & bearing between 2 points */
-  float x, y;
-  if (fop->protocol != RF_PROTOCOL_ADSB_1090) {
-    y = 111300.0 * (fop->latitude  - ThisAircraft.latitude);         /* meters */
-    x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
-    fop->distance = approxHypotenuse(x, y);      /* meters  */
-    fop->bearing = atan2_approx(y, x);           /* degrees from ThisAircraft to fop */
-    fop->dx = (int32_t) x;
-    fop->dy = (int32_t) y;
-  }
+  if (fop->tx_type <= TX_TYPE_S) {       // non-directional target
 
-  //int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
-  int rel_heading = (int) (fop->bearing - ThisAircraft.heading);
-  rel_heading += (rel_heading < -180 ? 360 : (rel_heading > 180 ? -360 : 0));
-  fop->RelativeBearing = rel_heading;   // << should rename RelativeHeading
+    fop->RelativeBearing = 0;
+    fop->adj_alt_diff = fop->alt_diff;
+    fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(fop->adj_alt_diff);
+    if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
+        fop->maxrssi = fop->rssi;
+        fop->maxrssirelalt = fop->alt_diff;
+    }
+    if (ThisAircraft.airborne == 0) {
+        fop->alarm_level = ALARM_LEVEL_NONE;
+        return;
+    }
+    // else fall through to alarm level computation below
 
-  fop->alt_diff = fop->altitude - ThisAircraft.altitude;
+  } else {
 
-  /* take altitude (and vert speed) differences into account as adjusted distance */
-  float adj_alt_diff = Adj_alt_diff(&ThisAircraft, fop);
-  fop->adj_alt_diff = adj_alt_diff;
-  fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(adj_alt_diff);
+    /* use an approximation for distance & bearing between 2 points */
+    float x, y;
+    if (fop->protocol != RF_PROTOCOL_ADSB_1090) {
+      y = 111300.0 * (fop->latitude  - ThisAircraft.latitude);         /* meters */
+      x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
+      fop->distance = approxHypotenuse(x, y);      /* meters  */
+      fop->bearing = atan2_approx(y, x);           /* degrees from ThisAircraft to fop */
+      fop->dx = (int32_t) x;
+      fop->dy = (int32_t) y;
+    }
 
-  /* follow FLARM docs: do not issue alarms about non-airborne traffic */
-  /* (first minute exception removed) (demo-mode exception added) */
-  if ((fop->airborne == 0 || ThisAircraft.airborne == 0) && !do_alarm_demo
-            /* && (millis() - SetupTimeMarker > 60000) */ ) {
-    fop->alarm_level = ALARM_LEVEL_NONE;
-    return;
-  }
+    //int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
+    int rel_heading = (int) (fop->bearing - ThisAircraft.heading);
+    rel_heading += (rel_heading < -180 ? 360 : (rel_heading > 180 ? -360 : 0));
+    fop->RelativeBearing = rel_heading;   // << should rename RelativeHeading
 
-  // do not compute alarms unless data is current
-  if (OurTime > ThisAircraft.timestamp + 2)
+    fop->alt_diff = fop->altitude - ThisAircraft.altitude;
+
+    if (fop->mindist == 0 || fop->distance < fop->mindist) {
+        fop->mindist = fop->distance;
+        fop->mindistrssi = fop->rssi;
+    }
+    if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
+        fop->maxrssi = fop->rssi;
+        fop->maxrssirelalt = fop->alt_diff;
+    }
+
+    /* take altitude (and vert speed) differences into account as adjusted distance */
+    float adj_alt_diff = Adj_alt_diff(&ThisAircraft, fop);
+    fop->adj_alt_diff = adj_alt_diff;
+    fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(adj_alt_diff);
+
+    /* follow FLARM docs: do not issue alarms about non-airborne traffic */
+    /* (first minute exception removed) (demo-mode exception added) */
+    if ((fop->airborne == 0 || ThisAircraft.airborne == 0) && !do_alarm_demo
+              /* && (millis() - SetupTimeMarker > 60000) */ ) {
+      fop->alarm_level = ALARM_LEVEL_NONE;
       return;
-  if (OurTime > fop->timestamp + 2)
-      return;
+    }
+
+    // do not compute alarms unless data is current
+    if (OurTime > ThisAircraft.timestamp + 2)
+        return;
+    if (OurTime > fop->timestamp + 2)
+        return;
+  }
 
   if (Alarm_Level) {  // if a collision prediction algorithm selected
 
@@ -696,6 +842,10 @@ bool air_relay(ufo_t *fop)
           if (fop->aircraft_type != AIRCRAFT_TYPE_JET && fop->aircraft_type != AIRCRAFT_TYPE_HELICOPTER) {
               if (fop->distance > 10000)  // only relay gliders and light planes if close
                   return false;
+              // - The idea is that if the aircraft is also sending FLARM signals, then if close
+              //     those signals will be received, and other protocols will be ignored.
+              //   Thus if close and another protocol, then no FLARM, and safe to relay,
+              //     meaning it won't make FLARM "see itself" and go crazy.
           }
           often = true;
       } else {
@@ -764,7 +914,6 @@ bool air_relay(ufo_t *fop)
 void AddTraffic(ufo_t *fop)
 {
     ufo_t *cip;
-    time_t timenow = ThisAircraft.timestamp;
 
     bool do_relay = false;
 
@@ -772,6 +921,7 @@ void AddTraffic(ufo_t *fop)
       // relay some traffic - only if we are airborne (or in "relay only" mode)
       if (settings->relay != RELAY_OFF && ((settings->debug_flags & DEBUG_SIMULATE) == 0)
           && fop->relayed == false         // not a packet already relayed one hop
+          && fop->tx_type > TX_TYPE_S      // not a non-directional target
           && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
       {
             do_relay = true;
@@ -791,7 +941,7 @@ void AddTraffic(ufo_t *fop)
 
         if (fop_adsb && ! cip_adsb) {
             // ignore external (ADS-B) data about aircraft we also receive from directly
-            if (timenow - cip->timestamp <= ENTRY_EXPIRATION_TIME)
+            if (OurTime <= cip->timestamp + ENTRY_EXPIRATION_TIME)
                 return;
             // if was tracked via other means, but expired - take over this slot
             *cip = *fop;
@@ -849,7 +999,9 @@ void AddTraffic(ufo_t *fop)
      /* fop->turnrate    = cip->turnrate;    keep the old turn rate   - why? */
         fop->alert       = cip->alert;
         fop->alert_level = cip->alert_level;
-     /* fop->callsign    = cip->callsign; */
+        if ((fop->callsign[0] == '\0' || fop->callsign[0] == ' ')
+        &&  (cip->callsign[0] != '\0' && cip->callsign[0] != ' '))
+            memcpy(fop->callsign, cip->callsign, 10);
 
         *cip = *fop;   /* copies the whole object/structure */
 
@@ -861,6 +1013,9 @@ void AddTraffic(ufo_t *fop)
     }
 
     /* new object, try and find a slot for it */
+
+    // if callsign was not received, compute USA N-number from ICAO ID (if in range)
+    icao_to_n(fop);
 
     /* get distance, alt_diff, and alarm_level, to be copied later into container[] */
     Traffic_Update(fop);
@@ -878,7 +1033,7 @@ void AddTraffic(ufo_t *fop)
     }
     /* replace an expired object if found */
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      if (timenow - Container[i].timestamp > ENTRY_EXPIRATION_TIME) {
+      if (OurTime > Container[i].timestamp + ENTRY_EXPIRATION_TIME) {
         Container[i] = *fop;
         return;
       }
@@ -974,6 +1129,9 @@ void ParseData(void)
 
     fo.rssi = RF_last_rssi;
 
+    if (fo.tx_type == TX_TYPE_NONE)   // not ADS-B or other external sources
+        fo.tx_type = TX_TYPE_FLARM;   // may actually be OGNTP or P3I or FANET...
+
     AddTraffic(&fo);
 }
 
@@ -995,6 +1153,9 @@ void Traffic_setup()
     Alarm_Level = &Alarm_Distance;
     break;
   }
+#if defined(USE_SD_CARD)
+    SD_log("$PSADX,addr,tx_type,maxrssirelalt,mindist,mindistrssi,maxrssi\r\n");
+#endif
 }
 
 void Traffic_loop()
@@ -1008,14 +1169,32 @@ void Traffic_loop()
     relay_waiting = false;
     int sound_alarm_level = ALARM_LEVEL_NONE;    /* local, used for sound alerts */
     int alarmcount = 0;
-
+/*
+static uint32_t showwhen;
+if (OurTime > 999999 && OurTime > showwhen) {
+Serial.println("Traffic table:");
+for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
+if (! Container[i].addr)  continue;
+Serial.print(i);
+Serial.print(".");
+Serial.print(Container[i].addr, HEX);
+Serial.print(" ");
+Serial.print(OurTime - Container[i].timestamp);
+Serial.println(" since heard");
+}
+showwhen = OurTime + 13;
+}
+*/
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
       ufo_t *fop = &Container[i];
 
       if (fop->addr) {  /* non-empty ufo */
-      
-        if (ThisAircraft.timestamp - fop->timestamp <= ENTRY_EXPIRATION_TIME) {
+
+        // expire non-directional targets early
+        uint32_t expiration_time = (fop->tx_type <= TX_TYPE_S)? NONDIR_EXPIRATION : ENTRY_EXPIRATION_TIME;
+
+        if (OurTime <= fop->timestamp + expiration_time) {
 
           if ((RF_time - fop->timestamp) >= TRAFFIC_VECTOR_UPDATE_INTERVAL)
               continue;
@@ -1043,9 +1222,33 @@ void Traffic_loop()
 
         } else {   /* expired ufo */
 
-          //fop->addr = 0;
+// send out summary data about the aircraft
+if (settings->debug_flags & DEBUG_DEEPER) {
+  if (settings->nmea_d || settings->nmea2_d) {
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      PSTR("$PSADX,%06X,%d,%d,%d,%d,%d\r\n"),
+      fop->addr, fop->tx_type, (int)fop->maxrssirelalt, (int)fop->mindist, fop->mindistrssi, fop->maxrssi);
+    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+#if defined(USE_SD_CARD)
+    SD_log(NMEABuffer);
+#endif
+  } else {
+    Serial.print(fop->addr, HEX);
+    Serial.print(" expiring, tx_type ");
+    Serial.print(fop->tx_type);
+    Serial.print(" max-RSSI rel alt (ft): ");
+    Serial.print((int)(3.2808*fop->maxrssirelalt));
+    Serial.print(" min distance (m): ");
+    Serial.print((int)fop->mindist);
+    Serial.print(" min-dist RSSI: ");
+    Serial.print(fop->mindistrssi);
+    Serial.print(" max RSSI: ");
+    Serial.println(fop->maxrssi);
+  }
+}
 
-          *fop = EmptyFO;
+          // *fop = EmptyFO;
+          fop->addr = 0;
 
           /* implied by emptyFO:
           fop->addr = 0;
@@ -1134,7 +1337,7 @@ void ClearExpired()
 {
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].addr &&
-         (ThisAircraft.timestamp - Container[i].timestamp) > ENTRY_EXPIRATION_TIME) {
+         (OurTime > Container[i].timestamp + ENTRY_EXPIRATION_TIME)) {
       //Container[i] = EmptyFO;
       Container[i].addr = 0;
     }

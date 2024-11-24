@@ -546,6 +546,8 @@ void process_traffic_message(char* buf)
   GDL90_Msg_Traffic_t *tp = (GDL90_Msg_Traffic_t *) buf;
 
   //memset(&fo, 0, sizeof(fo)-10);      // clear out old data in the static ufo_t buffer
+  //fo = EmptyFO;                       // clear out old data in the static ufo_t buffer
+  // this is our private "fo" for GDL90 input only, same fields are overwritten each time
   fo.addr_type = ((tp->addr_type==0 || tp->addr_type==2)? ADDR_TYPE_ICAO : ADDR_TYPE_FLARM);
   uint32_t addr = pack24bit(tp->addr);
   if (addr == ThisAircraft.addr)        // somehow echoed back
@@ -597,6 +599,7 @@ void process_traffic_message(char* buf)
       fo.course = 0;  // not available
   fo.aircraft_type = GDL90_TO_AT(tp->emit_cat);
   memcpy(fo.callsign, tp->callsign, 8);
+  fo.callsign[8] = '\0';
 
 #if 0
 Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
@@ -604,6 +607,7 @@ Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
   /* , fo.speed, fo.vs, fo.course */
 #endif
 
+  fo.tx_type = TX_TYPE_ADSB;        // may not be correct, but have to assume
   fo.protocol = RF_PROTOCOL_GDL90;  // not an RF protocol, but that is the data source
   fo.timestamp = ThisAircraft.timestamp;
   fo.gnsstime_ms = millis();

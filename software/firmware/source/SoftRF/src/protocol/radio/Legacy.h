@@ -42,10 +42,10 @@
 /* FTD-12 Version: 7.00 */
 enum
 {
-	ADDR_TYPE_RANDOM,
+	ADDR_TYPE_RANDOM,    /* FLARM stealth now */
 	ADDR_TYPE_ICAO,
 	ADDR_TYPE_FLARM,
-	ADDR_TYPE_ANONYMOUS, /* FLARM stealth, OGN */
+	ADDR_TYPE_ANONYMOUS, /* was FLARM stealth, OGN */
 	ADDR_TYPE_P3I,       /* not available in id_method settings field */
 	ADDR_TYPE_FANET,     /* not available in id_method settings field */
 	ADDR_TYPE_6,
@@ -54,7 +54,7 @@ enum
 
 enum
 {
-	AIRCRAFT_TYPE_UNKNOWN,
+	AIRCRAFT_TYPE_UNKNOWN,     // marks landed-out
 	AIRCRAFT_TYPE_GLIDER,
 	AIRCRAFT_TYPE_TOWPLANE,
 	AIRCRAFT_TYPE_HELICOPTER,
@@ -64,13 +64,13 @@ enum
 	AIRCRAFT_TYPE_PARAGLIDER,
 	AIRCRAFT_TYPE_POWERED,
 	AIRCRAFT_TYPE_JET,
-	AIRCRAFT_TYPE_UFO,
+	AIRCRAFT_TYPE_UFO,         // actually used when unknown
 	AIRCRAFT_TYPE_BALLOON,
 	AIRCRAFT_TYPE_ZEPPELIN,
 	AIRCRAFT_TYPE_UAV,
 	AIRCRAFT_TYPE_RESERVED,
 	AIRCRAFT_TYPE_STATIC,
-	AIRCRAFT_TYPE_WINCH       // added, not in FLARM protocol
+	AIRCRAFT_TYPE_WINCH        // added, not in FLARM protocol
 };
 
 enum alarm_levels
@@ -101,15 +101,6 @@ enum
 {
 	POWER_STATUS_BAD,
 	POWER_STATUS_GOOD
-};
-
-enum
-{
-	DATA_SOURCE_FLARM = 0,
-	DATA_SOURCE_ADSB  = 1,
-	DATA_SOURCE_ADSR  = 3, /* ADS-R (rebroadcasting of UAT ADS-B to 1090 MHz) */
-	DATA_SOURCE_TISB  = 4, /* TIS-B (broadcast of location of non-ADS-B equipped aircraft) */
-	DATA_SOURCE_MODES = 6  /* non-directional targets */
 };
 
 enum

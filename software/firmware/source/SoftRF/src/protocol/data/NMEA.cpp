@@ -51,7 +51,7 @@ uint8_t NMEA_Source = DEST_NONE;   // identifies which port a sentence came from
 char NMEABuffer[NMEA_BUFFER_SIZE]; //buffer for NMEA data
 char GPGGA_Copy[NMEA_BUFFER_SIZE];   //store last $GGA sentence
 
-static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
+//static char NMEA_Callsign[NMEA_CALLSIGN_SIZE];
 
 #if defined(NMEA_TCP_SERVICE)
 
@@ -172,7 +172,18 @@ const char *NMEA_CallSign_Prefix[] = {
   [RF_PROTOCOL_ADSB_UAT]  = "UAT",
   [RF_PROTOCOL_FANET]     = "FAN",
   [RF_PROTOCOL_GDL90]     = "GDL",   // data from external device
-  [RF_PROTOCOL_LATEST]    = "FLR",
+  [RF_PROTOCOL_LATEST]    = "FLR"
+};
+
+const uint8_t data_source_code[] = {
+    [TX_TYPE_NONE]  = 0,
+    [TX_TYPE_A]     = 6,
+    [TX_TYPE_C]     = 6,
+    [TX_TYPE_S]     = 6,
+    [TX_TYPE_TISB]  = 4,
+    [TX_TYPE_ADSR]  = 3,
+    [TX_TYPE_ADSB]  = 1,
+    [TX_TYPE_FLARM] = 0
 };
 
 #define isTimeToPGRMZ() (millis() - PGRMZ_TimeMarker > 1000)
@@ -232,6 +243,10 @@ TinyGPSCustom D_invert2;
 TinyGPSCustom D_extern1;
 TinyGPSCustom D_extern2;  /* 21 */
 TinyGPSCustom D_altpin0;
+TinyGPSCustom D_voice;
+TinyGPSCustom D_strobe;
+
+TinyGPSCustom F_Version;   /* 1 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -441,6 +456,12 @@ void NMEA_setup()
   D_extern1.begin       (gnss, psrf_d, term_num++);
   D_extern2.begin       (gnss, psrf_d, term_num++); /* 21 */
   D_altpin0.begin       (gnss, psrf_d, term_num++);
+  D_voice.begin         (gnss, psrf_d, term_num++);
+  D_strobe.begin        (gnss, psrf_d, term_num++);
+
+  const char *psrf_f = "PSRFF";
+  term_num = 1;
+  F_Version.begin       (gnss, psrf_f, term_num++); /* 1 */
 
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
@@ -973,7 +994,6 @@ void NMEA_Export()
     float bearing;
 
     int alarm_level = ALARM_LEVEL_NONE;
-    int data_source = DATA_SOURCE_FLARM;
     time_t this_moment = now();
     uint32_t follow_id = settings->follow_id;
 
@@ -985,11 +1005,13 @@ void NMEA_Export()
     float HP_distance  = 999999999;
     float HP_bearing = 0;
     uint32_t HP_addr = 0;
+    bool HP_nondir = false;
     bool HP_stealth = false;
     int total_objects = 0;
     int head = 0;
 
     bool has_Fix = (isValidFix() || (settings->mode == SOFTRF_MODE_TXRX_TEST));
+    bool deeper = (settings->debug_flags & DEBUG_DEEPER);
 
     if (has_Fix) {
 
@@ -1035,7 +1057,7 @@ void NMEA_Export()
 
           if ((alarm_level > ALARM_LEVEL_NONE
                || (distance < ALARM_ZONE_NONE && abs_alt_diff < VERTICAL_VISIBILITY_RANGE)
-               || cip->addr == follow_id)
+               || cip->addr == follow_id || deeper)
               && show) {
 
              /* put candidate traffic to report into a sorted list */
@@ -1074,6 +1096,7 @@ void NMEA_Export()
                 HP_adj_dist = adj_dist;
                 HP_addr = (stealth? 0xFFFFF0 + i : cip->addr);
                 HP_stealth = stealth;
+                HP_nondir = (cip->tx_type <= TX_TYPE_S);
              }
           }
         }
@@ -1085,46 +1108,89 @@ void NMEA_Export()
 
          // note that MAX_NMEA_OBJECTS (6) < MAX_TRACKING_OBJECTS (8)
 
-         uint8_t addr_type = fop->addr_type > ADDR_TYPE_ANONYMOUS ?
-                                  ADDR_TYPE_ANONYMOUS : fop->addr_type;
-
-         bool stealth = (fop->stealth || ThisAircraft.stealth);  /* reciprocal */
-
-         alarm_level = fop->alarm_level;
-
-         uint32_t id = fop->addr;
-         if (stealth) {
-           id = 0xFFFFF0 + i;   /* show as anonymous */
-           addr_type = ADDR_TYPE_ANONYMOUS;
-         }
-
          // may want to skip the HP object if there are many to report
          // since it will be in the PFLAU sentence - but XCsoar etc
          // seem to ignore the PFLAU, so report the HP object both ways
          //if (total_objects < MAX_NMEA_OBJECTS || fop->addr != HP_addr) {
 
+         uint8_t addr_type = fop->addr_type;
+         if (addr_type > ADDR_TYPE_FLARM)
+             addr_type = ADDR_TYPE_RANDOM;
+         uint32_t id = fop->addr;
+         alarm_level = fop->alarm_level;
          alt_diff = (int) (fop->alt_diff);  /* sent to NMEA */
+         int dx = fop->dx;
+         int dy = fop->dy;
 
-         int course = (int) fop->course;
-         int speed  = (int) (fop->speed * _GPS_MPS_PER_KNOT);
+         // if this aircraft not airborne, no-track targets should not be reported,
+         //  unless the target is closer than 200m horizontally and 100m vertically.
 
-         /* mask some data following FLARM protocol: */
+         if (fop->no_track && ! ThisAircraft.airborne) {
+            if (abs(alt_diff) > 100)
+                continue;               // do not report this aircraft
+           if (dx*dx + dy*dy > (200*200))
+                continue;               // do not report this aircraft
+         }
+
+         // If either target or this aircraft is "stealth" then:
+         //   course should be empty
+         //   speed should be empty
+         //   climbrate should be empty
+         //   rel_alt should be fuzzyfied if closer than 2k/300m but no alarm
+
+         // <RelativeEast>  (dx) needs to be empty (not zero) for non-directional targets
+         // <RelativeNorth> (dy) needs to be the estimated distance for non-directional targets
+         // For non-directional targets:
+         //     course should be empty
+         //     speed should be empty
+         //     climbrate should be empty
+
+         bool stealth = (fop->stealth || ThisAircraft.stealth);  /* reciprocal */
+
+         char str_dx[6] = "";
          char str_climb_rate[8] = "";
-         if (stealth && alarm_level <= ALARM_LEVEL_CLOSE) {
-             alt_diff = (alt_diff & 0xFFFFFF00) + 128;   /* fuzzify */
-             course = 0;
-             speed  = 0;
+         char str_course[4] = "";
+         char str_speed[4] = "";
+         if (fop->tx_type <= TX_TYPE_S) {     // a non-directional target
+             dy = (int) fop->distance;
+             if (dy > 2*ALARM_ZONE_LOW && !deeper)
+                 continue;                   // only report if close (2000m)
+         } else if (fop->distance > 99000 && !deeper) {
+             continue;
+         } else if (stealth) {
+            if (abs(alt_diff) > 300)
+                continue;               // do not report this aircraft
+           if (dx*dx + dy*dy > (2000*2000))
+                continue;               // do not report this aircraft
+           id = 0xFFFFF0 + i;            // show as anonymous
+           addr_type = ADDR_TYPE_RANDOM;    // (0) - not ADDR_TYPE_ANONYMOUS
+           if (alarm_level <= ALARM_LEVEL_CLOSE)
+               alt_diff = (alt_diff & 0xFFFFFF00) + 128;   /* fuzzify */
          } else {
+             snprintf(str_dx, 6, "%d", dx);
              dtostrf(
                constrain(fop->vs / (_GPS_FEET_PER_METER * 60.0), -32.7, 32.7),
                5, 1, str_climb_rate);
+             dtostrf(
+               constrain(fop->course, 0.0, 360.0),
+               3, 0, str_course);
+             float speed  = fop->speed * _GPS_MPS_PER_KNOT;
+             if (fop->airborne && speed == 0)
+                 speed = 0.1;
+             if (! fop->airborne && speed != 0)
+                 speed = 0.0;
+             dtostrf(
+               constrain(speed, 0.0, 999.0),
+               3, 0, str_speed);
          }
 
          if (alarm_level > ALARM_LEVEL_NONE)  --alarm_level;
            /* for NMEA export bypass CLOSE added between NONE and LOW */
 
-         data_source = fop->protocol == RF_PROTOCOL_ADSB_UAT ?
-                            DATA_SOURCE_ADSB : DATA_SOURCE_FLARM;
+         // data_source should be 1, 3, 4, 6 for ADS-B, ADS-R, TIS-B, Mode-S
+         //   (GDL90 should probably be treated as ADS-B)
+         // convert tx_type to the code used by FLARM:
+         int data_source = data_source_code[fop->tx_type];
 
 #if 1
          /*
@@ -1135,41 +1201,36 @@ void NMEA_Export()
          if (fop->callsign[0] == '\0') {
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-//            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d,%d,%d,%d" PFLAA_EXT1_FMT "*"),
+//            PSTR("$PFLAA,%d,%d,%s,%d,%d,%06X!%s_%06X,%d,,%d,%s,%d,%d,%d,%d" PFLAA_EXT1_FMT "*"),
 // aircraft type is supposed to be hex:
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s_%06X,%d,,%d,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
-              alarm_level, (int) fop->dy, (int) fop->dx,
+              PSTR("$PFLAA,%d,%d,%s,%d,%d,%06X!%s_%06X,%s,,%s,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
+              alarm_level, dy, str_dx,
               alt_diff, addr_type, id, NMEA_CallSign_Prefix[fop->protocol], id,
-              course, speed, ltrim(str_climb_rate), fop->aircraft_type,
-              (fop->no_track? 1 : 0),
-              (fop->protocol==RF_PROTOCOL_ADSB_1090? 1 : (fop->protocol==RF_PROTOCOL_GDL90? 1 : 0)),
-              fop->rssi
-              PFLAA_EXT1_ARGS );
+              ltrim(str_course), ltrim(str_speed), ltrim(str_climb_rate), fop->aircraft_type,
+              (fop->no_track? 1 : 0), data_source, fop->rssi  PFLAA_EXT1_ARGS );
 
          } else {   /* there is a callsign from incoming data */
 
            /* memset((void *) NMEA_Callsign, 0, sizeof(NMEA_Callsign));
               memcpy(NMEA_Callsign, fop->callsign, sizeof(fop->callsign)); */
-           fop->callsign[sizeof(fop->callsign)-1] = '\0';
+           if (fop->callsign[sizeof(fop->callsign)-1] != '?')   // not set up by icao_to_n()
+               fop->callsign[sizeof(fop->callsign)-1] = '\0';
 
            snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X!%s,%d,,%d,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
-              alarm_level, (int) fop->dy, (int) fop->dx,
+              PSTR("$PFLAA,%d,%d,%s,%d,%d,%06X!%s,%s,,%s,%s,%X,%d,%d,%d" PFLAA_EXT1_FMT "*"),
+              alarm_level, dy, str_dx,
               alt_diff, addr_type, id, fop->callsign,
-              course, speed, ltrim(str_climb_rate), fop->aircraft_type,
-              (fop->no_track? 1 : 0),
-              (fop->protocol==RF_PROTOCOL_ADSB_1090? 1 : (fop->protocol==RF_PROTOCOL_GDL90? 1 : 0)),
-              fop->rssi
-              PFLAA_EXT1_ARGS );
+              ltrim(str_course), ltrim(str_speed), ltrim(str_climb_rate), fop->aircraft_type,
+              (fop->no_track? 1 : 0), data_source, fop->rssi  PFLAA_EXT1_ARGS );
          }
 #else
          // skip the callsign
          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-            PSTR("$PFLAA,%d,%d,%d,%d,%d,%06X,%d,,%d,%s,%X" PFLAA_EXT1_FMT "*"),
-            alarm_level, (int) fop->dy, (int) fop->dx,
+            PSTR("$PFLAA,%d,%d,%s,%d,%d,%06X,%s,,%s,%s,%X" PFLAA_EXT1_FMT "*"),
+            alarm_level, dy, str_dx,
             alt_diff, addr_type, id,
-            course, speed, ltrim(str_climb_rate), fop->aircraft_type
-            PFLAA_EXT1_ARGS );
+            ltrim(str_course), ltrim(str_speed), ltrim(str_climb_rate), fop->aircraft_type,
+            (fop->no_track? 1 : 0), data_source, fop->rssi  PFLAA_EXT1_ARGS );
 #endif
          unsigned int nmealen = NMEA_add_checksum();
          NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
@@ -1183,7 +1244,7 @@ void NMEA_Export()
     }
 
     /* One PFLAU NMEA sentence is mandatory regardless of traffic reception status */
-    float voltage    = Battery_voltage();
+    float voltage = Battery_voltage();
     if (voltage < BATTERY_THRESHOLD_INVALID)
         voltage = 0;
     int power_status = (voltage > 0 && voltage < Battery_threshold()) ?
@@ -1199,6 +1260,7 @@ void NMEA_Export()
                HP_alt_diff = cip->alt_diff;
                HP_alarm_level = cip->alarm_level;
                HP_distance = cip->distance;
+               HP_nondir = false;
                if (cip->stealth || ThisAircraft.stealth) {
                    HP_addr = 0xFFFFF0;
                    HP_stealth = true;
@@ -1233,14 +1295,20 @@ void NMEA_Export()
         if (HP_stealth && HP_alarm_level <= ALARM_LEVEL_CLOSE) {
             HP_alt_diff = (HP_alt_diff & 0xFFFFFF00) + 128;   /* fuzzify */
         }
-        int rel_bearing = (int) (HP_bearing - ThisAircraft.course);
-        rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
+        // rel_bearing needs to be empty (not zero) for non-directional targets
+        char str_relbrg[6] = "";
+        if (! HP_nondir) {             // not a non-directional target
+            int rel_bearing = (int) (HP_bearing - ThisAircraft.course);
+            rel_bearing += (rel_bearing < -180 ? 360 : (rel_bearing > 180 ? -360 : 0));
+            snprintf(str_relbrg, 6, "%d", rel_bearing);
+        }
         if (HP_alarm_level > ALARM_LEVEL_NONE)  --HP_alarm_level;
+        int alarm_type = (HP_alarm_level > 0)? ALARM_TYPE_AIRCRAFT : ALARM_TYPE_TRAFFIC;
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-                PSTR("$PFLAU,%d,%d,%d,%d,%d,%d,%d,%d,%u,%06X" PFLAU_EXT1_FMT "*"),
+                PSTR("$PFLAU,%d,%d,%d,%d,%d,%s,%d,%d,%u,%06X" PFLAU_EXT1_FMT "*"),
                 total_objects, tx_status, gps_status,
-                power_status, HP_alarm_level, rel_bearing,
-                ALARM_TYPE_AIRCRAFT, HP_alt_diff, (int) HP_distance, HP_addr
+                power_status, HP_alarm_level, str_relbrg,
+                alarm_type, HP_alt_diff, (int) HP_distance, HP_addr
                 PFLAU_EXT1_ARGS );
     } else if (do_alarm_demo) {
         // simulate an aircraft
@@ -1250,7 +1318,7 @@ void NMEA_Export()
                 PFLAU_EXT1_ARGS );
     } else {
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-                PSTR("$PFLAU,0,%d,%d,%d,%d,,0,,," PFLAU_EXT1_FMT "*"),
+                PSTR("$PFLAU,0,%d,%d,%d,%d,,0,,,," PFLAU_EXT1_FMT "*"),
                 tx_status, gps_status,
                 power_status, ALARM_LEVEL_NONE
                 PFLAU_EXT1_ARGS );
@@ -1283,11 +1351,6 @@ if (settings->debug_flags) {
     nmealen = NMEA_add_checksum();
     NMEA_Outs(settings->nmea_l, settings->nmea2_l, NMEABuffer, nmealen, false);
 #endif /* EXCLUDE_SOFTRF_HEARTBEAT */
-
-    if (settings->debug_flags & DEBUG_DEEPER) {
-        Serial.printf("ThisAircraft.baro_alt_diff = %.0f\r\n", ThisAircraft.baro_alt_diff);
-        Serial.printf("OthAcfts Avg baro_alt_diff = %.0f\r\n", average_baro_alt_diff);
-    }
 }
 
 #if defined(USE_NMEALIB)
@@ -1603,14 +1666,17 @@ void NMEA_Process_SRF_SKV_Sentences()
 
       if (D_Version.isUpdated()) {
         if (strncmp(D_Version.value(), "?", 1) == 0) {
-          char psrfd_buf[MAX_PSRFD_LEN];
+          //char psrfd_buf[MAX_PSRFD_LEN];
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d*"),
+              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
               PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
               settings->ignore_id,      settings->follow_id,  settings->baud_rate,
               settings->power_external, settings->nmea_d,     settings->debug_flags,
               settings->nmea_out2,      settings->nmea2_g,    settings->nmea2_p,
-              settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d);
+              settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d,
+              settings->relay,          settings->bluetooth,  settings->baudrate2,
+              settings->invert2,        settings->nmea_e,     settings->nmea2_e,
+              settings->altpin0,        settings->voice,      settings->strobe);
 
           nmea_cfg_send();
 
@@ -1743,6 +1809,16 @@ void NMEA_Process_SRF_SKV_Sentences()
             Serial.print(F("NMEA2_ext = ")); Serial.println(settings->nmea2_e);
             cfg_is_updated = true;
           }
+          if (D_voice.isUpdated()) {
+            settings->voice = atoi(D_voice.value());
+            Serial.print(F("Voice = ")); Serial.println(settings->voice);
+            cfg_is_updated = true;
+          }
+          if (D_strobe.isUpdated()) {
+            settings->strobe = atoi(D_strobe.value());
+            Serial.print(F("Strobe = ")); Serial.println(settings->strobe);
+            cfg_is_updated = true;
+          }
 
           if (cfg_is_updated) {
             SoC->WDT_fini();
@@ -1751,6 +1827,23 @@ void NMEA_Process_SRF_SKV_Sentences()
             nmea_cfg_restart();
           }
         }
+      }
+
+      if (F_Version.isUpdated()) {
+        if (strncmp(F_Version.value(), "?", 1) == 0) {
+          //char psrff_buf[MAX_PSRFF_LEN];
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+              PSTR("$PSRFD,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
+              PSRFF_VERSION,        settings->rx1090,      settings->gdl90_in,
+              settings->gnss_pins,  settings->ppswire,     settings->logalarms,
+              settings->sd_card,    settings->logflight,   settings->loginterval,
+              settings->alt_udp,    settings->tcpport,     settings->tcpmode,
+              settings->geoid,      settings->freq_corr);
+
+          nmea_cfg_send();
+        }
+
+        // at this point PSRFF is output-only as above
       }
 
 #if defined(USE_OGN_ENCRYPTION)

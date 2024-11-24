@@ -497,7 +497,7 @@ void RF_loop()
 
     RF_current_slot = 0;
     RF_OK_until = slot_base_ms + 800;
-    TxTimeMarker = slot_base_ms + 400 + SoC->random(0, 395);
+    TxTimeMarker = slot_base_ms + 405 + SoC->random(0, 385);
     TxEndMarker  = slot_base_ms + 795;
 
   } else if (ms_since_pps >= 800 && ms_since_pps < 1300) {
@@ -508,10 +508,10 @@ void RF_loop()
     if ((RF_time & 0x0F) == 0xF) {
         // some other receivers may mis-decrypt packets sent after the next PPS
         // so squeeze the transmissions into the pre-PPS half of the slot
-        TxTimeMarker = slot_base_ms + 800 + SoC->random(0, 195);
+        TxTimeMarker = slot_base_ms + 805 + SoC->random(0, 185);
         TxEndMarker  = slot_base_ms + 995;
     } else {
-        TxTimeMarker = slot_base_ms + 800 + SoC->random(0, 395);
+        TxTimeMarker = slot_base_ms + 805 + SoC->random(0, 385);
         TxEndMarker  = slot_base_ms + 1195;
     }
 
@@ -589,15 +589,14 @@ bool RF_Transmit(size_t size, bool wait)
         /* do not set next transmit time here - it is done in RF_loop() */
 //Serial.println(">");
 //Serial.printf("> tx at %d s + %d ms\r\n", OurTime, millis()-ref_time_ms);
-#if 0
-if (settings->debug_flags & DEBUG_LEGACY) {
+#if 1
+if ((settings->debug_flags & (DEBUG_DEEPER | DEBUG_LEGACY)) == (DEBUG_DEEPER | DEBUG_LEGACY)) {
 uint32_t ms = millis();
 if (ms < ref_time_ms)  ms = 0;
 else   ms -= ref_time_ms;
 if (ms > 999)  ms = 999;
-Serial.printf("> tx %d s %3d ms (%02d:%02d) timebits %2d chan %2d alt %d geosep %d\r\n",
-OurTime, ms, (int)gnss.time.minute(), (int)gnss.time.second(), (RF_time & 0x0F), RF_current_chan,
-  (int)ThisAircraft.altitude, (int)ThisAircraft.geoid_separation);
+Serial.printf("> tx %d s %3d ms (%02d:%02d) timebits %2d chan %2d\r\n",
+OurTime, ms, (int)gnss.time.minute(), (int)gnss.time.second(), (RF_time & 0x0F), RF_current_chan);
 }
 #endif
         return true;

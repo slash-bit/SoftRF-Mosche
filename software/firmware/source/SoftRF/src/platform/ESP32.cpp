@@ -2757,7 +2757,7 @@ static float ESP32_Battery_param(uint8_t param)
   {
   case BATTERY_PARAM_THRESHOLD:
     rval = (hw_info.model == SOFTRF_MODEL_PRIME_MK2  && hw_info.revision ==  8) ?
-            BATTERY_THRESHOLD_LIPO + 0.1 :
+            BATTERY_THRESHOLD_LIPO /* + 0.1 */ :
             hw_info.model == SOFTRF_MODEL_PRIME_MK2  ||
             hw_info.model == SOFTRF_MODEL_PRIME_MK3  || /* TBD */
             /* TTGO T3 V2.1.6 */
@@ -2767,7 +2767,7 @@ static float ESP32_Battery_param(uint8_t param)
 
   case BATTERY_PARAM_CUTOFF:
     rval = (hw_info.model == SOFTRF_MODEL_PRIME_MK2  && hw_info.revision ==  8) ?
-            BATTERY_CUTOFF_LIPO + 0.2 :
+            BATTERY_CUTOFF_LIPO /* + 0.2 */ :
             hw_info.model == SOFTRF_MODEL_PRIME_MK2  ||
             hw_info.model == SOFTRF_MODEL_PRIME_MK3  || /* TBD */
             /* TTGO T3 V2.1.6 */
@@ -2948,6 +2948,15 @@ void handleEvent(AceButton* button, uint8_t eventType,
 #endif
       break;
     case AceButton::kEventDoubleClicked:
+      test_mode = !test_mode;
+      if (test_mode) {
+          OLED_msg("TEST",   " MODE");
+          Serial.println("Test Mode on");
+      } else {
+          OLED_msg("NOTEST", " MODE");
+          Serial.println("Test Mode off");
+      }
+      do_test_mode();
       break;
     case AceButton::kEventLongPressed:
       // v1.x shutdown is via PMU interrupt
@@ -2984,6 +2993,7 @@ void handleEvent2(AceButton* button, uint8_t eventType,
   // Click middle button on T-Beam to trigger alarm demo.
   // (Long-press the first button on the T-Beam v0.7)
   // But in winch mode the button turns transmissions on/off instead.
+  // Can also double-click middle button to toggle test_mode
   // Can also long-press middle button to turn off Bluetooth until next boot
   //    - this can help one reach the web interface
   // Note that now any web access turns BT off, without the button press.
@@ -3003,6 +3013,17 @@ void handleEvent2(AceButton* button, uint8_t eventType,
           do_alarm_demo = true;
           OLED_msg("ALARM", " DEMO");
       }
+      break;
+    case AceButton::kEventDoubleClicked:
+      test_mode = !test_mode;
+      if (test_mode) {
+          OLED_msg("TEST",   " MODE");
+          Serial.println("Test Mode on");
+      } else {
+          OLED_msg("NOTEST", " MODE");
+          Serial.println("Test Mode off");
+      }
+      do_test_mode();
       break;
     case AceButton::kEventLongPressed:
       if (settings->bluetooth != BLUETOOTH_OFF && millis() > 15000) {
@@ -3049,26 +3070,35 @@ static void ESP32_Button_setup()
     // level events.
     ButtonConfig* PageButtonConfig = button_1.getButtonConfig();
     PageButtonConfig->setEventHandler(handleEvent);
-    PageButtonConfig->setFeature(ButtonConfig::kFeatureClick);
+    //PageButtonConfig->setFeature(ButtonConfig::kFeatureClick);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
     PageButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
     PageButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterDoubleClick);
+    PageButtonConfig->setFeature(ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
 //  PageButtonConfig->setDebounceDelay(15);
-    PageButtonConfig->setClickDelay(600);
+    PageButtonConfig->setClickDelay(300);
+    PageButtonConfig->setDoubleClickDelay(600);
     PageButtonConfig->setLongPressDelay(2000);
   }
 
   if (middle_button_pin != SOC_UNUSED_PIN) {
-    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2)
+    if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
         if (ESP32_pin_reserved(middle_button_pin, false, "Button2")) return;
+    }
     button_2.init(middle_button_pin);
-    ButtonConfig* PageButtonConfig = button_2.getButtonConfig();
-    PageButtonConfig->setEventHandler(handleEvent2);
-    PageButtonConfig->setFeature(ButtonConfig::kFeatureClick);
-    PageButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
-    PageButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
-//  PageButtonConfig->setDebounceDelay(15);
-    PageButtonConfig->setClickDelay(600);
-    PageButtonConfig->setLongPressDelay(2000);
+    ButtonConfig* MidButtonConfig = button_2.getButtonConfig();
+    MidButtonConfig->setEventHandler(handleEvent2);
+    //MidButtonConfig->setFeature(ButtonConfig::kFeatureClick);
+    MidButtonConfig->setFeature(ButtonConfig::kFeatureDoubleClick);
+    MidButtonConfig->setFeature(ButtonConfig::kFeatureLongPress);
+    MidButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterClick);
+    MidButtonConfig->setFeature(ButtonConfig::kFeatureSuppressAfterDoubleClick);
+    MidButtonConfig->setFeature(ButtonConfig::kFeatureSuppressClickBeforeDoubleClick);
+//  MidButtonConfig->setDebounceDelay(15);
+    MidButtonConfig->setClickDelay(300);
+    MidButtonConfig->setDoubleClickDelay(600);
+    MidButtonConfig->setLongPressDelay(2000);
   }
 }
 

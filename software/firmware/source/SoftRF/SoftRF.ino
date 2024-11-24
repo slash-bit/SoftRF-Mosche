@@ -711,7 +711,7 @@ void normal()
   // Handle Air Connect
   NMEA_loop();
 
-  ClearExpired();
+  //ClearExpired();    // now done in Traffic_loop() instead
 }
 
 #if !defined(EXCLUDE_MAVLINK)

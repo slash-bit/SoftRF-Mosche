@@ -239,7 +239,6 @@ void Time_loop()
         // simulate PPS based on millis()
         if (ref_time_ms == 0)
             ref_time_ms = 1000 * (now_ms / 1000);  // most recent multiple of 1000
-//Serial.printf("Time_loop(): millis %d ref_time_ms %d  gnss_new_time %d\r\n", millis(), ref_time_ms, gnss_new_time);
         if (!newfix) {
             if (now_ms >= ref_time_ms + 1000) {
               OurTime += 1;
@@ -289,12 +288,14 @@ no_pps_time = latest_Commit_Time - no_pps_corr;
         if ( /* newfix && */ gnss_age < 2500 && newtime > base_time_ms
             && (pps_btime_ms == 0 || latest_Commit_Time > pps_btime_ms)) {
             /* new data arrived from GNSS */
+/*
             if (settings->debug_flags & DEBUG_DEEPER) {
                 Serial.print("New fix at: ");
                 Serial.print(now_ms - pps_btime_ms);                   
                 Serial.print(" ms after PPS at: ");
                 Serial.println(pps_btime_ms);
             }
+*/
         } else {
             newfix = false;
         }
@@ -317,13 +318,13 @@ no_pps_time = latest_Commit_Time - no_pps_corr;
       //ref_time_ms = base_time_ms = newtime;  // = pps_btime_ms + ADJ_FOR_FLARM_RECEPTION
       /* the adjusted time seems to better fit actual FLARM time slots */
 
-if (settings->debug_flags & DEBUG_DEEPER) {
-//if ((OurTime & 0x03) == 0) {
-int32_t diff = (int32_t)no_pps_time - (int32_t)newtime;
-Serial.print("no-PPS error: ");
-Serial.println(diff);
+//if (settings->debug_flags & DEBUG_DEEPER) {
+////if ((OurTime & 0x03) == 0) {
+//int32_t diff = (int32_t)no_pps_time - (int32_t)newtime;
+//Serial.print("no-PPS error: ");
+//Serial.println(diff);
+////}
 //}
-}
     //} else {
       //uint32_t last_RMC_Commit = now_ms - gnss.date.age();
       //time_corr_neg = gnss_chip ? gnss_chip->rmc_ms : 100;
