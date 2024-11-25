@@ -738,9 +738,11 @@ void Traffic_Update(ufo_t *fop)
     fop->RelativeBearing = 0;
     fop->adj_alt_diff = fop->alt_diff;
     fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(fop->adj_alt_diff);
-    if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
-        fop->maxrssi = fop->rssi;
-        fop->maxrssirelalt = fop->alt_diff;
+    if (fop->protocol == RF_PROTOCOL_ADSB_1090) {
+        if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
+            fop->maxrssi = fop->rssi;
+            fop->maxrssirelalt = fop->alt_diff;
+        }
     }
     if (ThisAircraft.airborne == 0) {
         fop->alarm_level = ALARM_LEVEL_NONE;
@@ -768,13 +770,15 @@ void Traffic_Update(ufo_t *fop)
 
     fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
-    if (fop->mindist == 0 || fop->distance < fop->mindist) {
-        fop->mindist = fop->distance;
-        fop->mindistrssi = fop->rssi;
-    }
-    if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
-        fop->maxrssi = fop->rssi;
-        fop->maxrssirelalt = fop->alt_diff;
+    if (fop->protocol == RF_PROTOCOL_ADSB_1090) {
+        if (fop->mindist == 0 || fop->distance < fop->mindist) {
+            fop->mindist = fop->distance;
+            fop->mindistrssi = fop->rssi;
+        }
+        if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
+            fop->maxrssi = fop->rssi;
+            fop->maxrssirelalt = fop->alt_diff;
+        }
     }
 
     /* take altitude (and vert speed) differences into account as adjusted distance */
@@ -1154,7 +1158,10 @@ void Traffic_setup()
     break;
   }
 #if defined(USE_SD_CARD)
-    SD_log("$PSADX,addr,tx_type,maxrssirelalt,mindist,mindistrssi,maxrssi\r\n");
+    if (settings->rx1090
+    && (settings->debug_flags & DEBUG_DEEPER)
+    && (settings->nmea_d || settings->nmea2_d))
+        SD_log("$PSADX,addr,tx_type,maxrssirelalt,mindist,mindistrssi,maxrssi\r\n");
 #endif
 }
 
@@ -1223,7 +1230,7 @@ showwhen = OurTime + 13;
         } else {   /* expired ufo */
 
 // send out summary data about the aircraft
-if (settings->debug_flags & DEBUG_DEEPER) {
+if (fop->protocol == RF_PROTOCOL_ADSB_1090 && (settings->debug_flags & DEBUG_DEEPER)) {
   if (settings->nmea_d || settings->nmea2_d) {
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       PSTR("$PSADX,%06X,%d,%d,%d,%d,%d\r\n"),
