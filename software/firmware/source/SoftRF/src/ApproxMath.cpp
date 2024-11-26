@@ -154,12 +154,12 @@ float approxHypotenuse(float x, float y)
 uint32_t iapproxHypotenuse1( int32_t x, int32_t y )
 {
    uint32_t imin, imax, approx;
+   if ( y < 0 ) y = -y;
    if (x == 0)
      return y;
-   else if (y == 0)
-     return x;
    if ( x < 0 ) x = -x;
-   if ( y < 0 ) y = -y;
+   if (y == 0)
+     return x;
    if ( x < y ) {
       imin = x;
       imax = y;
@@ -218,12 +218,12 @@ uint32_t iapproxHypotenuse1( int32_t x, int32_t y )
 uint32_t iapproxHypotenuse0( int32_t x, int32_t y )
 {
    uint32_t imin, imax, approx;
+   if ( y < 0 ) y = -y;
    if (x == 0)
      return y;
-   else if (y == 0)
-     return x;
    if ( x < 0 ) x = -x;
-   if ( y < 0 ) y = -y;
+   if (y == 0)
+     return x;
    if ( x < y ) {
       imin = x;
       imax = y;
