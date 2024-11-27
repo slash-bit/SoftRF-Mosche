@@ -248,6 +248,8 @@ TinyGPSCustom D_strobe;
 
 TinyGPSCustom F_Version;   /* 1 */
 
+TinyGPSCustom T_testmode;
+
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
 TinyGPSCustom S_Version;
@@ -289,17 +291,17 @@ static char *ltrim(char *s)
   return s;
 }
 
-unsigned int NMEA_add_checksum()
+unsigned int NMEA_add_checksum(char *buf)
 {
-//Serial.print("NMEA_add_checksum(): '");
-//Serial.print(NMEABuffer);
+  if (! buf)
+      buf = NMEABuffer;
 
   //calculate the checksum - get sentence length as a side effect
   unsigned int n;
   char c;
   unsigned char cs = 0;
-  for (n = 1; n < sizeof(NMEABuffer) - 5; n++) {
-    c = NMEABuffer[n];
+  for (n = 1; n < NMEA_BUFFER_SIZE - 5; n++) {
+    c = buf[n];
     if (c == '*')
         break;
     if (c == '\0')
@@ -309,10 +311,10 @@ unsigned int NMEA_add_checksum()
 //Serial.print("' - n:");
 //Serial.println(n);
   if (c == '*') {
-      char *csum_ptr = &NMEABuffer[n+1];
+      char *csum_ptr = &buf[n+1];
       snprintf_P(csum_ptr, 5, PSTR("%02X\r\n"), cs);
 //Serial.print("checksum added: ");
-//Serial.print(NMEABuffer);
+//Serial.print(buf);
       return (n + 5);
   }
   return 0;
@@ -463,6 +465,10 @@ void NMEA_setup()
   term_num = 1;
   F_Version.begin       (gnss, psrf_f, term_num++); /* 1 */
 
+  const char *psrf_t = "PSRFT";
+  term_num = 1;
+  T_testmode.begin      (gnss, psrf_t, term_num++); /* 1 */
+
 #if defined(USE_OGN_ENCRYPTION)
 /* Security and privacy */
   const char *psrf_s = "PSRFS";
@@ -543,7 +549,7 @@ void NMEA_Out(uint8_t dest, const char *buf, size_t size, bool nl)
 #if 0
   Serial.print("NMEA_Out(");
   Serial.print(dest);
-  Serial.print("): ", dest);
+  Serial.print("): ");
   Serial.write(buf, size);
   if (nl) Serial.print("\r\n");
 #endif
@@ -647,7 +653,7 @@ void NMEA_bridge_send(char *buf, int len)
     Serial.print("): ");
     Serial.write(buf, len);
 #endif
-    // First check whether it is GNSS or FLARM sentences, skip them (echo)
+    // First check whether it is GNSS or FLARM sentences, skip them (assume echo)
     if (buf[1]=='G' && buf[2]=='P')
         return;
     if (buf[1]=='P' && buf[2]=='F' && buf[3]=='L' && buf[4]=='A')
@@ -658,16 +664,27 @@ void NMEA_bridge_send(char *buf, int len)
     // Not sure whether to process SKV sentences here or pass them on?
     if (buf[1]=='P' && buf[2]=='S' && buf[3]=='R' && buf[4]=='F') {
         NMEA_bridge_sent = true;   // not really sent, but substantial processing
+        // if $PSRF checksum is wrong, send it back to the source:
+        if (buf[len-5] == '*') {
+            char c1 = buf[len-4];
+            char c2 = buf[len-3];
+            buf[len-4] = '\0';   // include the '*'
+            len = NMEA_add_checksum(buf);
+            if (buf[len-4] != c1 || buf[len-3] != c2) {
+                uint8_t dest = NMEA_Source;
+                NMEA_Source = DEST_NONE;
+                NMEA_Out(dest, "-- correct checksum is: ", 24, false);
+                NMEA_Out(dest, buf, len, false);
+                NMEA_Source = dest;
+                return;
+            }
+        }
         for (int i=0; i<len; i++) {
             if (gnss.encode(buf[i])) {   // valid sentence
                 NMEA_Process_SRF_SKV_Sentences();
                 return;
             }
         }
-        // if $PSRF but not a valid sentence, send it back to the source:
-        NMEA_Out(NMEA_Source, buf, len, false);
-        NMEA_Out(NMEA_Source, "-- invalid", 10, true);
-        return;
     }
 #endif
 
@@ -1502,536 +1519,329 @@ void NMEA_GGA()
 //#define SERIAL_FLUSH()       Serial.flush()
 //#endif
 
+// this is used specifically to respond to the source
+// while NMEA_Out() specifically avoids that,
+// so mask the source
 void nmea_cfg_send()
 {
     unsigned int nmealen = NMEA_add_checksum();
-#if defined(USE_NMEA_CFG)
-    uint8_t dest = NMEA_Source;           // answer the config source
-#else
-    uint8_t dest = settings->nmea_out;    // is nmea_cfg_send() called?
-#endif /* USE_NMEA_CFG */
+    uint8_t dest = NMEA_Source;
+    NMEA_Source = DEST_NONE;
     NMEA_Out(dest, NMEABuffer, nmealen, false);
+    NMEA_Source = dest;
 }
 
-static void nmea_cfg_restart()
+static void nmea_cfg_restart(bool save_settings)
 {
+  SoC->WDT_fini();
+  if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
+  if (save_settings)
+      EEPROM_store();
   Serial.println();
   Serial.println(F("Restart is in progress. Please, wait..."));
   Serial.println();
   reboot();
 }
 
+bool isdecdigit(const char *p)
+{
+    if (*p >= '0' && *p <= '9')  return true;
+    return false;
+}
+
+bool ishexdigit(const char *p)
+{
+    if (*p >= '0' && *p <= '9')  return true;
+    if (*p >= 'A' && *p <= 'F')  return true;
+    if (*p >= 'a' && *p <= 'f')  return true;
+    return false;
+}
+
+int  cfg_val;
+bool cfg_is_updated;
+
+bool updated(TinyGPSCustom &field, const char *label)
+{
+    const char *p = field.value();
+    if (! isdecdigit(p))
+        return false;
+    cfg_val = atoi(p);
+    Serial.print(label); Serial.print(" = "); Serial.println(cfg_val);
+    cfg_is_updated = true;
+    return true;
+}
+
 void NMEA_Process_SRF_SKV_Sentences()
 {
-      if (C_Version.isUpdated()) {
-        if (strncmp(C_Version.value(), "RST", 3) == 0) {
-            SoC->WDT_fini();
-            nmea_cfg_restart();
-        } else if (strncmp(C_Version.value(), "OFF", 3) == 0) {
+  if (C_Version.isUpdated()) {
+
+      if (strncmp(C_Version.value(), "RST", 3) == 0) {             // $PSRFC,RST*2D
+          nmea_cfg_restart(false);
+          // just reboot, settings not saved
+
+      } else if (strncmp(C_Version.value(), "SAV", 3) == 0) {      // $PSRFC,SAV*3C
+          nmea_cfg_restart(true);
+          // save settings to EEPROM and reboot
+
+      } else if (strncmp(C_Version.value(), "OFF", 3) == 0) {      // $PSRFC,OFF*37
           shutdown(SOFTRF_SHUTDOWN_NMEA);
-        } else if (strncmp(C_Version.value(), "?", 1) == 0) {
+
+      } else if (strncmp(C_Version.value(), "?", 1) == 0) {        // $PSRFC,?*47
 
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFC,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
-              PSRFC_VERSION,        settings->mode,     settings->rf_protocol,
-              settings->band,       settings->aircraft_type, settings->alarm,
-              settings->txpower,    settings->volume,   settings->pointer,
-              settings->nmea_g,     settings->nmea_p,   settings->nmea_l,
-              settings->nmea_s,     settings->nmea_out, settings->gdl90,
-              settings->d1090,      settings->stealth,  settings->no_track,
-              settings->power_save );
+            PSTR("$PSRFC,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
+            PSRFX_VERSION,        settings->mode,     settings->rf_protocol,
+            settings->band,       settings->aircraft_type, settings->alarm,
+            settings->txpower,    settings->volume,   settings->pointer,
+            settings->nmea_g,     settings->nmea_p,   settings->nmea_l,
+            settings->nmea_s,     settings->nmea_out, settings->gdl90,
+            settings->d1090,      settings->stealth,  settings->no_track,
+            settings->power_save );
 
           nmea_cfg_send();
 
-        } else if (atoi(C_Version.value()) == PSRFC_VERSION) {
-          bool cfg_is_updated = false;
+      } else if (isdecdigit(C_Version.value())) {
 
-          if (C_Mode.isUpdated())
-          {
-            settings->mode = atoi(C_Mode.value());
-            Serial.print(F("Mode = ")); Serial.println(settings->mode);
-            cfg_is_updated = true;
-          }
-          if (C_Protocol.isUpdated())
-          {
-            settings->rf_protocol = atoi(C_Protocol.value());
-            Serial.print(F("Protocol = ")); Serial.println(settings->rf_protocol);
-            cfg_is_updated = true;
-          }
-          if (C_Band.isUpdated())
-          {
-            settings->band = atoi(C_Band.value());
-            Serial.print(F("Region = ")); Serial.println(settings->band);
-            cfg_is_updated = true;
-          }
-          if (C_AcftType.isUpdated())
-          {
-            settings->aircraft_type = atoi(C_AcftType.value());
-            Serial.print(F("AcftType = ")); Serial.println(settings->aircraft_type);
-            cfg_is_updated = true;
-          }
-          if (C_Alarm.isUpdated())
-          {
-            settings->alarm = atoi(C_Alarm.value());
-            Serial.print(F("Alarm = ")); Serial.println(settings->alarm);
-            cfg_is_updated = true;
-          }
-          if (C_TxPower.isUpdated())
-          {
-            settings->txpower = atoi(C_TxPower.value());
-            Serial.print(F("TxPower = ")); Serial.println(settings->txpower);
-            cfg_is_updated = true;
-          }
-          if (C_Volume.isUpdated())
-          {
-            settings->volume = atoi(C_Volume.value());
-            Serial.print(F("Volume = ")); Serial.println(settings->volume);
-            cfg_is_updated = true;
-          }
-           if (C_Pointer.isUpdated())
-          {
-            settings->pointer = atoi(C_Pointer.value());
-            Serial.print(F("Pointer = ")); Serial.println(settings->pointer);
-            cfg_is_updated = true;
-          }
-          if (C_NMEA_gnss.isUpdated())
-          {
-            settings->nmea_g = atoi(C_NMEA_gnss.value());
-            Serial.print(F("NMEA_gnss = ")); Serial.println(settings->nmea_g);
-            cfg_is_updated = true;
-          }
-          if (C_NMEA_private.isUpdated())
-          {
-            settings->nmea_p = atoi(C_NMEA_private.value());
-            Serial.print(F("NMEA_private = ")); Serial.println(settings->nmea_p);
-            cfg_is_updated = true;
-          }
-          if (C_NMEA_legacy.isUpdated())
-          {
-            settings->nmea_l = atoi(C_NMEA_legacy.value());
-            Serial.print(F("NMEA_legacy = ")); Serial.println(settings->nmea_l);
-            cfg_is_updated = true;
-          }
-           if (C_NMEA_sensors.isUpdated())
-          {
-            settings->nmea_s = atoi(C_NMEA_sensors.value());
-            Serial.print(F("NMEA_sensors = ")); Serial.println(settings->nmea_s);
-            cfg_is_updated = true;
-          }
-          if (C_NMEA_Output.isUpdated())
-          {
-            settings->nmea_out = atoi(C_NMEA_Output.value());
-            Serial.print(F("NMEA_Output = ")); Serial.println(settings->nmea_out);
-            cfg_is_updated = true;
-          }
-          if (C_GDL90_Output.isUpdated())
-          {
-            settings->gdl90 = atoi(C_GDL90_Output.value());
-            Serial.print(F("GDL90_Output = ")); Serial.println(settings->gdl90);
-            cfg_is_updated = true;
-          }
-          if (C_D1090_Output.isUpdated())
-          {
-            settings->d1090 = atoi(C_D1090_Output.value());
-            Serial.print(F("D1090_Output = ")); Serial.println(settings->d1090);
-            cfg_is_updated = true;
-          }
-          if (C_Stealth.isUpdated())
-          {
-            settings->stealth = atoi(C_Stealth.value());
-            Serial.print(F("Stealth = ")); Serial.println(settings->stealth);
-            cfg_is_updated = true;
-          }
-          if (C_noTrack.isUpdated())
-          {
-            settings->no_track = atoi(C_noTrack.value());
-            Serial.print(F("noTrack = ")); Serial.println(settings->no_track);
-            cfg_is_updated = true;
-          }
-          if (C_PowerSave.isUpdated())
-          {
-            settings->power_save = atoi(C_PowerSave.value());
-            Serial.print(F("PowerSave = ")); Serial.println(settings->power_save);
-            cfg_is_updated = true;
-          }
+          cfg_is_updated = false;
 
-          if (cfg_is_updated) {
-            SoC->WDT_fini();
-            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
-            EEPROM_store();
-            nmea_cfg_restart();
-          }
-        }
+          if (updated(C_Mode, "Mode"))                  settings->mode = cfg_val;
+          if (updated(C_Protocol, "Protocol"))          settings->rf_protocol = cfg_val;
+          if (updated(C_Band, "Region"))                settings->band = cfg_val;
+          if (updated(C_AcftType, "AcftType"))          settings->aircraft_type = cfg_val;
+          if (updated(C_Alarm, "Alarm"))                settings->alarm = cfg_val;
+          if (updated(C_TxPower, "TxPower"))            settings->txpower = cfg_val;
+          if (updated(C_Volume, "Volume"))              settings->volume = cfg_val;
+          if (updated(C_Pointer, "Pointer"))            settings->pointer = cfg_val;
+          if (updated(C_NMEA_gnss, "NMEA_gnss"))        settings->nmea_g = cfg_val;
+          if (updated(C_NMEA_private, "NMEA_private"))  settings->nmea_p = cfg_val;
+          if (updated(C_NMEA_legacy, "NMEA_legacy"))    settings->nmea_l = cfg_val;
+          if (updated(C_NMEA_sensors, "NMEA_sensors"))  settings->nmea_s = cfg_val;
+          if (updated(C_NMEA_Output, "NMEA_Output"))    settings->nmea_out = cfg_val;
+          if (updated(C_GDL90_Output, "GDL90_Output"))  settings->gdl90 = cfg_val;
+          if (updated(C_D1090_Output, "D1090_Output"))  settings->d1090 = cfg_val;
+          if (updated(C_Stealth, "Stealth"))            settings->stealth = cfg_val;
+          if (updated(C_noTrack, "noTrack"))            settings->no_track = cfg_val;
+          if (updated(C_PowerSave, "PowerSave"))        settings->power_save = cfg_val;
+
+          if (cfg_is_updated && atoi(C_Version.value()))
+              nmea_cfg_restart(true);
       }
+  }
 
-      if (D_Version.isUpdated()) {
-        if (strncmp(D_Version.value(), "?", 1) == 0) {
+  if (D_Version.isUpdated()) {
+
+      if (strncmp(D_Version.value(), "?", 1) == 0) {
+
           //char psrfd_buf[MAX_PSRFD_LEN];
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
-              PSRFD_VERSION,            settings->id_method,  settings->aircraft_id,
-              settings->ignore_id,      settings->follow_id,  settings->baud_rate,
-              settings->power_external, settings->nmea_d,     settings->debug_flags,
-              settings->nmea_out2,      settings->nmea2_g,    settings->nmea2_p,
-              settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d,
-              settings->relay,          settings->bluetooth,  settings->baudrate2,
-              settings->invert2,        settings->nmea_e,     settings->nmea2_e,
-              settings->altpin0,        settings->voice,      settings->strobe);
+            PSTR("$PSRFD,%d,%d,%06X,%06X,%06X,%d,%d,%d,%02X,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
+            PSRFX_VERSION,            settings->id_method,  settings->aircraft_id,
+            settings->ignore_id,      settings->follow_id,  settings->baud_rate,
+            settings->power_external, settings->nmea_d,     settings->debug_flags,
+            settings->nmea_out2,      settings->nmea2_g,    settings->nmea2_p,
+            settings->nmea2_l,        settings->nmea2_s,    settings->nmea2_d,
+            settings->relay,          settings->bluetooth,  settings->baudrate2,
+            settings->invert2,        settings->nmea_e,     settings->nmea2_e,
+            settings->altpin0,        settings->voice,      settings->strobe);
 
           nmea_cfg_send();
 
-        } else if (atoi(D_Version.value()) == PSRFD_VERSION) {
-          bool cfg_is_updated = false;
+      } else if (isdecdigit(D_Version.value())) {
 
-          if (D_id_method.isUpdated()) {
-            settings->id_method = atoi(D_id_method.value());
-            Serial.print(F("ID method = ")); Serial.println(settings->id_method);
-            cfg_is_updated = true;
-          }
-          if (D_aircraft_id.isUpdated()) {
-            settings->aircraft_id = strtoul(D_aircraft_id.value(), NULL, 16);
-            Serial.print(F("Aircraft ID = ")); Serial.println(settings->aircraft_id, HEX);
-            cfg_is_updated = true;
-          }
-          if (D_ignore_id.isUpdated()) {
-            settings->ignore_id = strtoul(D_ignore_id.value(), NULL, 16);
-            Serial.print(F("Ignore ID = ")); Serial.println(settings->ignore_id, HEX);
-            cfg_is_updated = true;
-          }
-          if (D_follow_id.isUpdated()) {
-            settings->follow_id = strtoul(D_follow_id.value(), NULL, 16);
-            Serial.print(F("Follow ID = ")); Serial.println(settings->follow_id, HEX);
-            cfg_is_updated = true;
-          }
-          if (D_baud_rate.isUpdated()) {
-            settings->baud_rate = atoi(D_baud_rate.value());
-            Serial.print(F("Baud rate = ")); Serial.println(settings->baud_rate);
-            cfg_is_updated = true;
-          }
-          if (D_power_ext.isUpdated()) {
-            settings->power_external = atoi(D_power_ext.value());
-            Serial.print(F("Power source = ")); Serial.println(settings->power_external);
-            cfg_is_updated = true;
-          }
-          if (D_NMEA_debug.isUpdated()) {
-            settings->nmea_d = atoi(D_NMEA_debug.value());
-            Serial.print(F("NMEA_debug = ")); Serial.println(settings->nmea_d);
-            cfg_is_updated = true;
-          }
-          if (D_debug_flags.isUpdated()) {
-            settings->debug_flags = atoi(D_debug_flags.value());
-            Serial.print(F("Debug flags = ")); Serial.println(settings->debug_flags);
-            cfg_is_updated = true;
-          }
-          if (D_NMEA2.isUpdated())
-          {
-            int nmea1 = settings->nmea_out;
-            int nmea2 = atoi(D_NMEA2.value());
-            Serial.print(F("NMEA_Output2 (given) = ")); Serial.println(nmea2);
-            if (nmea2 == nmea1)
-                nmea2 = DEST_NONE;
-            if (hw_info.model == SOFTRF_MODEL_PRIME_MK2) {
-              if ((nmea1==DEST_UART || nmea1==DEST_USB)
-               && (nmea2==DEST_UART || nmea2==DEST_USB))
-                  nmea2 = DEST_NONE;      // USB & UART wired together
-            }
-//            bool wireless1 = (nmea1==DEST_UDP || nmea1==DEST_TCP || nmea1==DEST_BLUETOOTH);
-//            bool wireless2 = (nmea2==DEST_UDP || nmea2==DEST_TCP || nmea2==DEST_BLUETOOTH);
-//            if (wireless1 && wireless2)
-//                  nmea2 = DEST_NONE;      // only one wireless output route possible
-            Serial.print(F("NMEA_Output2 (adjusted) = ")); Serial.println(nmea2);
-            settings->nmea_out2 = nmea2;
-            cfg_is_updated = true;
-          }
-          if (D_NMEA2_gnss.isUpdated())
-          {
-            settings->nmea2_g = atoi(D_NMEA2_gnss.value());
-            Serial.print(F("NMEA2_gnss = ")); Serial.println(settings->nmea_g);
-            cfg_is_updated = true;
-          }
-          if (D_NMEA2_private.isUpdated())
-          {
-            settings->nmea2_p = atoi(D_NMEA2_private.value());
-            Serial.print(F("NMEA2_private = ")); Serial.println(settings->nmea_p);
-            cfg_is_updated = true;
-          }
-          if (D_NMEA2_legacy.isUpdated())
-          {
-            settings->nmea2_l = atoi(D_NMEA2_legacy.value());
-            Serial.print(F("NMEA2_legacy = ")); Serial.println(settings->nmea_l);
-            cfg_is_updated = true;
-          }
-           if (D_NMEA2_sensors.isUpdated())
-          {
-            settings->nmea2_s = atoi(D_NMEA2_sensors.value());
-            Serial.print(F("NMEA2_sensors = ")); Serial.println(settings->nmea_s);
-            cfg_is_updated = true;
-          }
-          if (D_NMEA2_debug.isUpdated()) {
-            settings->nmea2_d = atoi(D_NMEA2_debug.value());
-            Serial.print(F("NMEA2_debug = ")); Serial.println(settings->nmea_d);
-            cfg_is_updated = true;
-          }
-          if (D_relay.isUpdated()) {
-            settings->relay = atoi(D_relay.value());
-            Serial.print(F("Relay = ")); Serial.println(settings->relay);
-            cfg_is_updated = true;
-          }
-          if (D_bluetooth.isUpdated()) {
-            settings->bluetooth = atoi(D_bluetooth.value());
-            Serial.print(F("Bluetooth = ")); Serial.println(settings->bluetooth);
-            cfg_is_updated = true;
-          }
+          cfg_is_updated = false;
+
+          if (updated(D_baud_rate, "Baud rate"))         settings->baud_rate = cfg_val;
+          if (updated(D_power_ext, "Power source"))      settings->power_external = cfg_val;
+          if (updated(D_NMEA_debug, "NMEA_debug"))       settings->nmea_d = cfg_val;
+          if (updated(D_debug_flags, "Debug flags"))     settings->debug_flags = cfg_val;
+          if (updated(D_NMEA2, "NMEA_Output2"))          settings->nmea_out2 = cfg_val;
+          if (settings->nmea_out2 == settings->nmea_out)
+              settings->nmea_out2 = DEST_NONE;
+          if (updated(D_NMEA2_gnss, "NMEA2_gnss"))       settings->nmea_g = cfg_val;
+          if (updated(D_NMEA2_private, "NMEA2_private")) settings->nmea_p = cfg_val;
+          if (updated(D_NMEA2_legacy, "NMEA2_legacy"))   settings->nmea_l = cfg_val;
+          if (updated(D_NMEA2_sensors, "NMEA2_sensors")) settings->nmea_s = cfg_val;
+          if (updated(D_NMEA2_debug, "NMEA2_debug"))     settings->nmea_d = cfg_val;
+          if (updated(D_relay, "Relay"))                 settings->relay = cfg_val;
+          if (updated(D_bluetooth, "Bluetooth"))         settings->bluetooth = cfg_val;
 #if defined(ESP32)
-          if (D_altpin0.isUpdated()) {
-            settings->altpin0 = atoi(D_altpin0.value());
-            Serial.print(F("Use alt RX pin = ")); Serial.println(settings->altpin0);
-            cfg_is_updated = true;
-          }
-          if (D_baudrate2.isUpdated()) {
-            settings->baudrate2 = atoi(D_baudrate2.value());
-            Serial.print(F("Baud rate 2 = ")); Serial.println(settings->baudrate2);
-            cfg_is_updated = true;
-          }
-          if (D_invert2.isUpdated()) {
-            settings->invert2 = atoi(D_invert2.value());
-            Serial.print(F("Serial2 logic = ")); Serial.println(settings->invert2);
-            cfg_is_updated = true;
-          }
+          if (updated(D_baudrate2, "Baud rate 2"))       settings->baudrate2 = cfg_val;
+          if (updated(D_invert2, "Serial2 logic"))       settings->invert2 = cfg_val;
 #endif
-          if (D_extern1.isUpdated()) {
-            settings->nmea_e = atoi(D_extern1.value());
-            Serial.print(F("NMEA1_ext = ")); Serial.println(settings->nmea_e);
-            cfg_is_updated = true;
+          if (updated(D_extern1, "NMEA1_ext"))           settings->nmea_e = cfg_val;
+          if (updated(D_extern2, "NMEA2_ext"))           settings->nmea2_e = cfg_val;
+#if defined(ESP32)
+          if (updated(D_altpin0, "Use alt RX pin"))      settings->altpin0 = cfg_val;
+#endif
+          if (updated(D_voice, "Voice"))                 settings->voice = cfg_val;
+          if (updated(D_strobe, "Strobe"))               settings->strobe = cfg_val;
+
+          if (ishexdigit(D_aircraft_id.value())) {
+              settings->aircraft_id = strtoul(D_aircraft_id.value(), NULL, 16);
+              Serial.print(F("Aircraft ID = ")); Serial.println(settings->aircraft_id, HEX);
+             cfg_is_updated = true;
           }
-          if (D_extern2.isUpdated()) {
-            settings->nmea2_e = atoi(D_extern2.value());
-            Serial.print(F("NMEA2_ext = ")); Serial.println(settings->nmea2_e);
-            cfg_is_updated = true;
+          if (ishexdigit(D_ignore_id.value())) {
+              settings->ignore_id = strtoul(D_ignore_id.value(), NULL, 16);
+              Serial.print(F("Ignore ID = ")); Serial.println(settings->ignore_id, HEX);
+              cfg_is_updated = true;
           }
-          if (D_voice.isUpdated()) {
-            settings->voice = atoi(D_voice.value());
-            Serial.print(F("Voice = ")); Serial.println(settings->voice);
-            cfg_is_updated = true;
-          }
-          if (D_strobe.isUpdated()) {
-            settings->strobe = atoi(D_strobe.value());
-            Serial.print(F("Strobe = ")); Serial.println(settings->strobe);
-            cfg_is_updated = true;
+          if (ishexdigit(D_follow_id.value())) {
+              settings->follow_id = strtoul(D_follow_id.value(), NULL, 16);
+              Serial.print(F("Follow ID = ")); Serial.println(settings->follow_id, HEX);
+              cfg_is_updated = true;
           }
 
-          if (cfg_is_updated) {
-            SoC->WDT_fini();
-            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
-            EEPROM_store();
-            nmea_cfg_restart();
-          }
-        }
+          if (cfg_is_updated && atoi(D_Version.value()))
+              nmea_cfg_restart(true);
+      }
+  }
+
+  if (F_Version.isUpdated()) {
+
+      if (strncmp(F_Version.value(), "?", 1) == 0) {           // $PSRFF,?*42
+        //char psrff_buf[MAX_PSRFF_LEN];
+        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+          PSTR("$PSRFF,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
+          PSRFX_VERSION,         settings->rx1090,    settings->mode_s,
+          settings->gdl90_in,    settings->gnss_pins, settings->ppswire,
+          settings->logalarms,   settings->sd_card,   settings->logflight,
+          settings->loginterval, settings->alt_udp,   settings->tcpport,
+          settings->tcpmode,     geoid_from_setting,  settings->freq_corr);
+        nmea_cfg_send();
       }
 
-      if (F_Version.isUpdated()) {
-        if (strncmp(F_Version.value(), "?", 1) == 0) {
-          //char psrff_buf[MAX_PSRFF_LEN];
-          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFD,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d*"),
-              PSRFF_VERSION,        settings->rx1090,      settings->gdl90_in,
-              settings->gnss_pins,  settings->ppswire,     settings->logalarms,
-              settings->sd_card,    settings->logflight,   settings->loginterval,
-              settings->alt_udp,    settings->tcpport,     settings->tcpmode,
-              settings->geoid,      settings->freq_corr);
+      // at this point PSRFF is output-only as above
+      // if changed to allow settings, note that:
+      //     geoid_from_setting = descale(settings->geoid, 5, 1, 1) - 10;
+      //     settings->geoid = enscale(geoid_from_setting+10, 5, 1, 1);
+  }
 
+  // $PSRFT,0*5F  or  $PSRFT,1*5E  to set test_mode to 0 or 1, or $PSRFT,?*50 to query
+  if (T_testmode.isUpdated()) {
+
+      char tval = T_testmode.value()[0];
+      if (tval == '?') {
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFT,%d*"), test_mode);
           nmea_cfg_send();
-        }
-
-        // at this point PSRFF is output-only as above
+      } else {
+          if (tval == '0')
+              test_mode = false;
+          else if (tval == '1')
+              test_mode = true;
+          else
+              test_mode = !test_mode;
+          if (test_mode) {
+              OLED_msg("TEST",   " MODE");
+              Serial.println("Test Mode on");
+          } else {
+              OLED_msg("NOTEST", " MODE");
+              Serial.println("Test Mode off");
+          }
+          do_test_mode();
       }
+  }
 
 #if defined(USE_OGN_ENCRYPTION)
-      if (S_Version.isUpdated()) {
-        if (strncmp(S_Version.value(), "?", 1) == 0) {
+  if (S_Version.isUpdated()) {
 
-          snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSRFS,%d,%08X%08X%08X%08X*"),
-              PSRFS_VERSION,
-              settings->igc_key[0]? 0x88888888 : 0,
-              settings->igc_key[1]? 0x88888888 : 0,
-              settings->igc_key[2]? 0x88888888 : 0,
-              settings->igc_key[3]? 0x88888888 : 0);
-              /* mask the key from prying eyes */
+      if (strncmp(S_Version.value(), "?", 1) == 0) {
 
-          nmea_cfg_send();
+        snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+            PSTR("$PSRFS,%d,%08X%08X%08X%08X*"),
+            PSRFX_VERSION,
+            settings->igc_key[0]? 0x88888888 : 0,
+            settings->igc_key[1]? 0x88888888 : 0,
+            settings->igc_key[2]? 0x88888888 : 0,
+            settings->igc_key[3]? 0x88888888 : 0);
+            /* mask the key from prying eyes */
 
-        } else if (atoi(S_Version.value()) == PSRFS_VERSION) {
-          bool cfg_is_updated = false;
+        nmea_cfg_send();
 
-          if (S_IGC_Key.isUpdated())
-          {
-            char buf[32 + 1];
+      } else if (isdecdigit(S_Version.value())) {
 
-            strncpy(buf, S_IGC_Key.value(), sizeof(buf));
+          char buf[32 + 1];
 
-            settings->igc_key[3] = strtoul(buf + 24, NULL, 16);
-            buf[24] = 0;
-            settings->igc_key[2] = strtoul(buf + 16, NULL, 16);
-            buf[16] = 0;
-            settings->igc_key[1] = strtoul(buf +  8, NULL, 16);
-            buf[ 8] = 0;
-            settings->igc_key[0] = strtoul(buf +  0, NULL, 16);
+          strncpy(buf, S_IGC_Key.value(), sizeof(buf));
 
-            snprintf_P(buf, sizeof(buf),
-              PSTR("%08X%08X%08X%08X"),
-              settings->igc_key[0], settings->igc_key[1],
-              settings->igc_key[2], settings->igc_key[3]);
+          settings->igc_key[3] = strtoul(buf + 24, NULL, 16);
+          buf[24] = 0;
+          settings->igc_key[2] = strtoul(buf + 16, NULL, 16);
+          buf[16] = 0;
+          settings->igc_key[1] = strtoul(buf +  8, NULL, 16);
+          buf[ 8] = 0;
+          settings->igc_key[0] = strtoul(buf +  0, NULL, 16);
 
-            Serial.print(F("IGC Key = ")); Serial.println(buf);
-            cfg_is_updated = true;
-          }
-          if (cfg_is_updated) {
-            SoC->WDT_fini();
-            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
-            EEPROM_store();
-            nmea_cfg_restart();
-          }
-        }
+          snprintf_P(buf, sizeof(buf),
+            PSTR("%08X%08X%08X%08X"),
+            settings->igc_key[0], settings->igc_key[1],
+            settings->igc_key[2], settings->igc_key[3]);
+
+          Serial.print(F("IGC Key = ")); Serial.println(buf);
+
+          if (atoi(S_Version.value()))
+              nmea_cfg_restart(true);
       }
+  }
 #endif /* USE_OGN_ENCRYPTION */
 
 #if defined(USE_SKYVIEW_CFG)
-      if (V_Version.isUpdated()) {
-        if (strncmp(V_Version.value(), "?", 1) == 0) {
+  if (V_Version.isUpdated()) {
+
+      if (strncmp(V_Version.value(), "?", 1) == 0) {
 
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-              PSTR("$PSKVC,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%X*"),
-              PSKVC_VERSION,  ui->adapter,      ui->connection,
-              ui->units,      ui->zoom,         ui->protocol,
-              ui->baudrate,   ui->server,       ui->key,
-              ui->rotate,     ui->orientation,  ui->adb,
-              ui->idpref,     ui->vmode,        ui->voice,
-              ui->aghost,     ui->filter,       ui->power_save,
-              ui->team);
+            PSTR("$PSKVC,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%X*"),
+            PSKVC_VERSION,  ui->adapter,      ui->connection,
+            ui->units,      ui->zoom,         ui->protocol,
+            ui->baudrate,   ui->server,       ui->key,
+            ui->rotate,     ui->orientation,  ui->adb,
+            ui->idpref,     ui->vmode,        ui->voice,
+            ui->aghost,     ui->filter,       ui->power_save,
+            ui->team);
 
           nmea_cfg_send();
 
-        } else if (atoi(V_Version.value()) == PSKVC_VERSION) {
-          bool cfg_is_updated = false;
+      } else if (isdecdigit(V_Version.value())) {
 
-          if (V_Adapter.isUpdated())
-          {
-            ui->adapter = atoi(V_Adapter.value());
-            Serial.print(F("Adapter = ")); Serial.println(ui->adapter);
-            cfg_is_updated = true;
+          cfg_is_updated = false;
+
+          if (updated(V_Adapter, "Adapter"))          ui->adapter = cfg_val;
+          if (updated(V_Connection, "Connection"))    ui->connection = cfg_val;
+          if (updated(V_Units, "Units"))              ui->units = cfg_val;
+          if (updated(V_Zoom, "Zoom"))                ui->zoom = cfg_val;
+          if (updated(V_Protocol, "Protocol"))        ui->protocol = cfg_val;
+          if (updated(V_Baudrate, "Baudrate"))        ui->baudrate = cfg_val;
+          if (V_Server.value()[0]) {
+              strncpy(ui->server, V_Server.value(), sizeof(ui->server));
+              Serial.print(F("Server = ")); Serial.println(ui->server);
+              cfg_is_updated = true;
           }
-          if (V_Connection.isUpdated())
-          {
-            ui->connection = atoi(V_Connection.value());
-            Serial.print(F("Connection = ")); Serial.println(ui->connection);
-            cfg_is_updated = true;
+          if (V_Key.value()[0]) {
+              strncpy(ui->key, V_Key.value(), sizeof(ui->key));
+              Serial.print(F("Key = ")); Serial.println(ui->key);
+              cfg_is_updated = true;
           }
-          if (V_Units.isUpdated())
-          {
-            ui->units = atoi(V_Units.value());
-            Serial.print(F("Units = ")); Serial.println(ui->units);
-            cfg_is_updated = true;
-          }
-          if (V_Zoom.isUpdated())
-          {
-            ui->zoom = atoi(V_Zoom.value());
-            Serial.print(F("Zoom = ")); Serial.println(ui->zoom);
-            cfg_is_updated = true;
-          }
-          if (V_Protocol.isUpdated())
-          {
-            ui->protocol = atoi(V_Protocol.value());
-            Serial.print(F("Protocol = ")); Serial.println(ui->protocol);
-            cfg_is_updated = true;
-          }
-          if (V_Baudrate.isUpdated())
-          {
-            ui->baudrate = atoi(V_Baudrate.value());
-            Serial.print(F("Baudrate = ")); Serial.println(ui->baudrate);
-            cfg_is_updated = true;
-          }
-          if (V_Server.isUpdated())
-          {
-            strncpy(ui->server, V_Server.value(), sizeof(ui->server));
-            Serial.print(F("Server = ")); Serial.println(ui->server);
-            cfg_is_updated = true;
-          }
-           if (V_Key.isUpdated())
-          {
-            strncpy(ui->key, V_Key.value(), sizeof(ui->key));
-            Serial.print(F("Key = ")); Serial.println(ui->key);
-            cfg_is_updated = true;
-          }
-          if (V_Rotate.isUpdated())
-          {
-            ui->rotate = atoi(V_Rotate.value());
-            Serial.print(F("Rotation = ")); Serial.println(ui->rotate);
-            cfg_is_updated = true;
-          }
-          if (V_Orientation.isUpdated())
-          {
-            ui->orientation = atoi(V_Orientation.value());
-            Serial.print(F("Orientation = ")); Serial.println(ui->orientation);
-            cfg_is_updated = true;
-          }
-          if (V_AvDB.isUpdated())
-          {
-            ui->adb = atoi(V_AvDB.value());
-            Serial.print(F("AvDB = ")); Serial.println(ui->adb);
-            cfg_is_updated = true;
-          }
-          if (V_ID_Pref.isUpdated())
-          {
-            ui->idpref = atoi(V_ID_Pref.value());
-            Serial.print(F("ID_Pref = ")); Serial.println(ui->idpref);
-            cfg_is_updated = true;
-          }
-           if (V_VMode.isUpdated())
-          {
-            ui->vmode = atoi(V_VMode.value());
-            Serial.print(F("VMode = ")); Serial.println(ui->vmode);
-            cfg_is_updated = true;
-          }
-          if (V_Voice.isUpdated())
-          {
-            ui->voice = atoi(V_Voice.value());
-            Serial.print(F("Voice = ")); Serial.println(ui->voice);
-            cfg_is_updated = true;
-          }
-          if (V_AntiGhost.isUpdated())
-          {
-            ui->aghost = atoi(V_AntiGhost.value());
-            Serial.print(F("AntiGhost = ")); Serial.println(ui->aghost);
-            cfg_is_updated = true;
-          }
-          if (V_Filter.isUpdated())
-          {
-            ui->filter = atoi(V_Filter.value());
-            Serial.print(F("Filter = ")); Serial.println(ui->filter);
-            cfg_is_updated = true;
-          }
-          if (V_PowerSave.isUpdated())
-          {
-            ui->power_save = atoi(V_PowerSave.value());
-            Serial.print(F("PowerSave = ")); Serial.println(ui->power_save);
-            cfg_is_updated = true;
-          }
-          if (V_Team.isUpdated())
-          {
-            ui->team = strtoul(V_Team.value(), NULL, 16);
-            Serial.print(F("Team = ")); Serial.println(ui->team, HEX);
-            cfg_is_updated = true;
+          if (updated(V_Rotate, "Rotation"))          ui->rotate = cfg_val;
+          if (updated(V_Orientation, "Orientation"))  ui->orientation = cfg_val;
+          if (updated(V_AvDB, "AvDB"))                ui->adb = cfg_val;
+          if (updated(V_ID_Pref, "ID_Pref"))          ui->idpref = cfg_val;
+          if (updated(V_VMode, "VMode"))              ui->vmode = cfg_val;
+          if (updated(V_Voice, "Voice"))              ui->voice = cfg_val;
+          if (updated(V_AntiGhost, "AntiGhost"))      ui->aghost = cfg_val;
+          if (updated(V_Filter, "Filter"))            ui->filter = cfg_val;
+          if (updated(V_PowerSave, "PowerSave"))      ui->power_save = cfg_val;
+
+          if (ishexdigit(V_Team.value())) {
+              ui->team = strtoul(V_Team.value(), NULL, 16);
+              Serial.print(F("Team = ")); Serial.println(ui->team, HEX);
+              cfg_is_updated = true;
           }
 
-          if (cfg_is_updated) {
-            SoC->WDT_fini();
-            if (SoC->Bluetooth_ops) { SoC->Bluetooth_ops->fini(); }
-            EEPROM_store();
-            nmea_cfg_restart();
-          }
-        }
+          if (cfg_is_updated && atoi(V_Version.value()))
+              nmea_cfg_restart(true);
       }
+  }
 #endif /* USE_SKYVIEW_CFG */
 }
 #endif /* USE_NMEA_CFG */

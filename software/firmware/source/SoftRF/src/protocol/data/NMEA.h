@@ -31,20 +31,22 @@
 #define NMEA_BUFFER_SIZE    128
 #define NMEA_CALLSIGN_SIZE  (3 /* prefix */ + 1 /* _ */ + 6 /* ICAO */ + 1 /* EOL */)
 
-#define PSRFC_VERSION       1
-#define MAX_PSRFC_LEN       96
+#define PSRFX_VERSION       1
 
-#define PSRFD_VERSION       1
-#define MAX_PSRFD_LEN       96
+//#define PSRFC_VERSION       1
+//#define MAX_PSRFC_LEN       96
 
-#define PSRFF_VERSION       1
-#define MAX_PSRFF_LEN       96
+//#define PSRFD_VERSION       1
+//#define MAX_PSRFD_LEN       96
 
-#define PSRFS_VERSION       1
-#define MAX_PSRFS_LEN       96
+//#define PSRFF_VERSION       1
+//#define MAX_PSRFF_LEN       96
+
+//#define PSRFS_VERSION       1
+//#define MAX_PSRFS_LEN       96
 
 #define PSKVC_VERSION       1
-#define MAX_PSKVC_LEN       96
+//#define MAX_PSKVC_LEN       96
 
 void NMEA_setup(void);
 void NMEA_loop(void);
@@ -54,7 +56,9 @@ void NMEA_Position(void);
 void NMEA_Out(uint8_t, const char *, size_t, bool);
 void NMEA_Outs(bool, bool, const char *, size_t, bool);
 void NMEA_GGA(void);
-unsigned int NMEA_add_checksum(void);
+
+extern char NMEABuffer[NMEA_BUFFER_SIZE];
+unsigned int NMEA_add_checksum(char *buf=NMEABuffer);
 
 void sendPFLAJ();
 
@@ -63,7 +67,6 @@ int WiFi_transmit_TCP(const char *buf, size_t size);
 char *bytes2Hex(byte *, size_t);
 
 extern uint8_t NMEA_Source;
-extern char NMEABuffer[NMEA_BUFFER_SIZE];
 extern char GPGGA_Copy[NMEA_BUFFER_SIZE];
 extern bool has_serial2;
 extern bool rx1090found;
