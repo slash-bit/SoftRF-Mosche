@@ -428,10 +428,10 @@ void handleSettings() {
 <td align=right>\
 <select name='mode'>\
 <option %s value='%d'>Normal</option>\
-<!-- <option %s value='%d'>Tx/Rx Test</option> -->\
-<option %s value='%d'>Bridge</option>\
-<option %s value='%d'>UAV</option>\
+<option %s value='%d'>More NMEA</option>\
 <option %s value='%d'>GNSS Bridge</option>\
+<option %s value='%d'>UAV</option>\
+<option %s value='%d'>Bridge</option>\
 </select>\
 </td>\
 </tr>"),
@@ -439,11 +439,10 @@ void handleSettings() {
   (default_settings_used? "Warning: reverted to default settings" :
     "Restored user settings on boot")),
   (settings->mode == SOFTRF_MODE_NORMAL ? "selected" : "") , SOFTRF_MODE_NORMAL,
-  (settings->mode == SOFTRF_MODE_TXRX_TEST ? "selected" : ""), SOFTRF_MODE_TXRX_TEST,
-  (settings->mode == SOFTRF_MODE_BRIDGE ? "selected" : ""), SOFTRF_MODE_BRIDGE,
+  (settings->mode == SOFTRF_MODE_MORENMEA ? "selected" : "") , SOFTRF_MODE_MORENMEA,
+  (settings->mode == SOFTRF_MODE_GPSBRIDGE ? "selected" : ""), SOFTRF_MODE_GPSBRIDGE,
   (settings->mode == SOFTRF_MODE_UAV ? "selected" : ""), SOFTRF_MODE_UAV,
-  (settings->mode == SOFTRF_MODE_GPSBRIDGE ? "selected" : ""), SOFTRF_MODE_GPSBRIDGE
-/*  (settings->mode == SOFTRF_MODE_WATCHOUT ? "selected" : ""), SOFTRF_MODE_WATCHOUT, */
+  (settings->mode == SOFTRF_MODE_BRIDGE ? "selected" : ""), SOFTRF_MODE_BRIDGE
   );
 
   len = strlen(offset);
@@ -2055,6 +2054,7 @@ PSTR("<html>\
 <tr><th align=left>NMEA2 Debug</th><td align=right>%s</td></tr>\
 <tr><th align=left>NMEA2 External</th><td align=right>%s</td></tr>\
 <tr><th align=left>ADS-B Receiver</th><td align=right>%d</td></tr>\
+<tr><th align=left>Mode S</th><td align=right>%d</td></tr>\
 <tr><th align=left>GDL90 in</th><td align=right>%d</td></tr>\
 <tr><th align=left>GDL90 out</th><td align=right>%d</td></tr>\
 <tr><th align=left>DUMP1090</th><td align=right>%d</td></tr>\
@@ -2064,10 +2064,11 @@ PSTR("<html>\
 <tr><th align=left>Power save</th><td align=right>%d</td></tr>\
 <tr><th align=left>Power external</th><td align=right>%d</td></tr>\
 <tr><th align=left>Freq. correction</th><td align=right>%d</td></tr>\
-<tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
 <tr><th align=left>Ext GNSS</th><td align=right>%d</td></tr>\
 <tr><th align=left>PPS wire</th><td align=right>%d</td></tr>\
+<tr><th align=left>Geoid Sep</th><td align=right>%d</td></tr>\
 <tr><th align=left>SD card</th><td align=right>%d</td></tr>\
+<tr><th align=left>Alarm Log</th><td align=right>%d</td></tr>\
 <tr><th align=left>debug_flags</th><td align=right>%02X</td></tr>\
 <tr><th align=left>IGC key</th><td align=right>%08X%08X%08X%08X</td></tr>\
 </table>\
@@ -2089,10 +2090,11 @@ PSTR("<html>\
     settings->nmea_out2,
     BOOL_STR(settings->nmea2_g), BOOL_STR(settings->nmea2_p), BOOL_STR(settings->nmea2_l),
     BOOL_STR(settings->nmea2_s), BOOL_STR(settings->nmea2_d), BOOL_STR(settings->nmea2_e),
-    settings->rx1090, settings->gdl90_in, settings->gdl90, settings->d1090,
+    settings->rx1090, settings->mode_s, settings->gdl90_in, settings->gdl90, settings->d1090,
     settings->relay, BOOL_STR(settings->stealth), BOOL_STR(settings->no_track),
-    settings->power_save, settings->power_external, settings->freq_corr, settings->logalarms,
-    settings->gnss_pins, settings->ppswire, settings->sd_card, settings->debug_flags,
+    settings->power_save, settings->power_external, settings->freq_corr,
+    settings->gnss_pins, settings->ppswire, geoid_from_setting,
+    settings->sd_card, settings->logalarms, settings->debug_flags,
   //  settings->igc_key[0], settings->igc_key[1], settings->igc_key[2], settings->igc_key[3]
     (settings->igc_key[0]? 0x88888888 : 0),
     (settings->igc_key[1]? 0x88888888 : 0),
