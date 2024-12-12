@@ -75,7 +75,7 @@ void ogntp_fini()
 
 }
 
-bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
+bool ogntp_decode(void *pkt, container_t *this_aircraft, ufo_t *fop) {
 
   uint32_t *key = settings->igc_key;
 
@@ -152,7 +152,7 @@ bool ogntp_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   return true;
 }
 
-size_t ogntp_encode(void *pkt, ufo_t *this_aircraft) {
+size_t ogntp_encode(void *pkt, container_t *this_aircraft) {
 
   uint32_t *key = settings->igc_key;
 

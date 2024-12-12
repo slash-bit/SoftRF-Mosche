@@ -116,7 +116,7 @@ void onEvent (ev_t ev) {
 
 eeprom_t eeprom_block;
 settings_t *settings = &eeprom_block.field.settings;
-ufo_t ThisAircraft;
+container_t ThisAircraft;
 
 #if !defined(EXCLUDE_MAVLINK)
 aircraft the_aircraft;
@@ -787,7 +787,7 @@ void relay_loop()
       size_t size = RF_Payload_Size(settings->rf_protocol);
       size = size > sizeof(Container[i].raw) ? sizeof(Container[i].raw) : size;
 
-      if (memcmp (Container[i].raw, EmptyFO.raw, size) != 0) {
+      if (memcmp (Container[i].raw, EmptyFO.raw, size) != 0) {   // <<< TBD this needs work
         // Raw data
         size_t tx_size = sizeof(TxBuffer) > size ? size : sizeof(TxBuffer);
         memcpy(TxBuffer, Container[i].raw, tx_size);
@@ -799,7 +799,8 @@ void relay_loop()
             String str = Bin2Hex(TxBuffer, tx_size);
             printf("%s\n", str.c_str());
 #endif
-            Container[i] = EmptyFO;
+            //Container[i] = EmptyFO;
+            EmptyFO(&Container[i]);
           }
         }
       } else if (isValidFix() &&
@@ -824,7 +825,8 @@ void relay_loop()
               (int) fo.vs,
               fo.aircraft_type);
 #endif
-          Container[i] = EmptyFO;
+          //Container[i] = EmptyFO;
+          EmptyFO(&Container[i]);
         }
       }
     }

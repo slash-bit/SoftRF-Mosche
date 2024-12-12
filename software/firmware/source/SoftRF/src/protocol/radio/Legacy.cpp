@@ -250,7 +250,7 @@ int descale( unsigned int value, unsigned int mbits, unsigned int ebits, unsigne
 
 // interpret the data fields in the 2024 protocol packet
 //     https://pastebin.com/YB1ppAbt
-bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
+bool latest_decode(void* buffer, container_t* this_aircraft, ufo_t* fop)
 {
     //uint32_t timestamp = (uint32_t) this_aircraft->timestamp;
     //uint32_t timestamp = (uint32_t) OurTime;
@@ -265,7 +265,7 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
           timestamp, fop->addr,
           bytes2Hex((byte *)buffer, sizeof (latest_packet_t)));
         //Serial.print(NMEABuffer);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
       }
     }
 #endif
@@ -287,7 +287,7 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
             timestamp, fop->addr,
             bytes2Hex((byte *)pkt, sizeof (latest_packet_t)));
           //Serial.print(NMEABuffer);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          NMEAOutD();
           if ((timestamp & 0x0F) != pkt->timebits)
               Serial.println("timestamp != timebits");   // local & remote time out of sync
         }
@@ -320,12 +320,17 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
         return false;
     }
 
-    fop->protocol = RF_PROTOCOL_LATEST;
-
     //fop->timestamp = timestamp;
     //fop->gnsstime_ms = millis();
 
     fop->airborne = (pkt->airborne > 1);
+    // no need to do this here since airborne only relayed in old protocol:
+    //if (fop->relayed && fop->airborne) {
+    //    fop->protocol = RF_PROTOCOL_ADSB_1090;
+    //    fop->tx_type  = TX_TYPE_TISB;
+    //} else
+    fop->protocol = RF_PROTOCOL_LATEST;
+
     fop->stealth   = pkt->stealth;
     fop->no_track  = pkt->no_track;
     fop->aircraft_type = pkt->aircraft_type;
@@ -398,12 +403,12 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRFL,%ld,%06X,%.6f,%.6f,%.0f\r\n"),
           timestamp, fop->addr, fop->latitude, fop->longitude, fop->altitude);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
         /* mystery fields in packet */
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSRFX,%ld,%06X,%d,%d,%d,%d,%d,%d\r\n"),
           timestamp, fop->addr, turnrate, speed10, vs10, course, pkt->airborne, pkt->unk8);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
         if (settings->debug_flags & DEBUG_DEEPER) {
           /* also output ownship data */
           float speedf = this_aircraft->speed * _GPS_MPS_PER_KNOT; /* m/s */
@@ -413,7 +418,7 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
             timestamp, fop->addr,
             this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
             speedf, this_aircraft->course, this_aircraft->turnrate, fvs10);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          NMEAOutD();
         }
       }
     }
@@ -431,7 +436,7 @@ bool latest_decode(void* buffer, ufo_t* this_aircraft, ufo_t* fop)
     return true;
 }
 
-bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
+bool legacy_decode(void *buffer, container_t *this_aircraft, ufo_t *fop) {
 
     legacy_packet_t *pkt = (legacy_packet_t *) buffer;
 
@@ -440,18 +445,19 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     if (fop->addr == settings->ignore_id)
          return false;                 /* ID told in settings to ignore */
 
-    if (fop->addr == ThisAircraft.addr) {
+    if (fop->addr == ThisAircraft.addr && (! landed_out_mode)) {
          Serial.println("warning: received same ID as this aircraft");
          return false;
     }
+    // but if "seeing itself" is via requested relay, show it
 
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr == fop->addr) {
         if (RF_last_crc != 0 && RF_last_crc == Container[i].last_crc) {
           //Serial.println("duplicate packet");      // usually duplicated in 2nd time slot
           return false;
-          //break;
         }
+        break;
       }
     }
     fop->last_crc = RF_last_crc;
@@ -470,6 +476,8 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
         pkt->addr_type &= 3;
     }
     fop->addr_type = pkt->addr_type;
+    // fop->landed_out = pkt->_unk1;
+        // - if we switch to this instead of using aircraft_type==0 to mark landed-out
 
     if (pkt->msg_type == 2)
         return latest_decode(buffer, this_aircraft, fop);
@@ -497,8 +505,6 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
           Serial.println(F("$PSRFE,bad parity of decrypted packet"));
         return false;
     }
-
-    fop->protocol = RF_PROTOCOL_LEGACY;
 
     uint8_t unk2 = pkt->_unk2;
 
@@ -531,10 +537,14 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     }
 
     uint8_t smult = pkt->smult;
-    float nsf = (float) (((int16_t) pkt->ns[0]) << smult);      /* quarter-meters per sec */
-    float ewf = (float) (((int16_t) pkt->ew[0]) << smult);
-    float course = atan2_approx(nsf, ewf);
-    float speed4 = approxHypotenuse(nsf, ewf);
+    //float nsf = (float) (((int16_t) pkt->ns[0]) << smult);      /* quarter-meters per sec */
+    //float ewf = (float) (((int16_t) pkt->ew[0]) << smult);
+    //float course = atan2_approx(nsf, ewf);
+    //float speed4 = approxHypotenuse(nsf, ewf);
+    int nsi = (((int) pkt->ns[0]) << smult);             // quarter-meters per sec
+    int ewi = (((int) pkt->ew[0]) << smult);
+    float course = (float) iatan2_approx(nsi, ewi);
+    float speed4 = (float) iapproxHypotenuse1(nsi, ewi);
     float interval, factor;
     if (pkt->aircraft_type == AIRCRAFT_TYPE_TOWPLANE) {      // known 4-second intervals
         //interval = 4.0;
@@ -554,7 +564,7 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     }
     float turnrate = 0;
     if (speed4 > 0) {
-      float nextcourse = atan2_approx((float) pkt->ns[1], (float) pkt->ew[1]);
+      float nextcourse = (float) iatan2_approx(pkt->ns[1], pkt->ew[1]);
       float turnangle = (nextcourse - course);
       if (turnangle >  270.0) turnangle -= 360.0;
       if (turnangle < -270.0) turnangle += 360.0;
@@ -574,6 +584,13 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     int16_t alt = pkt->alt ; /* relative to WGS84 ellipsoid */
 
     fop->airborne = pkt->airborne;
+    if (fop->relayed && fop->airborne) {
+        //fop->protocol = RF_PROTOCOL_ADSB_1090;   // assumption
+        fop->protocol = RF_PROTOCOL_LEGACY;
+        fop->tx_type  = TX_TYPE_TISB;            // not really, but implies delayed second-hand report
+    } else {
+        fop->protocol = RF_PROTOCOL_LEGACY;
+    }
 
     /* FLARM sometimes sends packets with implausible data */
     if (fop->airborne == 0 && (vs10 > 150 || vs10 < -150))
@@ -616,7 +633,6 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
     //fop->fla_ns[1] = ((int16_t) pkt->ns[1]) << smult;
     //fop->fla_ew[0] = ((int16_t) pkt->ew[0]) << smult;
     //fop->fla_ew[1] = ((int16_t) pkt->ew[1]) << smult;
-    fop->projtime_ms = fop->gnsstime_ms;
 
 #if 0
     /* send received radio packet data out via NMEA for debugging */
@@ -634,13 +650,13 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
           fop->latitude, fop->longitude, fop->altitude,
           course, turnrate, vs10, smult, fop->airborne, unk2,
           ns[0], ns[1], ns[2], ns[3], ew[0], ew[1], ew[2], ew[3]);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
         if (settings->debug_flags & DEBUG_DEEPER) {
           /* also output the raw (but decrypted) packet as a whole, in hex */
           snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFB,%06X,%ld,%s\r\n"),
             fop->addr, timestamp,
             bytes2Hex((byte *)pkt, sizeof (legacy_packet_t)));
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          NMEAOutD();
         }
       }
     }
@@ -650,7 +666,7 @@ bool legacy_decode(void *buffer, ufo_t *this_aircraft, ufo_t *fop) {
 }
 
 // fill in the data fields in the new 2024 protocol packet
-size_t latest_encode(void *pkt_buffer, ufo_t *aircraft)
+size_t latest_encode(void *pkt_buffer, container_t *aircraft)
 {
     latest_packet_t *pkt = (latest_packet_t *) pkt_buffer;
 
@@ -681,7 +697,9 @@ Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
     uint8_t aircraft_type = aircraft->aircraft_type;
     if (aircraft != &ThisAircraft
            && aircraft_type == AIRCRAFT_TYPE_UNKNOWN)  // relaying landed-out traffic
+        // && aircraft->landed_out)
         aircraft_type == AIRCRAFT_TYPE_GLIDER;         // assumption
+        // (skip)
     if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
         aircraft_type = AIRCRAFT_TYPE_STATIC;
         pkt->airborne = 2;
@@ -753,7 +771,7 @@ Serial.printf("RF_time=%d but should be %d\r\n", (uint32_t) RF_time, timestamp);
     return (sizeof(latest_packet_t));
 }
 
-size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
+size_t legacy_encode(void *pkt_buffer, container_t *aircraft)
 {
     legacy_packet_t *pkt = (legacy_packet_t *) pkt_buffer;
 
@@ -763,6 +781,7 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     bool relay = (aircraft != &ThisAircraft);  // aircraft is some other aircraft
     bool relay_landed_out = relay &&
             aircraft->airborne==0 && aircraft->aircraft_type==AIRCRAFT_TYPE_UNKNOWN;
+    //      aircraft->landed_out;
 
     if (relay)
         pkt->addr_type = aircraft->addr_type | 4;  // marks as a relayed packet
@@ -851,13 +870,18 @@ size_t legacy_encode(void *pkt_buffer, ufo_t *aircraft)
     pkt->vs = vs10 >> smult;
 
     pkt->stealth = aircraft->stealth;
-    pkt->no_track = aircraft->no_track;
+    if (aircraft->tx_type < TX_TYPE_FLARM)     // if relaying ADS-B
+        pkt->no_track = 1;                     // then hide from OGN
+    else
+        pkt->no_track = aircraft->no_track;
 
     uint8_t aircraft_type = aircraft->aircraft_type;
     if (landed_out_mode)
         aircraft_type = AIRCRAFT_TYPE_UNKNOWN;    // marking ourself as landed-out
+        // pkt->_unk1 = 1;
     else if (relay_landed_out)
         aircraft_type = AIRCRAFT_TYPE_GLIDER;     // assumption
+        // (skip)
     else if (aircraft_type == AIRCRAFT_TYPE_WINCH) {
         aircraft_type = AIRCRAFT_TYPE_STATIC;
         pkt->airborne = 1;

@@ -106,7 +106,7 @@ typedef struct {
 
 extern const rf_proto_desc_t fanet_proto_desc;
 
-bool fanet_decode(void *, ufo_t *, ufo_t *);
-size_t fanet_encode(void *, ufo_t *);
+bool fanet_decode(void *, container_t *, ufo_t *);
+size_t fanet_encode(void *, container_t *);
 
 #endif /* PROTOCOL_FANET_H */

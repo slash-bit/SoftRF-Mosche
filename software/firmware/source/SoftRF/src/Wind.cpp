@@ -21,6 +21,7 @@
 #include "protocol/radio/Legacy.h"
 #include "protocol/data/NMEA.h"
 #include "protocol/data/IGC.h"
+#include "protocol/data/GNS5892.h"
 #include "ApproxMath.h"
 #include "Wind.h"
 #include "driver/EEPROM.h"
@@ -418,7 +419,7 @@ FlightLogComment(NMEABuffer);
         gnsstime_ms, ThisAircraft.speed, avg_speed, ThisAircraft.course,
         ThisAircraft.turnrate, ThisAircraft.circling*avg_abs_turnrate, min_gs_course, max_gs_course,
         weight_gs, wind_ns, wind_ew, wind_best_ns, wind_best_ew);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
 #if defined(USE_SD_CARD)
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("WGS,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.2f,%.1f,%.1f,%.1f,%.1f\r\n"),
@@ -434,7 +435,7 @@ FlightLogComment(NMEABuffer);
         gnsstime_ms, ThisAircraft.latitude, ThisAircraft.longitude,
         ThisAircraft.speed, ThisAircraft.course, ThisAircraft.turnrate,
         interval, drift_ns, weight_ns, wind_ns, wind_best_ns, wind_best_ew);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
 #if defined(USE_SD_CARD)
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("WNS,%.0f,%.1f,%.3f,%.1f,%.1f,%.1f\r\n"),
@@ -448,7 +449,7 @@ FlightLogComment(NMEABuffer);
         gnsstime_ms, ThisAircraft.latitude, ThisAircraft.longitude,
         ThisAircraft.speed, ThisAircraft.course, ThisAircraft.turnrate,
         interval, drift_ew, weight_ew, wind_ew, wind_best_ns, wind_best_ew);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
 #if defined(USE_SD_CARD)
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("WEW,%.0f,%.1f,%.3f,%.1f,%.1f,%.1f\r\n"),
@@ -458,7 +459,7 @@ FlightLogComment(NMEABuffer);
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("$PSWSD,%.1f,%.0f\r\n"),
         wind_speed * (1.0 / _GPS_MPS_PER_KNOT), wind_direction);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
 #if defined(USE_SD_CARD)
       snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("WSD,%.1f,%.0f\r\n"),
@@ -559,44 +560,15 @@ void this_airborne()
       airborne_changed = true;
       AirborneTime = RF_time;
 #if defined(ESP32)
-      // restart alarm log on first takeoff after boot
-      if (AlarmLogOpen==false && settings->logalarms) {
-        //if (SPIFFS.begin(true)) {
-          bool append = false;
-          if (SPIFFS.exists("/alarmlog.txt") && SPIFFS.totalBytes() - SPIFFS.usedBytes() > 10000)
-              append = true;
-          AlarmLog = SPIFFS.open("/alarmlog.txt", (append? FILE_APPEND : FILE_WRITE));
-          if (AlarmLog) {
-              AlarmLogOpen = true;
-              if (append == false) {
-                const char *p = "date,time,lat,lon,level,count,ID,relbrg,hdist,vdist\r\n";
-                AlarmLog.write((const uint8_t *)p, strlen(p));
-              }
-          } else {
-              Serial.println(F("Failed to open alarmlog.txt"));
-          }
-        //} else {
-        //    Serial.println(F("Failed to start SPIFFS"));
-        //}
-      }
-#if defined(USE_SD_CARD)
-      if (settings->logflight == FLIGHT_LOG_AIRBORNE
-       || settings->logflight == FLIGHT_LOG_TRAFFIC)
-          openFlightLog();
-#endif
+      startlogs();      // restart alarm log (and flight log) on first takeoff after boot
 #endif
     } else if (ThisAircraft.airborne==1 && airborne<=0) {
       airborne_changed = true;
       AirborneTime = 0;
 #if defined(ESP32)
-      // close the alarm log and flight log after landing
-      AlarmLog.close();
-      AlarmLogOpen = false;
-#if defined(USE_SD_CARD)
-      if (settings->logflight == FLIGHT_LOG_AIRBORNE
-       || settings->logflight == FLIGHT_LOG_TRAFFIC)
-          closeFlightLog();
-#endif
+      if (settings->rx1090)
+          save_zone_stats();  // do this first as it will append comments to IGC file
+      stoplogs();             // close the alarm log and flight log after landing
 #endif
     }
 
@@ -612,7 +584,7 @@ void this_airborne()
         snprintf_P(NMEABuffer, sizeof(NMEABuffer),
           PSTR("$PSTAA,this_airborne: %d, %.1f, %.5f, %.5f, %.0f\r\n"),
             airborne, speed, ThisAircraft.latitude, ThisAircraft.longitude, ThisAircraft.altitude);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
 #if defined(USE_SD_CARD)
         //int nmealen = strlen(NMEABuffer) - 2;   // overwrite existing \r\n
         //snprintf_P(NMEABuffer+nmealen, sizeof(NMEABuffer)-nmealen, " at %02d:%02d:%02d\r\n",
@@ -633,7 +605,7 @@ void this_airborne()
 }
 
 
-void report_this_projection(ufo_t *this_aircraft, int proj_type)
+void report_this_projection(container_t *this_aircraft, int proj_type)
 {
 #if 0
     if (proj_type==1)
@@ -671,7 +643,7 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
         this_aircraft->prevheading, this_aircraft->turnrate, this_aircraft->circling,
         this_aircraft->air_ns[0], this_aircraft->air_ew[0],
         this_aircraft->air_ns[1], this_aircraft->air_ew[1]);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
 #if defined(USE_SD_CARD)
       static uint8_t counter;
       ++counter;
@@ -684,7 +656,7 @@ void report_this_projection(ufo_t *this_aircraft, int proj_type)
     }
 }
 
-void report_that_projection(ufo_t *fop, int proj_type)
+void report_that_projection(container_t *fop, int proj_type)
 {
 #if 0
     Serial.printf("that_proj: %d %.0f %.1f %.0f %.1f %d %d %d %d %d %d\r\n",
@@ -699,7 +671,7 @@ void report_that_projection(ufo_t *fop, int proj_type)
           proj_type, fop->course, fop->speed, fop->heading, fop->turnrate,
           fop->air_ns[0], fop->air_ew[0],
           fop->air_ns[1], fop->air_ew[1]);
-        NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+        NMEAOutD();
 #if defined(USE_SD_CARD)
       static uint8_t counter;
       ++counter;
@@ -714,7 +686,7 @@ void report_that_projection(ufo_t *fop, int proj_type)
 /*
  * Project the future path of this_aircraft into some future time points.
  */
-void project_this(ufo_t *this_aircraft)
+void project_this(container_t *this_aircraft)
 {
     int i, endturn;
     int16_t ns, ew;
@@ -1009,11 +981,12 @@ void project_this(ufo_t *this_aircraft)
 /*
  * Project the future path of other aircraft into some future time points.
  */
-void project_that(ufo_t *fop)
+void project_that(container_t *fop)
 {
     int i, endturn;
     float aspeed, gspeed, course, heading, aturnrate;
-    float gs_ns, gs_ew, as_ns, as_ew, windangle;
+    float gs_ns, gs_ew, windangle;  // as_ns, as_ew
+    int as_ns, as_ew;
     int16_t ns, ew;
     bool report = false;
 
@@ -1078,18 +1051,18 @@ To compute the correct air-reference circling path:
 */
       float dir_now = fop->course;            // already computed in legacy_decode()
       float dir_chg = 3.0 * fop->turnrate;    // internally we use 3-second intervals
-      gspeed = fop->speed * (4.0 * _GPS_MPS_PER_KNOT);   /* quarter-meters per sec */
+      gspeed = fop->speed * (4.0 * _GPS_MPS_PER_KNOT);   // quarter-meters per sec
       gs_ns = gspeed * cos_approx(dir_now);
       gs_ew = gspeed * sin_approx(dir_now);     /* present ground-speed vector */
-      as_ns = gs_ns - 4*wind_best_ns;
-      as_ew = gs_ew - 4*wind_best_ew;           /* present air-speed vector */
-      heading = atan2_approx(as_ns, as_ew);
-      aspeed = approxHypotenuse(as_ns, as_ew);
+      as_ns = (int) (gs_ns - (4.0 * wind_best_ns));
+      as_ew = (int) (gs_ew - (4.0 * wind_best_ew));   /* present air-speed vector */
+      heading = (float) iatan2_approx(as_ns, as_ew);
+      aspeed = (float) iapproxHypotenuse1(as_ns, as_ew);  // quarter-meters per sec
       windangle = dir_now - wind_direction;
       if (windangle > 0)  windangle -= 180.0;         /* angle from DOWNwind */
       else                windangle += 180.0;
-      if (wind_speed > 1.0 && aspeed > 2.0)
-          dir_chg *= (1.0 + cos_approx(windangle) * wind_speed / aspeed);
+      if (wind_speed > 1.0 && aspeed > 4.0)
+          dir_chg *= (1.0 + cos_approx(windangle) * 4.0 * wind_speed / aspeed);
       /* this makes air-ref turnrate smaller than the ground-ref turnrate
          when heading upwind, and vice versa */
 
@@ -1148,14 +1121,14 @@ To compute the correct air-reference circling path:
       //if (settings->alarm != TRAFFIC_ALARM_LEGACY)  // don't need more than the turn rate
       //    return;
 
-      gspeed = fop->speed * _GPS_MPS_PER_KNOT;
+      gspeed = fop->speed * (4.0 * _GPS_MPS_PER_KNOT);   // quarter-meters per sec
 
       /* compute heading from course and speed and last wind estimate */
       float nsf = gspeed * cos_approx(fop->course);
       float ewf = gspeed * sin_approx(fop->course);
       int16_t ns, ew;
-      ns = (int16_t) roundf(4.0 * (nsf - wind_best_ns));
-      ew = (int16_t) roundf(4.0 * (ewf - wind_best_ew));
+      ns = (int16_t) roundf(nsf - wind_best_ns);
+      ew = (int16_t) roundf(ewf - wind_best_ew);
 
       /* project a straight line */
       for (i=0; i<6; i++) {
@@ -1166,8 +1139,8 @@ To compute the correct air-reference circling path:
       if (report) report_that_projection(fop, 2);
 
       // also fill in fla[] for air_relay
-      ns = (int16_t) roundf(4.0 * nsf);
-      ew = (int16_t) roundf(4.0 * ewf);
+      ns = (int16_t) roundf(nsf);
+      ew = (int16_t) roundf(ewf);
       for (i=0; i<4; i++) {
         fop->fla_ns[i] = ns;
         fop->fla_ew[i] = ew;
@@ -1180,7 +1153,7 @@ To compute the correct air-reference circling path:
     /* have history - compute turn rate - degrees per second */
     /* uses current and previous course and time_ms */
 
-    gspeed = fop->speed * _GPS_MPS_PER_KNOT;   /* ground speed */
+    gspeed = fop->speed * (4.0 * _GPS_MPS_PER_KNOT);   // ground speed - quarter-meters per sec
     course = fop->course;
 
     /* previous heading from past course and speed and wind */
@@ -1189,13 +1162,13 @@ To compute the correct air-reference circling path:
     /* same for current time point */
     float nsf = gspeed * cos_approx(fop->course);
     float ewf = gspeed * sin_approx(fop->course);
-    as_ns = nsf - wind_best_ns;
-    as_ew = ewf - wind_best_ew;
-    heading = atan2_approx(as_ns, as_ew);
+    as_ns = (int) (nsf - (4.0 * wind_best_ns));
+    as_ew = (int) (ewf - (4.0 * wind_best_ew));
+    heading = (float) iatan2_approx(as_ns, as_ew);
     if (heading >  360.0) heading -= 360.0;
     if (heading < -360.0) heading += 360.0;
     fop->heading = heading;                      /* will be carried over into prevheading */
-    aspeed = approxHypotenuse(as_ns, as_ew);     /* air speed */
+    aspeed = (float) iapproxHypotenuse1(as_ns, as_ew);   // air speed - quarter-mps
 
     /* turn rate in the air reference frame (drifting with the wind) */
     float heading_change = heading - prevheading;
@@ -1224,8 +1197,8 @@ To compute the correct air-reference circling path:
 
     if (fabs(aturnrate) < 2.0) {   /* hardly turning - treat it as not turning at all */
 
-      ns = (int16_t) roundf(4.0 * as_ns);
-      ew = (int16_t) roundf(4.0 * as_ew);
+      ns = (int16_t) as_ns;
+      ew = (int16_t) as_ew;
       for (i=0; i<6; i++) {
         fop->air_ns[i] = ns;
         fop->air_ew[i] = ew;
@@ -1273,8 +1246,8 @@ To compute the correct air-reference circling path:
         if (i < endturn) {
             if (heading >  360.0) heading -= 360.0;
             if (heading < -360.0) heading += 360.0;
-            ns = (int16_t) roundf(4.0 * aspeed * cos_approx(heading));
-            ew = (int16_t) roundf(4.0 * aspeed * sin_approx(heading));
+            ns = (int16_t) roundf(aspeed * cos_approx(heading));
+            ew = (int16_t) roundf(aspeed * sin_approx(heading));
             heading += dir_chg;
         }
         fop->air_ns[i] = ns;
@@ -1312,7 +1285,7 @@ float Estimate_Climbrate(void)
             snprintf_P(NMEABuffer, sizeof(NMEABuffer),
                PSTR("$PSWCR,%.0f,%.0f,%.0f,%d,%d\r\n"), avg_climbrate,
                  ThisAircraft.altitude, ThisAircraft.prevaltitude, ThisAircraft.gnsstime_ms, ThisAircraft.prevtime_ms);
-            NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+            NMEAOutD();
         }
     }
 

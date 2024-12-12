@@ -1466,8 +1466,6 @@ bool leap_seconds_valid()
 
 bool isValidGNSSFix()
 {
-  //if (settings->debug_flags & DEBUG_SIMULATE)
-  //    return true;   // for testing
   if (! GNSS_fix_cache)
       return false;
   return true;
@@ -1492,6 +1490,20 @@ byte GNSS_setup() {
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 8 */)
       is_prime_mk2 = true;
 
+  //gnss_id_t gnss_id = GNSS_MODULE_NONE;
+
+#if defined(USE_SD_CARD)
+  if ((! is_prime_mk2) || (settings->debug_flags & DEBUG_SIMULATE) == 0
+      || ((! SIMfileOpen) && (settings->gnss_pins != EXT_GNSS_NONE))) {
+         // this assumes SD_setup() is called before GNSS_setup()
+#else
+  if ((! is_prime_mk2) || (settings->debug_flags & DEBUG_SIMULATE) == 0
+      || (settings->gnss_pins != EXT_GNSS_NONE)) {
+#endif
+      SoC->swSer_begin(SERIAL_IN_BR);
+      delay(500);  // added to make sure swSer is ready
+  }
+
   if (is_prime_mk2 && settings->debug_flags & DEBUG_SIMULATE) {
       const char *psrf_p = "PFSIM";
       int term_num = 1;
@@ -1510,11 +1522,6 @@ byte GNSS_setup() {
       gnss_chip = &generic_nmea_ops;
       return GNSS_MODULE_NMEA;
   }
-
-  //gnss_id_t gnss_id = GNSS_MODULE_NONE;
-
-  SoC->swSer_begin(SERIAL_IN_BR);
-  delay(500);  // added to make sure swSer is ready
 
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 ||
       hw_info.model == SOFTRF_MODEL_PRIME_MK3 ||
@@ -1774,7 +1781,8 @@ void add_pfsim_traffic()
     }
     if (pfsim.hms > gnss_hms)    // too early
         return;
-    fo = EmptyFO;
+    //fo = EmptyFO;
+    EmptyFO(&fo);
     fo.protocol = RF_PROTOCOL_LATEST;
     fo.addr_type = pfsim.addrtype;
     fo.timestamp = OurTime;
@@ -1790,12 +1798,8 @@ void add_pfsim_traffic()
     fo.aircraft_type = pfsim.actype;
     fo.airborne = 1;
     fo.circling = (fo.turnrate < 10.0) ? -1 : ((fo.turnrate > 10.0) ? 1 : 0);
-    fo.callsign[0] = 'S';
-    fo.callsign[1] = 'I';
-    fo.callsign[2] = 'M';
-    //fo.callsign[3] = '\0';
     fo.tx_type = TX_TYPE_FLARM;
-    AddTraffic(&fo);
+    AddTraffic(&fo, "SIM");
     pfsim.waiting = false;
 }
 
@@ -1854,16 +1858,23 @@ uint8_t Try_GNSS_sentence() {
     char *gb = (char *) &GNSSbuf[ndx];
     ndx = sizeof(GNSSbuf)-2;             // anticipating next sentence
 
-    if (gb[1]!='G' && gb[1]!='P')
+    bool is_g = (gb[1]=='G');
+    bool is_p = (gb[1]=='P');
+    if (!is_g && !is_p)
         return 0;        // neither GNSS sentence nor SoftRF sentence
-    if (gb[1]=='P' && gb[2]=='G')
+    if (is_p && gb[2]=='G')
         return 0;        // ignore $PGRMZ
     if (gb[6] != ',')
         return 0;        // not $GPGGA, $GPRMC, etc nor $PFSIM, $PSRF* or $PSKVC
 
-    bool is_gga = (gb[1]=='G' && gb[3]=='G' && gb[4]=='G' && gb[5]=='A');
-    if (! is_gga) {
-        if (gb[1]=='P' && gb[3]=='S' && gb[4]=='I' && gb[5]=='M') {
+    if (is_p) {
+        if (gb[2]=='S' && ((gb[3]=='R' && gb[4]=='F') || (gb[3]=='K' && gb[4]=='V'))) {
+            NMEA_Process_SRF_SKV_Sentences();
+            GNSSbuf[GNSS_cnt+1] = '\0';
+            Serial.println(gb);
+            return 2;
+        }
+        if (gb[2]=='F' && gb[3]=='S' && gb[4]=='I' && gb[5]=='M') {
             process_pfsim_sentence();
             GNSSbuf[GNSS_cnt+1] = '\0';
             Serial.println(gb);
@@ -1871,12 +1882,13 @@ uint8_t Try_GNSS_sentence() {
         }
     }
 
+    bool is_gga = (is_g && gb[3]=='G' && gb[4]=='G' && gb[5]=='A');
     uint32_t now_ms = millis();
     if (now_ms > prev_fix_ms + 600) {           // expect one fix per second
       gnss_new_fix = gnss_new_time = false;     // withdraw what was not consumed
       bool is_rmc = false;
       if (! is_gga)
-          is_rmc = (gb[1]=='G' && gb[3]=='R' && gb[4]=='M' && gb[5]=='C');
+          is_rmc = (is_g && gb[3]=='R' && gb[4]=='M' && gb[5]=='C');
       if ((is_gga && new_gga_ms != 0) || (is_rmc && new_rmc_ms != 0)
                  || (latest_Commit_Time != 0 && now_ms > latest_Commit_Time + 600)) {
           // other sentence failed to arrive within same second - start over
@@ -1979,8 +1991,6 @@ void PickGNSSFix()
       if (TARGETfileOpen && GNSS_cnt == 0) {
         add_pfsim_traffic();   // if any waiting and its time has arrived
         while (! pfsim.waiting) {
-          //if (millis() < next_burst)     // pause until next simulated second
-          //  break;
           if (!TARGETfile.available()) {
             GNSS_cnt = 0;
             break;
@@ -2005,22 +2015,28 @@ void PickGNSSFix()
       static uint32_t burst_start = 0;
       static uint32_t next_burst = 40200;   // start sim running 40s after boot
 //Serial.printf("PickGNSSFix(): millis %d next_burst %d\r\n", millis(), next_burst);
+      bool ext_gnss = (settings->gnss_pins != EXT_GNSS_NONE);
       while (true) {
 #if defined(USE_SD_CARD)
         if (SIMfileOpen) {
-          if (millis() < next_burst)     // pause until next simulated second
-            return;
+          if (millis() < next_burst)        // ignore input until next simulated second
+              return;
           if (!SIMfile.available())
-            return;
+              return;
           c = SIMfile.read();
         } else
 #endif
         {
-          if (SerialOutput.available() <= 0)
-            return;
-          c = SerialOutput.read();
-          if (millis() < next_burst)     // discard input until next simulated second
-            return;
+          // let external source decide timing
+          if (ext_gnss) {                             // read from external GNSS port
+              if (Serial_GNSS_In.available() <= 0)
+                  return;
+              c = Serial_GNSS_In.read();
+          } else {                                    // read from USB port
+              if (SerialOutput.available() <= 0)
+                  return;
+              c = SerialOutput.read();
+          }
         }
         if (GNSS_cnt == 0) {
           SentenceType = 0;
@@ -2057,14 +2073,14 @@ void PickGNSSFix()
           //}
           if (c=='\n' || GNSS_cnt == sizeof(GNSSbuf)-1) {
             GNSS_cnt = 0;
-            if (SentenceType == 2)   // PFSIM
-                return;              // break to allow main loop to report
+            if (SentenceType)   // got valid sentence
+                return;              // break to allow main loop to run
           } else {
             GNSS_cnt++;
             yield();
           }
         }
-      }        // infinite loop unless !available() above, or pausing
+      }        // infinite loop unless !available() above, or pausing, or SentenceType == 2
       return;
     }
 

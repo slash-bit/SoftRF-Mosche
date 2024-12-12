@@ -253,6 +253,7 @@ void EEPROM_defaults(void);
 void EEPROM_store(void);
 void show_settings_serial(void);
 void do_test_mode(void);
+
 extern bool default_settings_used;
 extern settings_t *settings;
 extern uint32_t baudrates[];

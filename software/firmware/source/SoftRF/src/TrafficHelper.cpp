@@ -48,9 +48,73 @@ File AlarmLog;
 bool AlarmLogOpen = false;
 #endif
 
+void startlogs()
+{
+#if defined(ESP32)
+    // restart alarm log on first takeoff after boot
+    if (AlarmLogOpen==false && settings->logalarms) {
+      //if (SPIFFS.begin(true)) {
+        bool append = false;
+        if (SPIFFS.exists("/alarmlog.txt") && SPIFFS.totalBytes() - SPIFFS.usedBytes() > 10000)
+            append = true;
+        AlarmLog = SPIFFS.open("/alarmlog.txt", (append? FILE_APPEND : FILE_WRITE));
+        if (AlarmLog) {
+            AlarmLogOpen = true;
+            if (append == false) {
+              const char *p = "date,time,lat,lon,level,count,ID,relbrg,hdist,vdist\r\n";
+              AlarmLog.write((const uint8_t *)p, strlen(p));
+            }
+        } else {
+            Serial.println(F("Failed to open alarmlog.txt"));
+        }
+      //} else {
+      //    Serial.println(F("Failed to start SPIFFS"));
+      //}
+    }
+#if defined(USE_SD_CARD)
+    // also start this flight's SDlog with a banner:
+    int year   = gnss.date.year();
+    if( year > 99)  year = year - 2000;
+    int month  = gnss.date.month();
+    int day    = gnss.date.day();
+    int hour   = gnss.time.hour();
+    int minute = gnss.time.minute();
+    snprintf(NMEABuffer, sizeof(NMEABuffer),
+        "%02d/%02d/%02d %02d:%02d takeoff\r\n", year, month, day, hour, minute);
+    Serial.println(NMEABuffer);
+    SD_log(NMEABuffer);
+    // and, if flight-logging, start now:
+    if (settings->logflight == FLIGHT_LOG_AIRBORNE
+     || settings->logflight == FLIGHT_LOG_TRAFFIC) {
+        openFlightLog();
+    }
+#endif
+#endif
+}
+
+// close the alarm log and flight log after landing
+void stoplogs()
+{
+#if defined(ESP32)
+    AlarmLog.close();
+    AlarmLogOpen = false;
+#if defined(USE_SD_CARD)
+    if (settings->logflight == FLIGHT_LOG_AIRBORNE
+     || settings->logflight == FLIGHT_LOG_TRAFFIC)
+          closeFlightLog();
+#endif
+#endif
+}
+
 unsigned long UpdateTrafficTimeMarker = 0;
 
-ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
+container_t Container[MAX_TRACKING_OBJECTS]; // EmptyContainer;   // more fields
+ufo_t fo; // EmptyFO;                                             // fewer fields
+
+void EmptyContainer(container_t *p) { memset(p, 0, sizeof(CONTAINER)); }
+void EmptyFO(ufo_t *p) { memset(p, 0, sizeof(UFO)); }
+
+char fo_callsign[10];
 uint8_t fo_raw[34];
 traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 int max_alarm_level = ALARM_LEVEL_NONE;
@@ -59,13 +123,13 @@ bool relay_waiting = false;
 
 float average_baro_alt_diff = 0;
 
-static int8_t (*Alarm_Level)(ufo_t *, ufo_t *);
+static int8_t (*Alarm_Level)(container_t *, container_t *);
 
 static uint32_t Alarm_timer = 0;
 
 // Compute registration-number from ICAO ID - USA and Canada only
 
-static void icao_canadian(ufo_t *fop)
+static void icao_canadian(container_t *fop)
 {
     uint32_t icao = fop->addr;
     char *buf = (char *) fop->callsign;
@@ -87,10 +151,6 @@ static void icao_canadian(ufo_t *fop)
     buf[6] = '?';
     buf[7] = '\0';
     buf[9] = '?';
-if (settings->debug_flags & DEBUG_DEEPER) {
-Serial.print("computed registration: ");
-Serial.println(buf);
-}
 }
 
 // For USA based on:   https://github.com/guillaumemichel/icao-nnumber_converter
@@ -117,11 +177,11 @@ static void get_suffix(uint32_t offset, char *buf)
     return;
 }
 
-void icao_to_n(ufo_t *fop)
+void icao_to_n(container_t *fop)
 {
     if (fop->addr_type != ADDR_TYPE_ICAO)
         return;
-    if (settings->band != RF_BAND_US)   // this is only for US-registered aircraft
+    if (settings->band != RF_BAND_US)   // this is only for USA & Canada aircraft
         return;
     char *buf = (char *) fop->callsign;
     if (buf[0] != '\0' && buf[0] != ' ')        // already have a callsign
@@ -136,7 +196,7 @@ void icao_to_n(ufo_t *fop)
     buf[9] = '?';    // past the trailing null char, marks as computed, not received
     icao -= 0xA00001;
     buf[0] = 'N';
-    buf[1] = '\0';
+    //buf[1] = '\0';
     char *output = &buf[1];
     uint32_t dig, rem;
     dig = icao/bucket1_size;        // digit 1 minus 1
@@ -168,15 +228,13 @@ void icao_to_n(ufo_t *fop)
     *output++ = '?';       // this becomes part of the "callsign" string
     *output = '\0';
     }}}
-Serial.print("computed registration: ");
-Serial.println(buf);
 }
 
 /*
  * No any alarms issued by the firmware.
  * Rely upon high-level flight management software.
  */
-static int8_t Alarm_None(ufo_t *this_aircraft, ufo_t *fop)
+static int8_t Alarm_None(container_t *this_aircraft, container_t *fop)
 {
   return ALARM_LEVEL_NONE;
 }
@@ -184,7 +242,7 @@ static int8_t Alarm_None(ufo_t *this_aircraft, ufo_t *fop)
 /*
  * Adjust relative altitude for relative vertical speed.
  */
-float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
+float Adj_alt_diff(container_t *this_aircraft, container_t *fop)
 {
   float alt_diff = fop->alt_diff;           /* positive means fop is higher than this_aircraft */
   float vsr = fop->vs - this_aircraft->vs;  /* positive means fop is rising relative to this_aircraft */
@@ -212,7 +270,7 @@ float Adj_alt_diff(ufo_t *this_aircraft, ufo_t *fop)
 /*
  * Simple, distance based alarm level assignment.
  */
-static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
+static int8_t Alarm_Distance(container_t *this_aircraft, container_t *fop)
 {
   int8_t rval = ALARM_LEVEL_NONE;
 
@@ -248,10 +306,13 @@ static int8_t Alarm_Distance(ufo_t *this_aircraft, ufo_t *fop)
  *
  * Linear, CoG and GS based collision prediction.
  */
-static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
+static int8_t Alarm_Vector(container_t *this_aircraft, container_t *fop)
 {
   if (fop->tx_type <= TX_TYPE_S)
     return Alarm_Distance(this_aircraft, fop);    // non-directional target
+
+  if (fop->speed == 0)
+    return Alarm_Distance(this_aircraft, fop);    // ADS-B target with no velocity message yet
 
   int8_t rval = ALARM_LEVEL_NONE;
 
@@ -365,7 +426,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
       this_aircraft->latitude, this_aircraft->longitude, this_aircraft->altitude,
          this_aircraft->speed, this_aircraft->course,
       fop->latitude, fop->longitude, fop->altitude, fop->speed, fop->course);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+    NMEAOutD();
   }
 
   return rval;
@@ -384,7 +445,7 @@ static int8_t Alarm_Vector(ufo_t *this_aircraft, ufo_t *fop)
  * Either way, this algorithm assumes that circling aircraft will keep circling
  * for the relevant time period (the next 19 seconds).
  */
-static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
+static int8_t Alarm_Legacy(container_t *this_aircraft, container_t *fop)
 {
   if (fop->distance > 2*ALARM_ZONE_CLOSE) {    // 3km
     return ALARM_LEVEL_NONE;
@@ -394,8 +455,11 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
   if (fop->tx_type <= TX_TYPE_S)
     return Alarm_Distance(this_aircraft, fop);    // non-directional target
 
-  if (fop->tx_type == TX_TYPE_TISB)
-    return (Alarm_Vector(this_aircraft, fop));
+  if (fop->speed == 0)
+    return Alarm_Distance(this_aircraft, fop);    // ADS-B target with no velocity message yet
+
+  if (fop->tx_type == TX_TYPE_TISB || fop->relayed)
+    return (Alarm_Vector(this_aircraft, fop));    // data not timely enough for this algo
 
   float v2 = fop->speed + this_aircraft->speed;
   if (fop->distance > v2 * (ALARM_TIME_LOW * _GPS_MPS_PER_KNOT)) {
@@ -681,17 +745,17 @@ static int8_t Alarm_Legacy(ufo_t *this_aircraft, ufo_t *fop)
           fop->addr, fop->projtime_ms, this_aircraft->projtime_ms, rval, mintime, minsqdist, sqspeed,
           this_aircraft->speed, this_aircraft->heading, this_aircraft->turnrate,
           fop->dy, fop->dx, fop->alt_diff, fop->speed, fop->heading, fop->turnrate);
-      NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      NMEAOutD();
     }
   }
 
   return rval;
 }
 
-void logOneTraffic(ufo_t *fop, const char *label)
+void logOneTraffic(container_t *fop, const char *label)
 {
 #if defined(USE_SD_CARD)
-    uint32_t addr = ((fop->no_track)? 0xAAAAAA : fop->addr);
+    uint32_t addr = ((fop->no_track && fop->tx_type==TX_TYPE_FLARM)? 0xAAAAAA : fop->addr);
     int alarm_level = fop->alarm_level - 1;
     if (alarm_level < ALARM_LEVEL_NONE)
         alarm_level = ALARM_LEVEL_NONE;
@@ -704,7 +768,7 @@ void logOneTraffic(ufo_t *fop, const char *label)
       (int)ThisAircraft.speed, (int)ThisAircraft.course, (int)ThisAircraft.turnrate,
       (int)(wind_speed * (1.0 / _GPS_MPS_PER_KNOT)), (int)wind_direction);
     //Serial.print(NMEABuffer);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+    NMEAOutD();
     FlightLogComment(NMEABuffer+4);   // it will prepend the LPLT
 #endif
 }
@@ -714,7 +778,7 @@ void logOneTraffic(ufo_t *fop, const char *label)
 void logCloseTraffic()
 {
 #if defined(USE_SD_CARD)
-    ufo_t *fop;
+    container_t *fop;
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
         fop = &Container[i];
         if (fop->addr == 0)
@@ -731,13 +795,68 @@ void logCloseTraffic()
 #endif
 }
 
-void Traffic_Update(ufo_t *fop)
+struct {
+    float distance;
+    float bearing;
+    float alt_diff;
+    int32_t dx;
+    int32_t dy;
+} stash;
+
+// compute within the container_t struct
+void Calc_Traffic_Distances(container_t *cip)
+{
+    cip->alt_diff = cip->altitude - ThisAircraft.altitude;
+    /* use an approximation for distance & bearing between 2 points */
+    float x, y;
+    y = 111300.0 * (cip->latitude  - ThisAircraft.latitude);         /* meters */
+    x = 111300.0 * (cip->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
+    cip->dx = (int32_t) x;
+    cip->dy = (int32_t) y;
+    //cip->distance = approxHypotenuse(x, y);                       /* meters  */
+    cip->distance = (float) iapproxHypotenuse1(cip->dx, cip->dy);   /* meters  */
+    //cip->bearing = atan2_approx(y, x);                     /* degrees from ThisAircraft to cip */
+    cip->bearing = (float) iatan2_approx(cip->dy, cip->dx);  /* degrees from ThisAircraft to fop */
+    if (cip->bearing < 0)
+        cip->bearing += 360;
+}
+
+// compute and stash in the stash struct
+void Stash_Traffic_Distances(ufo_t *fop)
+{
+    stash.alt_diff = fop->altitude - ThisAircraft.altitude;
+    /* use an approximation for distance & bearing between 2 points */
+    float x, y;
+    y = 111300.0 * (fop->latitude  - ThisAircraft.latitude);         /* meters */
+    x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
+    stash.dx = (int32_t) x;
+    stash.dy = (int32_t) y;
+    //stash.distance = approxHypotenuse(x, y);                         /* meters  */
+    stash.distance = (float) iapproxHypotenuse1(stash.dx, stash.dy);   /* meters  */
+    //stash.bearing = atan2_approx(y, x);                        /* degrees from ThisAircraft to fop */
+    stash.bearing = (float) iatan2_approx(stash.dy, stash.dx);   /* degrees from ThisAircraft to fop */
+    if (stash.bearing < 0)
+        stash.bearing += 360;
+}
+
+// copy from the stash struct to a container_t struct
+void Copy_Traffic_Distances(container_t *cip)
+{
+    cip->distance = stash.distance;
+    cip->bearing  = stash.bearing;
+    cip->alt_diff = stash.alt_diff;
+    cip->dx       = stash.dx;
+    cip->dy       = stash.dy;
+}
+
+// assume dx, dy, distance, bearing, alt_diff have already been computed
+void Traffic_Update(container_t *fop)
 {
   if (fop->tx_type <= TX_TYPE_S) {       // non-directional target
 
-    fop->RelativeBearing = 0;
     fop->adj_alt_diff = fop->alt_diff;
-    fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(fop->adj_alt_diff);
+    fop->adj_distance = fop->distance + VERTICAL_SLOPE * fabs(fop->alt_diff);
+    fop->RelativeBearing = 0;
     if (fop->protocol == RF_PROTOCOL_ADSB_1090) {
         if (fop->maxrssi == 0 || fop->rssi > fop->maxrssi) {
             fop->maxrssi = fop->rssi;
@@ -752,23 +871,10 @@ void Traffic_Update(ufo_t *fop)
 
   } else {
 
-    /* use an approximation for distance & bearing between 2 points */
-    float x, y;
-    if (fop->protocol != RF_PROTOCOL_ADSB_1090) {
-      y = 111300.0 * (fop->latitude  - ThisAircraft.latitude);         /* meters */
-      x = 111300.0 * (fop->longitude - ThisAircraft.longitude) * CosLat(ThisAircraft.latitude);
-      fop->distance = approxHypotenuse(x, y);      /* meters  */
-      fop->bearing = atan2_approx(y, x);           /* degrees from ThisAircraft to fop */
-      fop->dx = (int32_t) x;
-      fop->dy = (int32_t) y;
-    }
-
     //int rel_bearing = (int) (fop->bearing - ThisAircraft.course);
     int rel_heading = (int) (fop->bearing - ThisAircraft.heading);
     rel_heading += (rel_heading < -180 ? 360 : (rel_heading > 180 ? -360 : 0));
     fop->RelativeBearing = rel_heading;   // << should rename RelativeHeading
-
-    fop->alt_diff = fop->altitude - ThisAircraft.altitude;
 
     if (fop->protocol == RF_PROTOCOL_ADSB_1090) {
         if (fop->mindist == 0 || fop->distance < fop->mindist) {
@@ -833,31 +939,33 @@ void Traffic_Update(ufo_t *fop)
 }
 
 /* relay landed-out or ADS-B traffic if we are airborne */
-bool air_relay(ufo_t *fop)
+bool air_relay(container_t *fop)
 {
     static uint32_t lastrelay = 0;
 
     bool often = false;
-    if (fop->airborne) {
-      if (settings->relay < RELAY_ALL)
-          return false;
-      //if (fop->protocol == RF_PROTOCOL_GDL90 || fop->protocol == RF_PROTOCOL_ADSB_1090) {
-      if (fop->protocol != RF_PROTOCOL_LATEST && fop->protocol != RF_PROTOCOL_LEGACY) {
-          if (fop->aircraft_type != AIRCRAFT_TYPE_JET && fop->aircraft_type != AIRCRAFT_TYPE_HELICOPTER) {
-              if (fop->distance > 10000)  // only relay gliders and light planes if close
-                  return false;
-              // - The idea is that if the aircraft is also sending FLARM signals, then if close
-              //     those signals will be received, and other protocols will be ignored.
-              //   Thus if close and another protocol, then no FLARM, and safe to relay,
-              //     meaning it won't make FLARM "see itself" and go crazy.
-          }
-          often = true;
-      } else {
-          // only relay SoftRF traffic in landed-out mode, signaled by AIRCRAFT_TYPE_UNKNOWN
-          if (fop->aircraft_type != AIRCRAFT_TYPE_UNKNOWN)
-              return false;
-          often = true;
-      }
+
+    if (fop->protocol == RF_PROTOCOL_LATEST || fop->protocol == RF_PROTOCOL_LEGACY) {
+        // only relay SoftRF traffic in landed-out mode, signaled by AIRCRAFT_TYPE_UNKNOWN
+        //if (fop->airborne)
+        //    return false;
+        if (fop->aircraft_type != AIRCRAFT_TYPE_UNKNOWN)        //if (! fop->landed_out)
+            return false;
+        often = true;
+    } else {    // must be ADS-B (since no relay if *our* protocol is not Latest or Legacy)
+        //if (! fop->airborne)
+        //    return false;
+        if (settings->relay < RELAY_ALL)     // RELAY_LANDED
+            return false;
+        if (fop->aircraft_type != AIRCRAFT_TYPE_JET && fop->aircraft_type != AIRCRAFT_TYPE_HELICOPTER) {
+            if (fop->distance > 10000)  // only relay gliders and light planes if close
+                return false;
+            // - The idea is that if the aircraft is also sending FLARM signals, then if close
+            //     those signals will be received, and other protocols will be ignored.
+            //   Thus if close and another protocol, then no FLARM, and safe to relay,
+            //     meaning it won't make FLARM "see itself" and go crazy.
+        }
+        often = true;
     }
 
     // only relay once in a while:
@@ -876,7 +984,7 @@ bool air_relay(ufo_t *fop)
 
     // >>> re-encode packets for relaying
     bool relayed = false;
-    size_t s = RF_Encode(&fo);
+    size_t s = RF_Encode(fop);
     if (s != 0)
         relayed = RF_Transmit(sizeof(legacy_packet_t), true);
 
@@ -886,7 +994,7 @@ bool air_relay(ufo_t *fop)
             snprintf_P(NMEABuffer, sizeof(NMEABuffer),
               PSTR("$PSRLO,%02d:%02d,%06x,%.5f,%.5f\r\n"),
               gnss.time.hour(), gnss.time.minute(), fop->addr, fop->latitude, fop->longitude);
-            NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+            NMEAOutD();
 #if defined(USE_SD_CARD)
             FlightLogComment(NMEABuffer+3);   // it will prepend the LPLT
 #endif
@@ -900,7 +1008,7 @@ bool air_relay(ufo_t *fop)
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSARL,1,%06X,%ld\r\n"),
             fop->addr, fop->timerelayed);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          NMEAOutD();
         }
     } else {
 #if 0
@@ -908,20 +1016,61 @@ bool air_relay(ufo_t *fop)
           snprintf_P(NMEABuffer, sizeof(NMEABuffer),
             PSTR("$PSARL,0,%06X,%ld\r\n"),
             fop->addr, ThisAircraft.timestamp);
-          NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+          NMEAOutD();
         }
 #endif
     }
     return true;
 }
 
-void AddTraffic(ufo_t *fop)
+// update fields from a received packet into Container[]
+void CopyTraffic(container_t *cip, ufo_t *fop, const char *callsign)
 {
-    ufo_t *cip;
+    cip->addr = fop->addr;
+    cip->latitude = fop->latitude;
+    cip->longitude = fop->longitude;
+    cip->altitude = fop->altitude;
+    cip->pressure_altitude = fop->pressure_altitude;
+    cip->timestamp = fop->timestamp;
+    cip->gnsstime_ms = fop->gnsstime_ms;
+    cip->speed = fop->speed;
+    cip->course = fop->course;
+    cip->turnrate = fop->turnrate;
+    cip->vs = fop->vs;
+    cip->hdop = fop->hdop;
+    cip->last_crc = fop->last_crc;
+    cip->protocol = fop->protocol;
+    cip->tx_type = fop->tx_type;
+    cip->addr_type = fop->addr_type;
+    cip->aircraft_type = fop->aircraft_type;
+    cip->airborne = fop->airborne;
+    cip->circling = fop->circling;
+    cip->stealth = fop->stealth;
+    cip->no_track = fop->no_track;
+    cip->relayed = fop->relayed;
+
+    cip->rssi = RF_last_rssi;
+
+    // if callsign was passed, copy it into Container[]
+    if (callsign) {
+        if ((callsign[0]      != '\0' && callsign[0]      != ' ')
+        &&  (cip->callsign[0] == '\0' || cip->callsign[0] == ' ')) {
+            strncpy((char *) cip->callsign, callsign, 8);
+            cip->callsign[8] = '\0';
+            cip->callsign[9] = '\0';
+        }
+    }
+    // if callsign was not received, compute USA N-number from ICAO ID (if in range)
+    icao_to_n(cip);
+}
+
+void AddTraffic(ufo_t *fop, const char *callsign)
+{
+    container_t *cip;
 
     bool do_relay = false;
 
-    if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
+    if (settings->rf_protocol == RF_PROTOCOL_LATEST || settings->rf_protocol == RF_PROTOCOL_LEGACY) {
       // relay some traffic - only if we are airborne (or in "relay only" mode)
       if (settings->relay != RELAY_OFF && ((settings->debug_flags & DEBUG_SIMULATE) == 0)
           && fop->relayed == false         // not a packet already relayed one hop
@@ -943,42 +1092,61 @@ void AddTraffic(ufo_t *fop)
         bool fop_adsb = fop->protocol == RF_PROTOCOL_GDL90 || fop->protocol == RF_PROTOCOL_ADSB_1090;
         bool cip_adsb = cip->protocol == RF_PROTOCOL_GDL90 || cip->protocol == RF_PROTOCOL_ADSB_1090;
 
-        if (fop_adsb && ! cip_adsb) {
+        if (fop_adsb && (! cip_adsb)) {
             // ignore external (ADS-B) data about aircraft we also receive from directly
-            if (OurTime <= cip->timestamp + ENTRY_EXPIRATION_TIME)
+            // - unless we heard from only via relay, accept direct data instead
+            if (cip->relayed == 0 &&
+                OurTime <= cip->timestamp + ENTRY_EXPIRATION_TIME)
                 return;
-            // if was tracked via other means, but expired - take over this slot
-            *cip = *fop;
+            // take over this slot (fall through)
+#if 0
+            //*cip = EmptyContainer;
+            EmptyContainer(cip);
+            CopyTraffic(cip, fop, callsign);
+            Calc_Traffic_Distances(cip);
             Traffic_Update(cip);
             if (do_relay)  air_relay(cip);
             return;
+#endif
         }
 
         // overwrite external (ADS-B) data about aircraft that also has FLARM
-        if (cip_adsb && ! fop_adsb) {
-            *cip = *fop;
+        // - unless the "FLARM" is relayed, which may have originated as ADS-B
+        else if (cip_adsb && (! fop_adsb)) {
+            if (fop->relayed &&
+                OurTime <= cip->timestamp + ENTRY_EXPIRATION_TIME)
+                return;
+            // else fall through
+#if 0
+            //*cip = EmptyContainer;
+            EmptyContainer(cip);
+            CopyTraffic(cip, fop, callsign);
+            Calc_Traffic_Distances(cip);
             Traffic_Update(cip);
+            if (do_relay)  air_relay(cip);
             return;
+#endif
         }
 
-        fop->distance = cip->distance;      // - data from previous packet or update
-        fop->alt_diff = cip->alt_diff;
-        fop->timerelayed = cip->timerelayed;
-        if (do_relay)  do_relay = air_relay(fop);
-        // this updates fop->timerelayed, to be copied later into container[]
+        // if both are from ADS-B, prefer direct over TIS-B (relayed ADS-B treated as TIS-B)
+        else if (cip_adsb && fop_adsb) {
+            if (fop->tx_type == TX_TYPE_TISB && cip->tx_type > TX_TYPE_TISB
+                && OurTime <= cip->timestamp + ENTRY_EXPIRATION_TIME)
+                return;
+            // else fall through
+        }
 
         /* ignore "new" positions that are exactly the same as before */
         if (fop->altitude == cip->altitude &&
             fop->latitude == cip->latitude &&
             fop->longitude == cip->longitude) {
-                cip->last_crc    = fop->last_crc;      // so 2nd time slot packet will be ignored
-                cip->timestamp   = fop->timestamp;     // so it won't expire
-                cip->timerelayed = fop->timerelayed;   // in case relayed above
+                cip->last_crc  = fop->last_crc;      // so 2nd time slot packet will be ignored
+                cip->timestamp = fop->timestamp;     // so it won't expire
+                if (do_relay)  air_relay(cip);
                 return;
         }
 
         /* overwrite old entry, but preserve fields that store history */
-        /*   - they are copied into fo and then back into Container[i] */
 
         if ((fop->gnsstime_ms - cip->gnsstime_ms > 1200)
           /* packets spaced far enough apart, store new history */
@@ -986,59 +1154,48 @@ void AddTraffic(ufo_t *fop)
           /* previous history getting too old, drop it */
           /* this means using the past data from < 1200 ms ago */
           /* to avoid that would need to store data from yet another time point */
-          fop->prevtime_ms  = cip->gnsstime_ms;
-          fop->prevcourse   = cip->course;
-          fop->prevheading  = cip->heading;
-          /* fop->prevspeed = Container[i].speed; */
-          fop->prevaltitude = cip->altitude;
-        } else {
-          /* retain the older history for now */
-          fop->prevtime_ms  = cip->prevtime_ms;
-          fop->prevcourse   = cip->prevcourse;
-          fop->prevheading  = cip->prevheading;
-          /* fop->prevspeed = cip->prevspeed; */
-          fop->prevaltitude = cip->prevaltitude;
-          /* >>> may want to also retain info needed to compute velocity vector at t=0 */
+          cip->prevtime_ms  = cip->gnsstime_ms;
+          cip->prevcourse   = cip->course;
+          cip->prevheading  = cip->heading;
+          /* cip->prevspeed = cip->speed; */
+          cip->prevaltitude = cip->altitude;
         }
-     /* fop->turnrate    = cip->turnrate;    keep the old turn rate   - why? */
-        fop->alert       = cip->alert;
-        fop->alert_level = cip->alert_level;
-        if ((fop->callsign[0] == '\0' || fop->callsign[0] == ' ')
-        &&  (cip->callsign[0] != '\0' && cip->callsign[0] != ' '))
-            memcpy(fop->callsign, cip->callsign, 10);
+        // else retain the older history for now
 
-        *cip = *fop;   /* copies the whole object/structure */
-
-        /* Now old alert_level is in same structure, can update alarm_level:  */
-        Traffic_Update(cip);    // also updates distance, alt_diff
-
+        CopyTraffic(cip, fop, callsign);
+        Calc_Traffic_Distances(cip);
+        // Now can update alarm_level
+        Traffic_Update(cip);
+        if (do_relay)  air_relay(cip);
         return;
       }
     }
 
     /* new object, try and find a slot for it */
 
-    // if callsign was not received, compute USA N-number from ICAO ID (if in range)
-    icao_to_n(fop);
-
-    /* get distance, alt_diff, and alarm_level, to be copied later into container[] */
-    Traffic_Update(fop);
-
-    // timerelayed started out as 0 (from empty_fo)
-    if (do_relay)  do_relay = air_relay(fop);
-    // this updates fop->timerelayed, to be copied later into container[]
-
     /* replace an empty object if found */
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].addr == 0) {
-        Container[i] = *fop;
+        cip = &Container[i];
+        //*cip = EmptyContainer;
+        EmptyContainer(cip);
+        CopyTraffic(cip, fop, callsign);
+        Calc_Traffic_Distances(cip);
+        Traffic_Update(cip);
+        if (do_relay)  air_relay(cip);
         return;
       }
     }
     /* replace an expired object if found */
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (OurTime > Container[i].timestamp + ENTRY_EXPIRATION_TIME) {
-        Container[i] = *fop;
+        cip = &Container[i];
+        //*cip = EmptyContainer;
+        EmptyContainer(cip);
+        CopyTraffic(cip, fop, callsign);
+        Calc_Traffic_Distances(cip);
+        Traffic_Update(cip);
+        if (do_relay)  air_relay(cip);
         return;
       }
     }
@@ -1046,56 +1203,42 @@ void AddTraffic(ufo_t *fop)
     /* may need to replace a non-expired object:   */
     /* identify the least important current object */
 
-    uint32_t follow_id = settings->follow_id;
-
-    /* replace an object of lower alarm level if found */
-
-    if (fop->alarm_level > ALARM_LEVEL_NONE) {
-      int min_level_ndx = 0;
-      int min_level = fop->alarm_level;
-      for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-        if (Container[i].alarm_level < min_level) {
-          min_level_ndx = i;
-          min_level = Container[i].alarm_level;
-        } else if (Container[min_level_ndx].addr == follow_id
-                     && min_level < fop->alarm_level
-                     && Container[i].alarm_level == min_level) {
-          min_level_ndx = i;
-        }
-      }
-      if (min_level < fop->alarm_level) {
-          Container[min_level_ndx] = *fop;
-          return;
-      }
-    }
+    // we can't compute the alarm level of the new object yet
+    // so just assume that if it deserves an alarm then it is
+    // likely closer than some other object in the (full) table
 
     /* identify the farthest-away non-"followed" object */
     /*    (distance adjusted for altitude difference)   */
-
+    uint32_t follow_id = settings->follow_id;
     int max_dist_ndx = MAX_TRACKING_OBJECTS;
-    float max_adj_dist = 0;
+    float max_dist = 0;
     float adj_distance;
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
       if (Container[i].alarm_level == ALARM_LEVEL_NONE
-          && Container[i].addr != follow_id) {
-        adj_distance = Container[i].distance;
-        if (Container[i].adj_distance > adj_distance)
-              adj_distance = Container[i].adj_distance;
-        if (adj_distance > max_adj_dist)  {
+          && Container[i].addr != follow_id && Container[i].relayed == false) {
+        adj_distance = Container[i].adj_distance;
+        if (adj_distance < Container[i].distance)
+            adj_distance = Container[i].distance;
+        if (adj_distance > max_dist)  {
           max_dist_ndx = i;
-          max_adj_dist = adj_distance;
+          max_dist = adj_distance;
         }
       }
     }
 
     /* replace the farthest currently-tracked object, */
-    /* but only if the new object is closer (or "followed", or relayed) */
-    adj_distance = fop->adj_distance;
+    /* but only if the new object is closer (or "followed", or relayed) */;
+    Stash_Traffic_Distances(fop);
+    adj_distance = stash.distance + VERTICAL_SLOPE * fabs(stash.alt_diff);
     if (max_dist_ndx < MAX_TRACKING_OBJECTS
-      && (adj_distance < max_adj_dist
-          || fop->addr == follow_id
-          || (do_relay && fop->timerelayed > 0))) {
-      Container[max_dist_ndx] = *fop;
+        && (adj_distance < max_dist || fop->addr == follow_id || fop->relayed)) {
+      cip = &Container[max_dist_ndx];
+      //*cip = EmptyContainer;
+      EmptyContainer(cip);
+      CopyTraffic(cip, fop, callsign);
+      Copy_Traffic_Distances(cip);     // computed above by Stash_Traffic_Distances(fop)
+      Traffic_Update(cip);
+      if (do_relay)  air_relay(cip);
       return;
     }
 
@@ -1123,7 +1266,8 @@ void ParseData(void)
       StdOut.println(RF_last_rssi);
     }
 
-    fo = EmptyFO;  /* to ensure no data from past packets remains in any field */
+    //fo = EmptyFO;  /* to ensure no data from past packets remains in any field */
+    EmptyFO(&fo);    /* to ensure no data from past packets remains in any field */
 
     if (protocol_decode == NULL)
         return;
@@ -1131,12 +1275,14 @@ void ParseData(void)
     if (((*protocol_decode)((void *) fo_raw, &ThisAircraft, &fo)) == false)
         return;
 
-    fo.rssi = RF_last_rssi;
-
     if (fo.tx_type == TX_TYPE_NONE)   // not ADS-B or other external sources
         fo.tx_type = TX_TYPE_FLARM;   // may actually be OGNTP or P3I or FANET...
 
-    AddTraffic(&fo);
+    if (settings->rf_protocol == RF_PROTOCOL_ADSB_UAT)
+//  ||  settings->rf_protocol == RF_PROTOCOL_ADSB_1090)
+        AddTraffic(&fo, fo_callsign);
+    else
+        AddTraffic(&fo, (char *) NULL);
 }
 
 void Traffic_setup()
@@ -1170,7 +1316,7 @@ void Traffic_loop()
     if (! isTimeToUpdateTraffic())
         return;
 
-    ufo_t *mfop = NULL;
+    container_t *mfop = NULL;
     max_alarm_level = ALARM_LEVEL_NONE;          /* global, used for visual displays */
     alarm_ahead = false;                         /* global, used for strobe pattern */
     relay_waiting = false;
@@ -1194,9 +1340,9 @@ showwhen = OurTime + 13;
 */
     for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
 
-      ufo_t *fop = &Container[i];
+      container_t *fop = &Container[i];
 
-      if (fop->addr) {  /* non-empty ufo */
+      if (fop->addr) {  /* non-empty Container slot */
 
         // expire non-directional targets early
         uint32_t expiration_time = (fop->tx_type <= TX_TYPE_S)? NONDIR_EXPIRATION : ENTRY_EXPIRATION_TIME;
@@ -1235,7 +1381,7 @@ if (fop->protocol == RF_PROTOCOL_ADSB_1090 && (settings->debug_flags & DEBUG_DEE
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
       PSTR("$PSADX,%06X,%d,%d,%d,%d,%d\r\n"),
       fop->addr, fop->tx_type, (int)fop->maxrssirelalt, (int)fop->mindist, fop->mindistrssi, fop->maxrssi);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+    NMEAOutD();
 #if defined(USE_SD_CARD)
     SD_log(NMEABuffer);
 #endif
@@ -1254,10 +1400,10 @@ if (fop->protocol == RF_PROTOCOL_ADSB_1090 && (settings->debug_flags & DEBUG_DEE
   }
 }
 
-          // *fop = EmptyFO;
+          // EmptyContainer(fop);
           fop->addr = 0;
 
-          /* implied by emptyFO:
+          /* implied by empty:
           fop->addr = 0;
           fop->alert = 0;
           fop->alarm_level = 0;
@@ -1345,7 +1491,7 @@ void ClearExpired()
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].addr &&
          (OurTime > Container[i].timestamp + ENTRY_EXPIRATION_TIME)) {
-      //Container[i] = EmptyFO;
+      //EmptyContainer(&Container[i]);
       Container[i].addr = 0;
     }
   }

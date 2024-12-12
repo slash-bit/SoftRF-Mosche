@@ -25,14 +25,14 @@
 
 #if defined(EXCLUDE_VOICE)
 void  Voice_setup()       {}
-bool  Voice_Notify(ufo_t *fop) {return false;}
+bool  Voice_Notify(container_t *fop) {return false;}
 void  Voice_loop()        {}
 void  Voice_fini()        {}
 #else
 
 #if !defined(ESP32)
 void  Voice_setup()       {}
-bool  Voice_Notify(ufo_t *fop) {return false;}
+bool  Voice_Notify(container_t *fop) {return false;}
 void  Voice_loop()        {}
 void  Voice_fini()        {}
 #else
@@ -256,7 +256,7 @@ void Voice_test(int reason)
     }
 }
 
-static void Traffic_Voice_Msg(ufo_t *fop, bool multi_alarm)
+static void Traffic_Voice_Msg(container_t *fop, bool multi_alarm)
 {
     int oclock = fop->RelativeBearing + 15;
     if (oclock < 0)    oclock += 360;
@@ -355,7 +355,7 @@ void Voice_setup(void)
     parse_wav_tar();           // then try and do that
 }
 
-bool Voice_Notify(ufo_t *fop, bool multi_alarm)
+bool Voice_Notify(container_t *fop, bool multi_alarm)
 {
   if (settings->voice == VOICE_OFF)
       return false;

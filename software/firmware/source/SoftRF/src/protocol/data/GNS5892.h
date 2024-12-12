@@ -22,8 +22,10 @@
 void play5892(void);
 void gns5892_setup(void);
 void gns5892_loop(void);
+void save_zone_stats(void);
+void show_zone_stats(void);
 
-void gns5892_test_mode();
+void gns5892_test_mode(void);
 
 extern uint32_t adsb_packets_counter;
 

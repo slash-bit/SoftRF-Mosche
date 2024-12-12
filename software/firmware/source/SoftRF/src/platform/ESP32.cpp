@@ -1276,7 +1276,12 @@ static void ESP32_post_init()
   case DISPLAY_OLED_TTGO:
   case DISPLAY_OLED_HELTEC:
   case DISPLAY_OLED_1_3:
-    OLED_info1();
+    if (settings->mode == SOFTRF_MODE_GPSBRIDGE) {
+        OLED_msg("GNSS", "BRIDGE");
+        Serial.println(">>> GNSS Bridge Mode...");
+    } else {
+        OLED_info1();
+    }
 
 #if defined(CONFIG_IDF_TARGET_ESP32S3)
     if (hw_info.model == SOFTRF_MODEL_PRIME_MK3)
@@ -2962,7 +2967,10 @@ void handleEvent(AceButton* button, uint8_t eventType,
       // v1.x shutdown is via PMU interrupt
       // skip v0.7 shutdown, should use slide switch instead
       if (hw_info.model == SOFTRF_MODEL_PRIME_MK2  && hw_info.revision <  8) {
-          if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
+          if (settings->mode != SOFTRF_MODE_NORMAL && settings->mode != SOFTRF_MODE_MORENMEA) {
+              settings->mode = SOFTRF_MODE_NORMAL;
+              OLED_msg("NORMAL", " MODE");
+          } else if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
               if (settings->txpower == RF_TX_POWER_OFF) {
                   settings->txpower = RF_TX_POWER_FULL;
               } else {
@@ -3002,12 +3010,14 @@ void handleEvent2(AceButton* button, uint8_t eventType,
     case AceButton::kEventReleased:
       break;
     case AceButton::kEventClicked:
-      if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
-          if (settings->txpower == RF_TX_POWER_OFF) {
+      if (settings->mode != SOFTRF_MODE_NORMAL && settings->mode != SOFTRF_MODE_MORENMEA) {
+          settings->mode = SOFTRF_MODE_NORMAL;
+          OLED_msg("NORMAL", " MODE");
+      } else if (ThisAircraft.aircraft_type == AIRCRAFT_TYPE_WINCH) {
+          if (settings->txpower == RF_TX_POWER_OFF)
               settings->txpower = RF_TX_POWER_FULL;
-          } else {
+          else
               settings->txpower = RF_TX_POWER_OFF;
-          }
       } else if (millis() > 10000 && !bt_turned_off) {
           SetupTimeMarker = millis();
           do_alarm_demo = true;

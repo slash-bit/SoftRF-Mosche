@@ -27,6 +27,7 @@ void WiFi_fini()    {}
 #include <FS.h>
 #include <TimeLib.h>
 
+#include "../../SoftRF.h"
 #include "../system/OTA.h"
 #include "GNSS.h"
 #include "EEPROM.h"
@@ -301,7 +302,9 @@ void WiFi_setup()
   // Set Hostname.
   host_name += "-";
   char chipID[8];
-  snprintf(chipID, 8, "%06x", (SoC->getChipId() & 0xFFFFFF));
+  // if ICAO ID set then use it for WiFi host name too
+  snprintf(chipID, 8, "%06x",
+      (ThisAircraft.addr != 0)? ThisAircraft.addr : (SoC->getChipId() & 0xFFFFFF));
   host_name += chipID;
   SoC->WiFi_hostname(host_name);
 

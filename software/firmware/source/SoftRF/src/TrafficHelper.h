@@ -53,7 +53,7 @@
                                   TRAFFIC_UPDATE_INTERVAL_MS)
 
 typedef struct traffic_by_dist_struct {
-  ufo_t *fop;
+  container_t *fop;
   float distance;
 } traffic_by_dist_t;
 
@@ -74,26 +74,31 @@ enum
     TX_TYPE_TISB,
     TX_TYPE_ADSR,
     TX_TYPE_ADSB,
-    TX_TYPE_FLARM
+    TX_TYPE_FLARM   // also used for OGNTP, FANET, P3I, etc
 };
 
 #define TRAFFIC_ALERT_SOUND   1
 
-bool air_relay(ufo_t *fop);
-void AddTraffic(ufo_t *fop);
+bool air_relay(container_t *fop);
+void AddTraffic(ufo_t *fop, const char *callsign);
 void ParseData(void);
 void Traffic_setup(void);
 void Traffic_loop(void);
 void ClearExpired(void);
-void Traffic_Update(ufo_t *fop);
+void Traffic_Update(container_t *fop);
 int  Traffic_Count(void);
 void logCloseTraffic(void);
-void icao_to_n(ufo_t *fop);
+void icao_to_n(container_t *fop);
 int  traffic_cmp_by_distance(const void *, const void *);
-float Adj_alt_diff(ufo_t *, ufo_t *);
+float Adj_alt_diff(container_t *, container_t *);
 void generate_random_id(void);
 
-extern ufo_t fo, Container[MAX_TRACKING_OBJECTS], EmptyFO;
+void EmptyContainer(container_t *p);
+void EmptyFO(ufo_t *p);
+
+extern container_t Container[MAX_TRACKING_OBJECTS];  // EmptyContainer;
+extern ufo_t fo;  // EmptyFO;
+extern char fo_callsign[10];
 extern uint8_t fo_raw[34];
 extern traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 extern int max_alarm_level;
@@ -104,6 +109,8 @@ extern float average_baro_alt_diff;
 #if defined(ESP32)
 extern File AlarmLog;
 extern bool AlarmLogOpen;
+void startlogs(void);
+void stoplogs(void);
 #endif
 
 #endif /* TRAFFICHELPER_H */

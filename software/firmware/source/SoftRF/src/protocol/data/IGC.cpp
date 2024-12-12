@@ -297,34 +297,6 @@ void igc_file_append_comment(char *data)
 }
 
 
-// Read one line from an open text file
-// Handle possibly different types of line endings
-// Used for reading a config file with pilot name etc
-char *
-getline(File file, char *buf, int limit)
-{
-    char *cp, *tp;
-    char c;
-    cp = buf;
-    tp = cp + (limit-2);
-    while (file.available() && cp<tp) {
-        c = file.read();
-        if (cp == buf) {
-            if (c == '\r')  continue;
-            if (c == '\n')  continue;
-        }
-        if (c == '\r')  break;
-        if (c == '\n')  break;
-        if (c == '\0')  break;
-        *cp++ = c;
-    }
-    *cp = '\0';
-    if (cp == buf)     // read nothing
-        return (NULL);
-    return (buf);
-}
-
-
 /*
 Short file name style: YMDCXXXF.IGC
 Y = Year; value 0 to 9, cycling every 10 years

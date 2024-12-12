@@ -113,7 +113,7 @@ uint8_t parity(uint32_t);
 byte    RF_setup(void);
 void    RF_SetChannel(void);
 void    RF_loop(void);
-size_t  RF_Encode(ufo_t *);
+size_t  RF_Encode(container_t *);
 bool    RF_Transmit_Ready();
 bool    RF_Transmit(size_t, bool);
 bool    RF_Receive(void);
@@ -128,8 +128,8 @@ extern uint8_t RF_current_slot;
 
 extern const rfchip_ops_t *rf_chip;
 extern bool RF_SX12XX_RST_is_connected;
-extern size_t (*protocol_encode)(void *, ufo_t *);
-extern bool (*protocol_decode)(void *, ufo_t *, ufo_t *);
+extern size_t (*protocol_encode)(void *, container_t *);
+extern bool (*protocol_decode)(void *, container_t *, ufo_t *);
 
 extern const char *Protocol_ID[];
 extern uint16_t RF_last_crc;

@@ -27,6 +27,7 @@
 #include "../../../SoftRF.h"
 #include "../../driver/RF.h"
 #include "../data/GDL90.h"
+#include "../../TrafficHelper.h"
 
 const rf_proto_desc_t uat978_proto_desc = {
   "UAT",
@@ -59,11 +60,12 @@ const rf_proto_desc_t uat978_proto_desc = {
 
 static struct uat_adsb_mdb mdb;
 
-bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
+bool uat978_decode(void *pkt, container_t *this_aircraft, ufo_t *fop) {
 
   uat_decode_adsb_mdb((uint8_t *) pkt, &mdb);
 
-  fop->protocol = RF_PROTOCOL_ADSB_UAT;
+  fop->protocol  = RF_PROTOCOL_ADSB_UAT;
+  fop->tx_type   = TX_TYPE_ADSB;
   fop->addr_type = ADDR_TYPE_ICAO;
   fop->addr = mdb.address;
   fop->timestamp = this_aircraft->timestamp;
@@ -94,12 +96,12 @@ bool uat978_decode(void *pkt, ufo_t *this_aircraft, ufo_t *fop) {
   fop->ew[2] = 0; fop->ew[3] = 0;
 */
   /* sizeof(mdb.callsign) = 9 ; sizeof(fop->callsign) = 10 */
-  memcpy(fop->callsign, mdb.callsign, sizeof(mdb.callsign));
+  memcpy(fo_callsign, mdb.callsign, sizeof(mdb.callsign));
 
   return true;
 }
 
-size_t uat978_encode(void *pkt, ufo_t *this_aircraft) {
+size_t uat978_encode(void *pkt, container_t *this_aircraft) {
 
   /* No Tx on 978 MHz until the system will eventually become certified */
 

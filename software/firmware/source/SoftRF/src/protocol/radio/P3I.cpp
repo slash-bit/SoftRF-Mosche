@@ -1,5 +1,4 @@
 /*
- *
  * Protocol_P3I.cpp
  * Encoder and decoder for PilotAware P3I radio protocol
  * Copyright (C) 2017-2021 Linar Yusupov
@@ -62,7 +61,7 @@ const uint8_t whitening_pattern[] PROGMEM = { 0x05, 0xb4, 0x05, 0xae, 0x14, 0xda
   0x04, 0xbc, 0xf6, 0x12, 0x2c, 0x01, 0xd9, 0x04, 0xb1, 0xd5, 0x03, 0xab, 0x06,
   0xcf, 0x08, 0xe6, 0xf2, 0x07, 0xd0, 0x12, 0xc2, 0x09, 0x34, 0x20 };
 
-bool p3i_decode(void *p3i_pkt, ufo_t *this_aircraft, ufo_t *fop) {
+bool p3i_decode(void *p3i_pkt, container_t *this_aircraft, ufo_t *fop) {
 
   p3i_packet_t *pkt = (p3i_packet_t *) p3i_pkt;
 
@@ -109,7 +108,7 @@ bool p3i_decode(void *p3i_pkt, ufo_t *this_aircraft, ufo_t *fop) {
   return true;
 }
 
-size_t p3i_encode(void *p3i_pkt, ufo_t *this_aircraft) {
+size_t p3i_encode(void *p3i_pkt, container_t *this_aircraft) {
 
   p3i_packet_t *pkt = (p3i_packet_t *) p3i_pkt;
 

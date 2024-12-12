@@ -25,8 +25,8 @@ extern float wind_speed;
 extern float wind_direction;
 extern time_t AirborneTime;
 
-void project_this(ufo_t *);
-void project_that(ufo_t *);
+void project_this(container_t *);
+void project_that(container_t *);
 void Estimate_Wind(void);
 float Estimate_Climbrate(void);
 

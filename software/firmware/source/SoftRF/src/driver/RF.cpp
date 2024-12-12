@@ -70,8 +70,8 @@ const char *Protocol_ID[] = {
   [RF_PROTOCOL_LATEST]    = "LAT"
 };
 
-size_t (*protocol_encode)(void *, ufo_t *);
-bool   (*protocol_decode)(void *, ufo_t *, ufo_t *);
+size_t (*protocol_encode)(void *, container_t *);
+bool   (*protocol_decode)(void *, container_t *, ufo_t *);
 
 static Slots_descr_t Time_Slots, *ts;
 static uint8_t       RF_timing = RF_TIMING_INTERVAL;
@@ -535,7 +535,7 @@ void RF_loop()
 //RF_current_chan, RF_current_slot, ms_since_pps, TxTimeMarker, TxEndMarker, RF_OK_until);
 }
 
-size_t RF_Encode(ufo_t *fop)
+size_t RF_Encode(container_t *fop)
 {
   size_t size = 0;
   if (RF_ready && protocol_encode) {

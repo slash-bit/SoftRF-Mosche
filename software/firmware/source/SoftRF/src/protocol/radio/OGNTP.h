@@ -45,7 +45,7 @@ typedef struct {
 
 extern const rf_proto_desc_t ogntp_proto_desc;
 
-bool ogntp_decode(void *, ufo_t *, ufo_t *);
-size_t ogntp_encode(void *, ufo_t *);
+bool ogntp_decode(void *, container_t *, ufo_t *);
+size_t ogntp_encode(void *, container_t *);
 
 #endif /* PROTOCOL_OGNTP_H */

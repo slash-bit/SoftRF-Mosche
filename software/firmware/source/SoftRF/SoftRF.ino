@@ -116,7 +116,7 @@
 #define isTimeToDisplay() (millis() > LEDTimeMarker    + 1000)
 #define isTimeToExport()  (millis() > ExportTimeMarker + 1000)
 
-ufo_t ThisAircraft;
+container_t ThisAircraft;
 
 hardware_info_t hw_info = {
   .model    = DEFAULT_SOFTRF_MODEL,

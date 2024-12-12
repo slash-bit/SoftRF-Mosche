@@ -1,4 +1,34 @@
 #include "../system/SoC.h"
+
+#if defined(ESP32)
+
+// Read one line from an open text file (SPIFFS or SD)
+// Handle possibly different types of line endings
+// Used for reading a config file with pilot name etc
+char *
+getline(File file, char *buf, int limit)
+{
+    char *cp, *tp;
+    char c;
+    cp = buf;
+    tp = cp + (limit-2);
+    while (file.available() && cp<tp) {
+        c = file.read();
+        if (cp == buf) {
+            if (c == '\r')  continue;
+            if (c == '\n')  continue;
+        }
+        if (c == '\r')  break;
+        if (c == '\n')  break;
+        if (c == '\0')  break;
+        *cp++ = c;
+    }
+    *cp = '\0';
+    if (cp == buf)     // read nothing
+        return (NULL);
+    return (buf);
+}
+
 #if defined(USE_SD_CARD)
 
 #include <SPI.h>
@@ -151,20 +181,25 @@ void SD_setup() {
   if (! SD.exists("/logs/old"))
       SD.mkdir("/logs/old");
 
-  // keep a copy of the existing log.txt (if non-empty)
-  // so can download it after a reboot
+  // if the existing log.txt is above a certain size
+  // then keep a copy and start a new one
   size_t logsize = 0;
   SDfile = SD.open("/logs/log.txt", FILE_READ);
   if (SDfile) {
-    logsize = SDfile.size();
-    SDfile.close();
+      logsize = SDfile.size();
+      SDfile.close();
+  }
+  if (logsize > 200000) {
+      SD.remove("/logs/oldlog.txt");
+      SD.rename("/logs/log.txt", "/logs/oldlog.txt");
+      logsize = 0;
   }
   if (logsize > 0) {
-    SD.remove("/logs/oldlog.txt");
-    SD.rename("/logs/log.txt", "/logs/oldlog.txt");
+      SDfile = SD.open("/logs/log.txt", FILE_APPEND);
+      SDfile.print("---booted---\r\n");
+  } else {
+      SDfile = SD.open("/logs/log.txt", FILE_WRITE);
   }
-
-  SDfile = SD.open("/logs/log.txt", FILE_WRITE);
   if (SDfile)
       SDfileOpen = true;
   else
@@ -219,4 +254,5 @@ void closeSDlog()
   }
 }
 
-#endif /* USE_SD_CARD */
+#endif // USE_SD_CARD
+#endif // ESP32

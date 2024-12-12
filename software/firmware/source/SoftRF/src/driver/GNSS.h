@@ -49,7 +49,7 @@ typedef struct gnss_chip_ops_struct {
   uint16_t  rmc_ms;
 } gnss_chip_ops_t;
 
-#define ENABLE_GNSS_STATS
+//#define ENABLE_GNSS_STATS
 #if defined(ENABLE_GNSS_STATS)
 typedef struct gnss_stat_struct {
   unsigned long gga_count;

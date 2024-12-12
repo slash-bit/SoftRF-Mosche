@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated August 2, 2024 to fit software version MB138
+This version last updated December 12, 2024 to fit software version MB149
 
 
 PART 1: USER GUIDE - see separate document
@@ -119,7 +119,7 @@ For more accuracy and efficiency.  Similar to, but not the same as, done in Soft
 
 Additional settings
 
-Added code to allow choosing aircraft ID type, aircraft IDs, baud rate, external power, my own debugging flags, etc.  Main files affected: driver/EEPROM, ui/Web.  Also added code into GNSS.cpp to allow accessing the added settings via $PSRFD NMEA sentences sent *to* SoftRF - useful for hardware (T-Echo) that does not offer the web UI.
+Added code to allow choosing aircraft ID type, aircraft IDs, baud rate, external power, my own debugging flags, etc.  Main files affected: driver/EEPROM, ui/Web.
 
 Option to shutdown when there is no external power
 
@@ -127,11 +127,11 @@ Some have asked for an option to mount the SoftRF device in an inaccessible plac
 
 Spurious alarm warnings caused in FLARM by stationary SoftRF
 
-Made multiple rounds of changes to the computation of the "airborne" status for this aircraft.  Now in Wind.cpp.  Still not clear whether this is resolved.  Affected: protocol/radio/Legacy legacy_encode().
+Made multiple rounds of changes to the computation of the "airborne" status for this aircraft.  Now in Wind.cpp.  Affected: protocol/radio/Legacy legacy_encode().
 
 Spurious alarm warnings caused in towed FLARM by SoftRF in tow plane
 
-This has been resolved by transmitting lat/lon computed for 2 seconds into the future, as FLARM does.
+In the old protocol this was resolved by transmitting lat/lon computed for 2 seconds into the future, as FLARM does.
 
 Hide IGC encryption key
 
@@ -152,6 +152,27 @@ From GNSS.cpp to NMEA.cpp, following what was done in the mainline.
 Second NMEA output destination
 
 Allow two NMEA output route simultaneously.  For example, BT & USB.  Also allow selection of sentence types to output via each route independently.  Default routes depend on platform.  Main files affected: NMEA.cpp, Web.cpp.
+
+Settings via NMEA
+
+Added code (in NMEA.cpp) to allow accessing the added settings via $PSRFD NMEA sentences sent *to* SoftRF - useful for hardware (T-Echo) that does not offer the web UI, automated config, etc.  New in MB148+: the first field in the NMEA sentence (the "version" number) now means "save and reboot".  Thus $PSRFC,1,... will work as before (including with the BT app), while $PSRFC,0,... will just change the setting variables, notsave to EEPROM and not reboot.  Then can now do:  $PSRFC,SAV*3C   to save and reboot.
+
+NMEA processing (in NMEA.cpp)
+
+* "private" sentences are from Linar's debug code which I have left alone but ignore
+* "debug" sentences are my own debug bits
+* "legacy" sentences are FLARM-like output
+* "gnss" sentences are $GPGGA, etc.
+* "sensor" sentences are from internal sensors (mainly a baro chip)
+* "external" sentences are input from other devices, passed through
+* output of each of those can be enabled or disabled in settings for each of the two NMEA output routes
+* incoming (external) sentences are examined before being passed through
+* if an external sentence is a GNSS sentence it is ignored (not passed through)
+* if an external sentence is a FLARM sentence it is ignored (not passed through)
+* an external sentence is not passed through to the same port from which it came
+* if an external sentence is a config sentence ($PSRF...) it is processed
+* a reply to a config sentence is sent only to the same port from which it came
+(for example, if you use a BT terminal app to send config, the reply is only sent to BT)
 
 Visual alarms and strobe driver
 
@@ -177,6 +198,10 @@ Memory use
 
 Once the library objects are created, SoftRF uses up almost all available heap space.  It is no longer possible to have the web server and Bluetooth active simultaneously.  Upon accessing the web server SoftRF now turns Bluetooth off until the next reboot.  To try and free up some heap space, blocks bigger than 1 KB (rather than the default 4 KB) are now allocated in PSRAM (on the T-Beam) - this is still experimental, watching for unintended consequences.
 
+Handling of altitudes
+
+In version MB146 this has been revised.  Altitudes stored within SoftRF are now relative to the WGS84 ellipsoid, not MSL.  This is what is transmitted by FLARMs and what is output to IGC flight log files, so this simplifies things.  Altitudes reported in GGA sentences to attached devices are MSL, along with the "geoid separation", as is standard.  Altitudes transmitted and received in OGNTP protocol are MSL.  Not clear what FANET and P3I want.  ADS-B altitudes are pressure altitudes.
+
 Data bridging
 
 Version MB110 on the T-Beam (versions 1.0, 1.1 & 1.2) added use of a secondary serial port, and the ability to forward data from 1-3 input ports to 1-2 output ports.  This can eliminate the need for an IOIO box or Bluetooth dongle.  GNSS and FLARM messages are not forwarded.  Other messages are forwarded to the designated output routes.  Only complete NMEA sentences, $ through * plus checksum, are forwarded, but the checksum is not checked for validity.  Note that due to the way the T-Beam is designed, the same data is sent out via both the USB interface and the primary serial port (UART) pins.  They cannot be separated.  Since debugging messages may appear on the primary serial port, and it is also connected to the USB port, the secondary serial port is a bit more efficient as an interface to other instruments.
@@ -193,7 +218,7 @@ This version of SoftRF can now receive and transmit in the new FLARM protocol (V
 
 Air Relay
 
-Added one-hop relay of radio packets from landed (or all) aircraft.  Relayed packets are re-encoded into the old (pre-2024, V6) protocol.  These can be received by other SoftRF devices and by OGN ground stations but are invisible to FLARMs.  It is done that way since otherwise the originating FLARM "sees itself" and switches its ID randomly.  (SoftRF ignores received packets with its own ID.)  Relayed packets are marked as such, by setting the third bit in the "address type" field, which seems to be ignored by OGN ground stations.  Relayed packets are not relayed a second time.
+Added one-hop relay of radio packets from some aircraft.  Relayed packets from landed-out aircraft (marked by the aircraft type being zero) are visible to FLARMs, but those from ADS-B traffic can only be received by other SoftRF devices and by OGN ground stations since they are relayed in the "old protocol".  Relayed packets are marked as such, by setting the third bit in the "address type" field, which seems to be ignored by OGN ground stations.  Relayed packets are not relayed a second time.
 
 Other changes in version 120
 
@@ -203,7 +228,7 @@ Added a check for received data in the main loop just *before* transmission.  Th
 
 Efforts to reduce the binary size
 
-Since the flash space on the T-Beam is almost full, as is RAM used, before adding new features to SoftRF it would help if the memory space used is reduced.  In version 124 the PMU chips (AXP192 and AXP2101) in the T-Beam (versions 1.1 and 1.2) are handled by the same library, XpowersLib.  Also, the "jquery" script (used to show percent progress during OTA firmware update) was removed.  These changes reduced the binary size by 60 KB.
+Since the flash space on the T-Beam is almost full, as is RAM used, before adding new features to SoftRF it would help if the memory space used is reduced.  In version 124 the PMU chips (AXP192 and AXP2101) in the T-Beam (versions 1.1 and 1.2) are handled by the same library, XpowersLib.  Also, the "jquery" script (used to show percent progress during OTA firmware update) was removed.  Those changes reduced the binary size by 60 KB.  Another 16 KB were shaved off by removing the EGM96 table from the binary.  See the description of the "geoid separation" setting for how to restore that functionality when needed.
 
 Adding a GNSS module
 
@@ -215,7 +240,17 @@ The data flows into the "auxilliary" serial port of the T-Beam.  The ADS-B traff
 
 The additional code to process the ADS-B messages only added about 20 KB to the binary.  I worked to make the calculations as efficient as possible.  Intermediate numbers that are common to many packets are pre-computed.  Floating point operations are avoided where possible, especially division.  Nevertheless, with this version started compiling to use a 160 MHz CPU clock (with slightly higher power consumption than 80 MHz).  Power consumption of the module itself is about 40 mA at 3.3V, supplied by the T-Beam.  In total this increases the power consumption by about 40%.  It will still run all day on a single 18650 cell.
 
-ADS-B traffic (and similarly traffic from an external GDL90 source) is at this time included in the "air relay" feature of my version of SoftRF.  I.e., if an ADS-B aircraft is received from, SoftRF can optionally re-transmit (but not re-re-transmit) the position of that aircraft, about once in 10 seconds, in the old FLARM radio packet format.  That makes the ADS-B traffic visible to other nearby SoftRF devices that do not have an ADS-B receiver.  To avoid cluttering OGN station reports with ADS-B data mislabeled as FLARM data, these relayed packets are marked as "do not track".
+Mode-S messages only convey altitude, not position.  The aircraft ID is overlaid on the CRC bits but is recovered on the assumption that there are no bit errors.  A very rough estimate of the distance is computed based on the signal strength (RSSI), which is an integer in the range 22-42.  This estimate, taylored for the specific installation, is based on data collected when ADS-B messages (with position, thus a known distance under 6km) are received.  The data counts are stored by 4 distance categories.  For Mode-S, it is considered to be closer than some distance if the RSSI is higher than the highest RSSI for which most of the recorded ADS-B distances are farther.  E.g., if most ADS-B messages with RSSI 32 are from more than 1km away, then Mode-S messages with RSSI 32 or below are assumed to be more than 1km away (and thus do not generate a collision warning).  The sample is highly biased towards farther distances since the covered area is proportional to the distance squared.  But this is not corrected for, since a real-time signal is also similarly biased.  The sampled data is not used until at least 100 ADS-B messages have been received from less than 1km away, which may require multiple flights.  Until then default RSSI thresholds are used.  The data is stored in a file in SPIFFS, to reset it (e.g., after revising the antenna installation) use the "clear all SPIFFS files" button in the web interface.
+
+ADS-B traffic (and similarly traffic from an external GDL90 source) is included in the "air relay" feature of my version of SoftRF.  I.e., if an ADS-B aircraft is received from, SoftRF can optionally re-transmit (but not re-re-transmit) the position of that aircraft, about once in 10 seconds, in the old FLARM radio packet format.  That makes the ADS-B traffic visible to other nearby SoftRF devices that do not have an ADS-B receiver.  To avoid cluttering OGN station reports with ADS-B data mislabeled as FLARM data, these relayed packets are marked as "do not track".
+
+Revision of the data structures
+
+Implemented a revision of the data structures at the heart of SoftRF: the "container[]" array.  Each element in it has grown to hundreds of bytes, and was copied over and over for each incoming packet.  Changed to two structure types.  A short one (ufo_t) for data from incoming packets, with only the needed fields (57 bytes).  And a long one (container_t) for the array.  There is a third small one (adsfo_t) with only the fields needed for processing ADS-B messages.
+
+How to upload and download files
+
+To see the list of files in SPIFFS, connect a terminal to the USB port and access the web interface.  The "Upload egm96s.dem" button on the status web page can actually be used to upload any file into SPIFFS.  To download a file from SPIFFS, use the URL 192.168.1.1/filename (where the "192.168.1.1" will be something else if using an external network).  To see a list of all files in the /logs folder on the SD card, use the "List" button in the flight-logs section of the status web page.  To upload a file into the /logs folder on the SD card, use 192.168.1.1/logupload.  To download any file from the SD card, use the URL 192.168.1.1/pathname - only works if there is no file on SPIFFS of the same name.
 
 
 KNOWN ISSUES
@@ -226,7 +261,7 @@ Reception of FLARM signals can be further improved by shifting our clock (for fr
 
 Baro sensor support and turn-off issues (both related to I2C library?) seem mostly resolved by switching from ESP32 Core library 2.0.2 to 2.0.3.  But inclusion of code for detection of baro sensors other than BMP280 still causes booting to fail.  For now only the BMP280 is probed for.
 
-Should switch (from the version used in SoftRF v1.0) to a later version of the basicmac library.
+Should switch (from the version used in SoftRF v1.0) to a later version of the basicmac library.  Or the new RadioLib.
 
 
 Compiling SoftRF

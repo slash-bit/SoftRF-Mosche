@@ -67,8 +67,8 @@ typedef struct {
 
 extern const rf_proto_desc_t uat978_proto_desc;
 
-bool   uat978_decode(void *, ufo_t *, ufo_t *);
-size_t uat978_encode(void *, ufo_t *);
+bool   uat978_decode(void *, container_t *, ufo_t *);
+size_t uat978_encode(void *, container_t *);
 
 #endif /* PROTOCOL_UAT978_H */
 

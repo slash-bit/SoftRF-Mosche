@@ -405,6 +405,14 @@ void NMEA_setup()
             has_serial2 = true;
             Serial.printf("Serial2 started on pins %d,%d at baud rate %d, logic:%d\r\n",
                rx_pin, Serial2TxPin, Serial2Baud, settings->invert2);
+            delay(500);
+            int limit = 199;
+            if (Serial2.available() > 0) {
+                Serial.println("Input data available on Serial2:");
+                while (Serial2.available() > 0 && --limit > 0)
+                    Serial.write(Serial2.read());
+                Serial.println("...");
+            }
         }
     }
   }
@@ -675,11 +683,11 @@ void NMEA_bridge_send(char *buf, int len)
         return;
 
 #if defined(USE_NMEA_CFG)
-    // Also trap PSRF config sentences, process internally instead
-    // Not sure whether to process SKV sentences here or pass them on?
-    if (buf[1]=='P' && buf[2]=='S' && buf[3]=='R' && buf[4]=='F') {
+    // Also trap PSRF/PSKV config sentences, process internally instead
+    if (buf[1]=='P' && buf[2]=='S') {
+      if ((buf[3]=='R' && buf[4]=='F') || (buf[3]=='K' && buf[4]=='V')) {
         NMEA_bridge_sent = true;   // not really sent, but substantial processing
-        // if $PSRF checksum is wrong, send it back to the source:
+        // if checksum is wrong, send it back to the source:
         if (buf[len-5] == '*') {
             char c1 = buf[len-4];
             char c2 = buf[len-3];
@@ -698,6 +706,7 @@ void NMEA_bridge_send(char *buf, int len)
             NMEA_Process_SRF_SKV_Sentences();
             return;
         }
+      }
     }
 #endif
 
@@ -761,33 +770,43 @@ void NMEA_loop()
 
     bool gdl90 = false;
 
+    if ((settings->debug_flags & DEBUG_SIMULATE) == 0
+#if defined(USE_SD_CARD)
+        || SIMfileOpen
+#endif
+        || (settings->gnss_pins != EXT_GNSS_NONE)) {
+
+      // if not reading sim data from Serial, poll Serial here:
+
 #if 0
-    static char usb_buf[128+3];
-    static int usb_n = 0;
-    if (SoC->USB_ops) {
-      gdl90 = (settings->gdl90_in == DEST_USB);
-      while (SoC->USB_ops->available() > 0) {
-          NMEA_Source = DEST_USB;
-          int c = SoC->USB_ops->read();
-          if (gdl90)
-              GDL90_bridge_buf(c, usb_buf, usb_n);
-          else
-              NMEA_bridge_buf(c, usb_buf, usb_n);
+      static char usb_buf[128+3];
+      static int usb_n = 0;
+      if (SoC->USB_ops) {
+        gdl90 = (settings->gdl90_in == DEST_USB);
+        while (SoC->USB_ops->available() > 0) {
+            NMEA_Source = DEST_USB;
+            int c = SoC->USB_ops->read();
+            if (gdl90)
+                GDL90_bridge_buf(c, usb_buf, usb_n);
+            else
+                NMEA_bridge_buf(c, usb_buf, usb_n);
+        }
       }
-    }
 #endif
 
-    static char uart_buf[128+3];
-    static int uart_n = 0;
-    gdl90 = (settings->gdl90_in == DEST_UART);
-    while (Serial.available() > 0) {
-        NMEA_Source = DEST_UART;
-        int c = Serial.read();
-        if (gdl90)
-            GDL90_bridge_buf(c, uart_buf, uart_n);
-        else
-            NMEA_bridge_buf(c, uart_buf, uart_n);
-    }
+      static char uart_buf[128+3];
+      static int uart_n = 0;
+      gdl90 = (settings->gdl90_in == DEST_UART);
+      while (Serial.available() > 0) {
+          NMEA_Source = DEST_UART;
+          int c = Serial.read();
+          if (gdl90)
+              GDL90_bridge_buf(c, uart_buf, uart_n);
+          else
+              NMEA_bridge_buf(c, uart_buf, uart_n);
+      }
+
+    }  // end of polling Serial
 
     static char uart2_buf[128+3];
     static int uart2_n = 0;
@@ -1169,12 +1188,12 @@ void NMEA_Export()
          //   climbrate should be empty
          //   rel_alt should be fuzzyfied if closer than 2k/300m but no alarm
 
-         // <RelativeEast>  (dx) needs to be empty (not zero) for non-directional targets
-         // <RelativeNorth> (dy) needs to be the estimated distance for non-directional targets
          // For non-directional targets:
-         //     course should be empty
-         //     speed should be empty
-         //     climbrate should be empty
+         //   <RelativeEast>  (dx) needs to be empty (not zero)
+         //   <RelativeNorth> (dy) needs to be the estimated distance
+         //   course should be empty
+         //   speed should be empty
+         //   climbrate should be empty
 
          bool stealth = (fop->stealth || ThisAircraft.stealth);  /* reciprocal */
 
@@ -1589,7 +1608,7 @@ int updated(TinyGPSCustom &field, const char *label, int cur_val)
     }
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
         PSTR("%s %s %d\r\n"), label, p, cfg_val);
-    nmea_cfg_reply();
+    nmea_cfg_reply();   // no '*' and thus checksum will not be added
     return cfg_val;
 }
 
@@ -1755,12 +1774,19 @@ void NMEA_Process_SRF_SKV_Sentences()
   }
 
   // $PSRFT,0*5F  or  $PSRFT,1*5E  to set test_mode to 0 or 1, or $PSRFT,?*50 to query
+  // Also reports the chip ID, which is not settable, transmitted if ID type is "device"
   if (T_testmode.isUpdated()) {
 
       char tval = T_testmode.value()[0];
       if (tval == '?') {
-          snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFT,%d*"), test_mode);
+          snprintf_P(NMEABuffer, sizeof(NMEABuffer), PSTR("$PSRFT,%d,%06X*"),
+                test_mode, (SoC->getChipId() & 0x00FFFFFF));
           nmea_cfg_reply();
+          // put custom code here for debugging, for example:
+#if defined(ESP32)
+          if (settings->rx1090)
+              show_zone_stats();
+#endif
       } else {
           if (tval == '0')
               test_mode = false;
@@ -1769,10 +1795,14 @@ void NMEA_Process_SRF_SKV_Sentences()
           else
               test_mode = !test_mode;
           if (test_mode) {
+#if defined(ESP32)
               OLED_msg("TEST",   " MODE");
+#endif
               Serial.println("Test Mode on");
           } else {
+#if defined(ESP32)
               OLED_msg("NOTEST", " MODE");
+#endif
               Serial.println("Test Mode off");
           }
           do_test_mode();

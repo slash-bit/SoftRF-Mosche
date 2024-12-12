@@ -35,7 +35,7 @@
 #include <raspi/raspi.h>
 #endif /* RASPBERRY_PI */
 
-#define SOFTRF_FIRMWARE_VERSION "MB147"
+#define SOFTRF_FIRMWARE_VERSION "MB149"
 #define SOFTRF_IDENT            "SoftRF"
 #define SOFTRF_USB_FW_VERSION   0x0101
 
@@ -122,11 +122,7 @@
 #define ENABLE_AHRS
 #endif /* PREMIUM_PACKAGE */
 
-typedef struct UFO {
-
-#if defined(RASPBERRY_PI) || defined(ARDUINO_ARCH_NRF52)
-    uint8_t   raw[34];
-#endif
+typedef struct CONTAINER {
 
     uint8_t   protocol;
     uint8_t   tx_type;
@@ -199,20 +195,54 @@ typedef struct UFO {
     uint32_t  velocitytime;
     uint32_t  mode_s_time;
 
+} container_t;
+
+// only the fields needed for processing incoming radio messages
+// - made this smaller than 'container' since it is copied over and over
+typedef struct UFO {
+//#if defined(RASPBERRY_PI) || defined(ARDUINO_ARCH_NRF52)
+#if defined(RASPBERRY_PI)
+    uint8_t   raw[34];
+#endif
+    uint32_t  addr;
+    float     latitude;
+    float     longitude;
+    float     altitude;
+    float     pressure_altitude;
+    time_t    timestamp;
+    uint32_t  gnsstime_ms;
+    float     speed;
+    float     course;
+    float     turnrate;
+    float     vs;
+    uint16_t  hdop;
+    uint16_t  last_crc;
+    // those below can be bit-packed into a smaller space:
+    uint8_t   protocol;         // needs 4 bits
+    uint8_t   tx_type;          // needs 3+ bits
+    uint8_t   addr_type;        // needs 3 bits
+    uint8_t   aircraft_type;    // needs 4 bits
+    uint8_t   airborne;         // needs 1 bit
+    int8_t    circling;         // needs 2 bits (signed)
+    bool      stealth;          // needs 1 bit
+    bool      no_track;         // needs 1 bit
+    bool      relayed;          // needs 1 bit
 } ufo_t;
 
 // only the fields needed for processing ADS-B messages:
 typedef struct ADSBFO {
     uint32_t  addr;
-    float     latitude;      // signed decimal-degrees
+    float     latitude;
     float     longitude;
-    float     altitude;      // meters, changed to store altitude above ellipsoid
-    float     distance;       // meters
+    float     altitude;    // meters
+    float     distance;    // meters
     float     bearing;
-    int32_t   dx;        // EW distance to this other aircraft, in meters
-    int32_t   dy;        // NS distance
+    int32_t   dx;          // EW distance to this other aircraft, in meters
+    int32_t   dy;          // NS distance
     uint8_t   tx_type;
+    // if the following are added can remove all reference to "mm" at the "fo1090" level:
     //int8_t    rssi;
+    //int8_t    alt_type;
 } adsfo_t;
 
 typedef struct hardware_info {
@@ -257,7 +287,8 @@ enum
 	SOFTRF_MODE_UAV,
 	SOFTRF_MODE_RECEIVER,
 	SOFTRF_MODE_CASUAL,
-	SOFTRF_MODE_GPSBRIDGE
+	SOFTRF_MODE_GPSBRIDGE,
+	SOFTRF_MODE_MORENMEA     // for Stratux
 };
 
 enum
@@ -333,21 +364,12 @@ enum
 
 static inline uint32_t DevID_Mapper(uint32_t id)
 {
-  /* remap address to avoid overlapping with congested FLARM range */
-  if (((id & 0x00FFFFFF) >= 0xDD0000) && ((id & 0x00FFFFFF) <= 0xDFFFFF)) {
-    id += 0x100000;
-  /*
-   * OGN 0.2.8+ does not decode 'Air V6' traffic when leading byte of 24-bit Id is 0x5B
-   * Remap 11xxxx addresses to avoid overlapping with congested Skytraxx range
-   */
-  } else if ((id & 0x00FF0000) == 0x5B0000 || (id & 0x00FF0000) == 0x110000) {
-    id += 0x010000;
-  }
-
-  return id;
+  // switched to restricting device ID to a 20-bit range
+  // to avoid overlapping with any of FLARM ranges
+  return (0x400000 | (id & 0x000FFFFF));
 }
 
-extern ufo_t ThisAircraft;
+extern container_t ThisAircraft;
 extern hardware_info_t hw_info;
 extern const float txrx_test_positions[90][2] PROGMEM;
 extern uint32_t SetupTimeMarker; 

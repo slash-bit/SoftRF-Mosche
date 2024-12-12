@@ -397,6 +397,7 @@ void handleSettings() {
     is_prime_mk2 = true;
 
   size_t size = 14000;
+  size_t totalsize = size;
   char *offset;
   size_t len = 0;
   char *Settings_temp = (char *) malloc(size);
@@ -455,7 +456,7 @@ void handleSettings() {
 <th align=left>Device ID</th>\
 <td align=right>%06x\
 </td>\
-</tr>"),SoC->getChipId() & 0x00FFFFFF);
+</tr>"),(SoC->getChipId() & 0x00FFFFFF));
     
   len = strlen(offset);
   offset += len;
@@ -1466,7 +1467,8 @@ void handleSettings() {
 
   len = strlen(offset);
   offset += len;
-  Serial.print(F("Settings page size: ")); Serial.println(offset-Settings_temp);
+  Serial.print(F("Settings page size: ")); Serial.print(offset-Settings_temp);
+  Serial.print(F(" out of allocated: ")); Serial.println(totalsize);
   // currently about 12800
 
   SoC->swSer_enableRx(false);
@@ -1535,7 +1537,8 @@ void handleRoot() {
  %s\
  </table>\
  <table width=100%%>\
-  <tr><th align=left>Device Id</th><td align=right>%06X</td></tr>\
+  <tr><th align=left>Device ID</th><td align=right>%06X</td></tr>\
+  <tr><th align=left>Transmitted ID</th><td align=right>%06X</td></tr>\
   <tr><th align=left>Software Version</th><td align=right>%s&nbsp;&nbsp;%s</td></tr>"
 #if !defined(ENABLE_AHRS)
  "</table><table width=100%%>\
@@ -1610,7 +1613,7 @@ void handleRoot() {
        "<tr><td align=center><h4>(Warning: reverted to default settings)</h4></td></tr>" : "")),
     (BTpaused ?
        "<tr><td align=center><h4>(Bluetooth paused, reboot to resume)</h4></td></tr>" : ""),
-    ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
+    (SoC->getChipId() & 0x00FFFFFF), ThisAircraft.addr, SOFTRF_FIRMWARE_VERSION,
     (SoC == NULL ? "NONE" : SoC->name),
     GNSS_name[hw_info.gnss],
     (rf_chip   == NULL ? "NONE" : rf_chip->name),
@@ -1654,8 +1657,9 @@ void handleRoot() {
  ""
 #endif
   );
-  Serial.print(F("Status page size: ")); Serial.println(strlen(Root_temp));
-  // currently about 2800
+  Serial.print(F("Status page size: ")); Serial.print(strlen(Root_temp));
+  Serial.print(F(" out of allocated: ")); Serial.println(size);
+  // currently about 2900
   SoC->swSer_enableRx(false);
   server.sendHeader(String(F("Cache-Control")), String(F("no-cache, no-store, must-revalidate")));
   server.sendHeader(String(F("Pragma")), String(F("no-cache")));
@@ -1945,8 +1949,8 @@ void handleInput() {
           }
           if (settings->ppswire && settings->gnss_pins == EXT_GNSS_15_14)
               settings->altpin0 = false;
-          if (settings->gnss_pins == EXT_GNSS_39_4)
-              settings->altpin0 = false;
+          //if (settings->gnss_pins == EXT_GNSS_39_4)   // already done above
+          //    settings->altpin0 = false;
           if (settings->rx1090 != ADSB_RX_NONE)
               settings->altpin0 = false;
       } else {    // T-Beam v1.x
@@ -2396,6 +2400,12 @@ void Web_setup()
 
   server.on ( "/about", []() {
     serve_P_html(about_html);
+  } );
+
+  server.on ( "/show", []() {
+    // put custom code here for debugging, for example:
+    if (settings->rx1090)
+        show_zone_stats();
   } );
 
   server.on( "/landed_out", []() {

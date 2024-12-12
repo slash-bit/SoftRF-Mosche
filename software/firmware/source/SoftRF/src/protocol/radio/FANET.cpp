@@ -207,7 +207,7 @@ static void payload_absolut2coord(float *lat, float *lon, uint8_t *buf)
 /* ------------------------------------------------------------------------- */
 #endif
 
-bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
+bool fanet_decode(void *fanet_pkt, container_t *this_aircraft, ufo_t *fop) {
 
   fanet_packet_t *pkt = (fanet_packet_t *) fanet_pkt;
   unsigned int altitude;
@@ -306,7 +306,7 @@ bool fanet_decode(void *fanet_pkt, ufo_t *this_aircraft, ufo_t *fop) {
   return rval;
 }
 
-size_t fanet_encode(void *fanet_pkt, ufo_t *this_aircraft) {
+size_t fanet_encode(void *fanet_pkt, container_t *this_aircraft) {
 
   uint32_t id = this_aircraft->addr;
   float lat = this_aircraft->latitude;

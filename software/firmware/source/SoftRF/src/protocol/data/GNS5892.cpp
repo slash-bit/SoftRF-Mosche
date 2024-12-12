@@ -13,6 +13,9 @@
 
 #include <math.h>
 #include <protocol.h>
+#include "GNS5892.h"
+#include "NMEA.h"
+#include "IGC.h"
 #include "../../ApproxMath.h"
 #include "../../../SoftRF.h"
 #include "../../system/SoC.h"
@@ -20,14 +23,15 @@
 #include "../../driver/EEPROM.h"
 #include "../../driver/Baro.h"
 #include "../../driver/GNSS.h"
+#include "../../driver/SDcard.h"
 #include "../../TrafficHelper.h"
 #include "../radio/Legacy.h"
-#include "NMEA.h"
-#include "GNS5892.h"
 
-static adsfo_t fo1090, EmptyFO1090;
+static adsfo_t fo1090;  // EmptyFO1090;
 static char buf1090[256];
 static unsigned char msg[14];
+
+static void EmptyFO1090(adsfo_t *p) { memset(p, 0, sizeof(ADSBFO)); }
 
 typedef struct mmstruct {
     // variables filled in by message parsing:
@@ -43,7 +47,9 @@ typedef struct mmstruct {
     uint8_t  sub;       // subtype
     uint8_t  fflag;     // odd/even
 } mm_t;
-static mm_t mm, EmptyMsg;
+static mm_t mm;  // EmptyMsg;
+
+static void EmptyMsg(mm_t *p) { memset(p, 0, sizeof(mmstruct)); }
 
 static uint8_t ac_type_table[16] =
 {
@@ -66,6 +72,234 @@ static uint8_t ac_type_table[16] =
 };
 
 uint32_t adsb_packets_counter = 0;
+
+// data structures for collecting statistics on RSSI vs. distance
+
+#define ZONESTATSVERSION 1
+#define MINRSSI 24
+#define MAXRSSI 43
+// GNS5892 may report as high as 45, here we fold 44-45 into 43
+#define MINSAMPLE 100
+#define MAXSAMPLE 10000
+
+typedef struct zonestruct {
+    uint32_t ignore;
+    uint32_t report;
+    uint32_t alarm1;
+    uint32_t alarm2;
+} zonestats_t;
+static zonestats_t zone_stats[1+MAXRSSI-MINRSSI];
+static int32_t stats_count = 0;
+
+// RSSI thresholds, with defaults:
+static uint8_t close_rssi  = 27;    // at 27-29 still do not report
+static uint8_t report_rssi = 30;    // at 30-31 report, but no alarm
+static uint8_t alarm1_rssi = 32;    // at 32-34 give alarm level "low"
+static uint8_t alarm2_rssi = 35;    // at 35+ give alarm level "important"
+
+static void zero_stats()
+{
+    SPIFFS.remove("/rssidist.txt");
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++)
+       zone_stats[rssi-MINRSSI] = {0};
+}
+
+// try and load RSSI stats from file
+static bool load_zone_stats()
+{
+    if (! SPIFFS.exists("/rssidist.txt")) {
+        Serial.println("rssidist.txt does not exist in SPIFFS");
+        return false;
+    }
+    File statsfile = SPIFFS.open("/rssidist.txt", FILE_READ);
+    if (! statsfile)
+        return false;
+    char buf[64];
+    if (! getline(statsfile, buf, 64)) {
+        statsfile.close();
+        return false;
+    }
+    int file_version;
+    sscanf(buf, "%d", &file_version);
+    if (file_version != ZONESTATSVERSION) {
+        Serial.println("wrong version of rssidist.txt");
+        statsfile.close();
+        return false;
+    }
+    // read rest of file into zone_stats[]
+    Serial.println("reading rssidist.txt...");
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++) {
+        if (! getline(statsfile, buf, 64)) {
+            Serial.println("rssidist.txt ended early");
+            statsfile.close();
+            zero_stats();
+            return false;
+        }
+        //Serial.println(buf);
+        int index = rssi - MINRSSI;
+        int file_rssi;
+        sscanf(buf, "%d,%d,%d,%d,%d",
+            &file_rssi,
+            &zone_stats[index].ignore,
+            &zone_stats[index].report,
+            &zone_stats[index].alarm1,
+            &zone_stats[index].alarm2);
+        snprintf(buf, 64, "%d,%d,%d,%d,%d",
+            rssi,
+            zone_stats[index].ignore,
+            zone_stats[index].report,
+            zone_stats[index].alarm1,
+            zone_stats[index].alarm2);
+        Serial.println(buf);
+        if (file_rssi != rssi) {
+            Serial.println("rssidist.txt rssi values wrong");
+            statsfile.close();
+            zero_stats();
+            return false;
+        }
+    }
+    statsfile.close();
+    return true;
+}
+
+static void set_zone_thresholds(bool force)
+{
+    uint32_t closer  = 0;
+    uint32_t farther = 0;
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++) {
+        int index = rssi - MINRSSI;
+        farther += zone_stats[index].ignore + zone_stats[index].report;
+        closer  += zone_stats[index].alarm1 + zone_stats[index].alarm2;
+    }
+    if (closer < MINSAMPLE && (! force))
+        return;      // use the defaults (but continue to collect data)
+    // - continue if accumulated at least 100 samples in under-1000m range
+    if (closer > MAXSAMPLE || farther > 0x08000000)
+        stats_count = -1;    // do not collect any more data
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++) {
+        int index = rssi - MINRSSI;
+#if 0
+        uint32_t middle = zone_stats[index].ignore
+                        + zone_stats[index].report
+                        + zone_stats[index].alarm1
+                        + zone_stats[index].alarm2;
+        middle >>= 1;   // half the samples
+        // Note: the sample is grossly biased since the larger distances cover
+        // much more area, so may want to modify the definition of "median" below.
+        // The threshold of 5000m in sample_rssi_zone() helps.
+        uint32_t above = zone_stats[index].ignore;
+        if (above > middle)
+            // median distance is > 2*ALARM_ZONE_CLOSE, do not report
+            report_rssi = rssi+1;
+        above += zone_stats[index].report;
+        if (above > middle)
+            // median distance is > ALARM_ZONE_LOW, no alarm
+            alarm1_rssi = rssi+1;
+        above += zone_stats[index].alarm1;
+        if (above > middle)
+            // median distance is > ALARM_ZONE_IMPORTANT, alarm level not IMPORTANT
+            alarm2_rssi = rssi+1;
+#else
+        // equivalent, perhaps more readable:
+        uint32_t above  = zone_stats[index].ignore;
+        uint32_t report = zone_stats[index].report;
+        uint32_t alarm1 = zone_stats[index].alarm1;
+        uint32_t below  = report + alarm1 + zone_stats[index].alarm2;
+        if (above > below)
+            // median distance is > 2*ALARM_ZONE_CLOSE, do not report
+            report_rssi = rssi+1;
+        above += report;
+        below -= report;
+        if (above > below)
+            // median distance is > ALARM_ZONE_LOW, no alarm
+            alarm1_rssi = rssi+1;
+        above += alarm1;
+        below -= alarm1;
+        if (above > below)
+            // median distance is > ALARM_ZONE_IMPORTANT, alarm level not IMPORTANT
+            alarm2_rssi = rssi+1;
+#endif
+    }
+    close_rssi = report_rssi - 3;   // mark as 3000m distance, but not reported in PFLAA
+
+    Serial.print("RSSI thresholds: ");
+    Serial.print(close_rssi);
+    Serial.print(", ");
+    Serial.print(report_rssi);
+    Serial.print(", ");
+    Serial.print(alarm1_rssi);
+    Serial.print(", ");
+    Serial.println(alarm2_rssi);
+}
+
+static void sample_rssi_zone(uint8_t rssi, float distance, float alt_diff)
+{
+    if (distance > 6000)  return;         // only sample smaller distances
+    if (rssi < MINRSSI)   return;
+    if (stats_count < 0)  return;         // do not collect any more data
+    uint32_t distance_3d = iapproxHypotenuse0((int32_t) distance, (int32_t) alt_diff);
+    //if (distance_3d > 6000)  return;     // only sample smaller distances
+    if (rssi > MAXRSSI)  rssi = MAXRSSI;   // fold higher RSSIs into this top value
+    int index = rssi - MINRSSI;
+    if (distance_3d > 2*ALARM_ZONE_CLOSE)        zone_stats[index].ignore++;     // 3000m
+    else if (distance_3d > ALARM_ZONE_LOW)       zone_stats[index].report++;     // 1000
+    else if (distance_3d > ALARM_ZONE_IMPORTANT) zone_stats[index].alarm1++;     //  700
+    else                                         zone_stats[index].alarm2++;
+    ++stats_count;
+}
+
+// this is called after landing
+void save_zone_stats()
+{
+    if (stats_count <= 0) {
+        Serial.println("no update to rssidist.txt");
+        return;
+    }
+    SPIFFS.remove("/oldrssi.txt");
+    SPIFFS.rename("/rssidist.txt", "/oldrssi.txt");
+    File statsfile = SPIFFS.open("/rssidist.txt", FILE_WRITE);
+    Serial.print(stats_count);
+    Serial.println("new samples, writing rssidist.txt...");
+    statsfile.println((int)ZONESTATSVERSION);
+    char buf[64];
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++) {
+        int index = rssi - MINRSSI;
+        snprintf(buf, 64, "RD,%d,%d,%d,%d,%d",
+            rssi,
+            zone_stats[index].ignore,
+            zone_stats[index].report,
+            zone_stats[index].alarm1,
+            zone_stats[index].alarm2);
+        //Serial.print("...");
+        Serial.println(buf+3);     // skip the "RD,"
+        statsfile.println(buf+3);
+        FlightLogComment(buf);
+        // - it will prepend LPLT, resulting in, e.g., LPLTRD,31,1234,321,45,7
+    }
+    statsfile.close();
+}
+
+// print the stats at any time
+void show_zone_stats()
+{
+    Serial.println("RSSI zone stats:");
+    char buf[64];
+    for (int rssi=MINRSSI; rssi <= MAXRSSI; rssi++) {
+        int index = rssi - MINRSSI;
+        snprintf(buf, 64, "%d,%d,%d,%d,%d",
+            rssi,
+            zone_stats[index].ignore,
+            zone_stats[index].report,
+            zone_stats[index].alarm1,
+            zone_stats[index].alarm2);
+        //Serial.print("...");
+        Serial.println(buf);
+    }
+    // for testing, save to SPIFFS file,
+    // and compute thresholds too (even if sample is small)
+    save_zone_stats();
+    set_zone_thresholds(true);
+}
 
 // truncated CRC table, for 56 bit messages only, and skipped the CRC bits, leaving 32
 static uint32_t mode_s_checksum_table[] = {
@@ -453,7 +687,8 @@ static int find_traffic_by_addr(uint32_t addr)
         if (Container[i].addr == addr) {
             if (Container[i].protocol == RF_PROTOCOL_ADSB_1090)
                 return i;      // found
-            if (OurTime <= Container[i].timestamp + ENTRY_EXPIRATION_TIME)
+            if (Container[i].relayed == 0
+                && OurTime <= Container[i].timestamp + ENTRY_EXPIRATION_TIME)
                 return -1;     // already tracked via other means
             // was tracked via other means, but expired - clear this slot
             Container[i].addr = 0;
@@ -464,7 +699,7 @@ static int find_traffic_by_addr(uint32_t addr)
 }
 
 // make room for a new entry
-static int add_traffic_by_dist(float distance)
+static int add_traffic_by_dist(float alt_diff)
 {
     int i;
     // replace an empty object if found
@@ -479,14 +714,30 @@ static int add_traffic_by_dist(float distance)
         return i;
       }
     }
-    // may replace a non-expired object: identify a less important one
+    /* identify the farthest-away non-"followed" object */
+    /*    (distance adjusted for altitude difference)   */
+    uint32_t follow_id = settings->follow_id;
+    int max_dist_ndx = MAX_TRACKING_OBJECTS;
+    float max_dist = 0;
+    float adj_distance;
     for (i=0; i < MAX_TRACKING_OBJECTS; i++) {
-      ufo_t *cip = &Container[i];
-      if (cip->distance > distance
-       && cip->alarm_level == ALARM_LEVEL_NONE
-       && cip->addr != settings->follow_id) {
-            return i;
+      container_t *cip = &Container[i];
+      if (cip->alarm_level == ALARM_LEVEL_NONE
+          && cip->addr != follow_id && cip->relayed == false) {
+        adj_distance = cip->adj_distance;
+        if (adj_distance < cip->distance)
+            adj_distance = cip->distance;
+        if (adj_distance > max_dist)  {
+          max_dist_ndx = i;
+          max_dist = adj_distance;
+        }
       }
+    }
+    if (max_dist_ndx < MAX_TRACKING_OBJECTS) {
+        // may replace the farthest object
+        adj_distance = fo1090.distance + VERTICAL_SLOPE * fabs(alt_diff);
+        if (adj_distance < max_dist || fo1090.addr == follow_id)
+            return max_dist_ndx;
     }
     return MAX_TRACKING_OBJECTS;
 }
@@ -500,44 +751,56 @@ static void update_traffic_position(int index)
     // Only position messages create a traffic table entry
     //   - and only if not too far or high
 
-    //already done by parse_position():
+    //already done:
     //int index = find_traffic_by_addr(fo1090.addr);
     //if (index < 0)        // already tracked via other means
     //    return;
 
-    ufo_t *cip;
-    if (index == MAX_TRACKING_OBJECTS) {  // not found
-        index = add_traffic_by_dist(fo1090.distance);
+    float alt_diff;
+    container_t *cip;
+    if (index == MAX_TRACKING_OBJECTS) {      // not found
+        // convert pressure altitude to GNSS ellipsoid altitude
+        if (mm.alt_type == 0) {               // not GPS altitude
+          if (baro_chip != NULL)
+            fo1090.altitude += ThisAircraft.baro_alt_diff;
+          else
+            fo1090.altitude += average_baro_alt_diff;
+        }
+        alt_diff = fo1090.altitude - ThisAircraft.altitude;
+        index = add_traffic_by_dist(alt_diff);
         if (index == MAX_TRACKING_OBJECTS)    // no room
             return;
         cip = &Container[index];
-        *cip = EmptyFO;
-        cip->addr = fo1090.addr;
+        //*cip = EmptyContainer;
+        EmptyContainer(cip);
+        cip->addr      = fo1090.addr;
         cip->addr_type = ADDR_TYPE_ICAO;
         icao_to_n(cip);                           // compute USA N-number from ICAO ID
         cip->protocol  = RF_PROTOCOL_ADSB_1090;
         cip->aircraft_type = AIRCRAFT_TYPE_UFO;   // will be updated by identity message
         cip->tx_type   = fo1090.tx_type;
         cip->airborne  = 1;          // we only process airborne traffic (mm.type 9-22)
-        cip->circling  = 0;
-        cip->timerelayed = 0;
+        //cip->circling  = 0;
+        //cip->timerelayed = 0;
     } else {
         // this ID already tracked, just update some fields
         cip = &Container[index];
         //if (fo1090.tx_type > cip->tx_type)
         //    cip->tx_type = fo1090.tx_type;     // already done
+        if (mm.alt_type == 0) {               // not GPS altitude
+          if (cip->baro_alt_diff != 0)        // from a velocity message
+            fo1090.altitude += cip->baro_alt_diff;
+          else if (baro_chip != NULL)
+            fo1090.altitude += ThisAircraft.baro_alt_diff;
+          else
+            fo1090.altitude += average_baro_alt_diff;
+        }
+        alt_diff = fo1090.altitude - ThisAircraft.altitude;
         cip->prevaltitude = cip->altitude;
         cip->prevtime_ms = cip->gnsstime_ms;
     }
-    // convert pressure altitude to GNSS ellipsoid altitude
-    if (mm.alt_type == 0) {               // not GPS altitude
-      if (cip->baro_alt_diff != 0)        // from a velocity message
-        fo1090.altitude += cip->baro_alt_diff;
-      else if (baro_chip != NULL)
-        fo1090.altitude += ThisAircraft.baro_alt_diff;
-      else
-        fo1090.altitude += average_baro_alt_diff;
-    }
+    if (settings->mode_s)
+        sample_rssi_zone(mm.rssi, fo1090.distance, alt_diff);
     cip->altitude  = fo1090.altitude;
     cip->latitude  = fo1090.latitude;
     cip->longitude = fo1090.longitude;
@@ -545,7 +808,7 @@ static void update_traffic_position(int index)
     cip->dx        = fo1090.dx;
     cip->dy        = fo1090.dy;
     cip->bearing   = fo1090.bearing;
-    cip->alt_diff  = cip->altitude - ThisAircraft.altitude;
+    cip->alt_diff  = alt_diff;
     cip->rssi      = mm.rssi;
     cip->timestamp    = OurTime;
     cip->positiontime = OurTime;
@@ -556,16 +819,16 @@ static void update_traffic_position(int index)
 if (settings->debug_flags & DEBUG_DEEPER) {
   if (settings->nmea_d || settings->nmea2_d) {
     snprintf_P(NMEABuffer, sizeof(NMEABuffer),
-      PSTR("$PSADS,%06X,%d,%d,%d\r\n"),
-      cip->addr, (int)cip->alt_diff, (int)cip->distance, mm.rssi);
-    NMEA_Outs(settings->nmea_d, settings->nmea2_d, NMEABuffer, strlen(NMEABuffer), false);
+      PSTR("$PSADS,%06X,%d,%d,%d,%d\r\n"),
+      cip->addr, cip->tx_type, (int)cip->alt_diff, (int)cip->distance, mm.rssi);
+    NMEAOutD();
   }
 }
 
     // relay some traffic - only if we are airborne (or in "relay only" mode)
     if (settings->rf_protocol == RF_PROTOCOL_LEGACY || settings->rf_protocol == RF_PROTOCOL_LATEST) {
-        if (settings->relay != RELAY_OFF && settings->relay != RELAY_LANDED
-        && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
+        if (settings->relay > RELAY_LANDED)
+               // && (ThisAircraft.airborne || settings->relay == RELAY_ONLY))
             air_relay(cip);
     }
 }
@@ -661,35 +924,23 @@ static float decode_ac12_field() {
     return 0.3048 * (float) alt;   // meters
 }
 
-// this function based on sampling of GNS5892 reception,
-// on the ground for one specific antenna arrangement
-// and is a compromise since the distance spread is large
-// - ideally this should be calibrated for the specific aircraft
+// ideally this should be calibrated for the specific aircraft
 //   using actually received ADS-B data over time
 float estimate_distance_from_rssi(uint8_t rssi)
 {
-// based on dump5892, quarter-wave wire as antenna, on the ground:
-    if (rssi < 29)
+// based on limited data from ground-based SoftRF reception of ADS-B DF17
+// will be revised - and possibly should be calibrated for the individual installation
+    if (rssi < close_rssi)
         return ALARM_ZONE_NONE;           // 15 km, will not be reported at all
-    if (rssi < 33)                        // for RSSI 29+
+    if (rssi < report_rssi)               // for RSSI 27-29
         return 2*ALARM_ZONE_CLOSE;        // estimate as 3000m, not reported in PFLAA
-    if (rssi < 36)                        // for RSSI 33+
+    if (rssi < alarm1_rssi)               // for RSSI 30-31
         return 2*ALARM_ZONE_LOW;          // report as 2000m, report, but still no alarm
-    if (rssi < 39)                        // for RSSI 36+
-        return ALARM_ZONE_IMPORTANT+100;  // report as 800m, generate alarm level LOW
-    return ALARM_ZONE_URGENT+100;         // 500m, alarm level IMPORTANT for RSSI 39+
-
-/* based on limited data from ground-based SoftRF reception of ADS-B DF17
-    if (rssi < 26)
-        return ALARM_ZONE_NONE;           // 15 km, will not be reported at all
-    if (rssi < 28)                        // for RSSI 26+
-        return 2*ALARM_ZONE_CLOSE;        // estimate as 3000m, not reported in PFLAA
-    if (rssi < 30)                        // for RSSI 28+
-        return 2*ALARM_ZONE_LOW;          // report as 2000m, report, but still no alarm
-    if (rssi < 33)                        // for RSSI 30+
-        return ALARM_ZONE_IMPORTANT+100;  // report as 800m, generate alarm level LOW
-    return ALARM_ZONE_URGENT+100;         // 500m, alarm level IMPORTANT for RSSI 33+
-*/
+    if (rssi < alarm2_rssi)               // for RSSI 32-34
+        return ALARM_ZONE_IMPORTANT;      // report as 700m, generate alarm level LOW
+    return ALARM_ZONE_URGENT;             // 400m, alarm level IMPORTANT for RSSI 35+
+    // note: alarm will only be generated if this reported distance plus 5*alt_diff < zone,
+    // i.e., with up to 60m alt_diff (possibly 120m alt_diff for alarm level 1 if level 2 RSSI)
 }
 
 // Mode S altitude replies - only altitude & ICAO ID
@@ -700,38 +951,49 @@ void update_mode_s_traffic(int i)
     //int i = find_traffic_by_addr(fo1090.addr);
     //if (i < 0)        // already tracked via other means
     //    return;
-    ufo_t *cip;
+
+    float alt_diff;
+    container_t *cip;
     if (i == MAX_TRACKING_OBJECTS) {  // not found
-        i = add_traffic_by_dist(fo1090.distance);
+        // convert pressure altitude to GNSS ellipsoid altitude
+        if (baro_chip != NULL)
+          fo1090.altitude += ThisAircraft.baro_alt_diff;
+        else
+          fo1090.altitude += average_baro_alt_diff;
+        alt_diff = fo1090.altitude - ThisAircraft.altitude;
+        i = add_traffic_by_dist(alt_diff);
         if (i == MAX_TRACKING_OBJECTS)    // no room
             return;
         cip = &Container[i];
-        *cip = EmptyFO;
+        //*cip = EmptyContainer;
+        EmptyContainer(cip);
         cip->addr = fo1090.addr;
         cip->addr_type = ADDR_TYPE_ICAO;
         icao_to_n(cip);                   // compute USA N-number from ICAO ID
         cip->protocol  = RF_PROTOCOL_ADSB_1090;
         cip->aircraft_type = AIRCRAFT_TYPE_UFO;
         cip->tx_type   = fo1090.tx_type;
+        cip->airborne  = 1;
     } else {
         // this ID already tracked, just update some fields
         cip = &Container[i];
         if (fo1090.tx_type > cip->tx_type)
             cip->tx_type = fo1090.tx_type;
+        // >>> perhaps do this: (would only miss altitude updates via Mode S messages)
+        //if (fo1090.tx_type < cip->tx_type)
+        //    return;
+        if (cip->baro_alt_diff != 0)        // from a velocity message
+          fo1090.altitude += cip->baro_alt_diff;
+        else if (baro_chip != NULL)
+          fo1090.altitude += ThisAircraft.baro_alt_diff;
+        else
+          fo1090.altitude += average_baro_alt_diff;
+        alt_diff = fo1090.altitude - ThisAircraft.altitude;
         cip->prevaltitude = cip->altitude;
         cip->prevtime_ms = cip->gnsstime_ms;
     }
-    // convert pressure altitude to GNSS ellipsoid altitude
-    if (mm.alt_type == 0) {               // not GPS altitude
-      if (cip->baro_alt_diff != 0)        // from a velocity message
-        fo1090.altitude += cip->baro_alt_diff;
-      else if (baro_chip != NULL)
-        fo1090.altitude += ThisAircraft.baro_alt_diff;
-      else
-        fo1090.altitude += average_baro_alt_diff;
-    }
     cip->altitude = fo1090.altitude;
-    cip->alt_diff  = cip->altitude - ThisAircraft.altitude;
+    cip->alt_diff = alt_diff;
     if (cip->tx_type <= TX_TYPE_S) {       // no ADS-B position data
         cip->distance = fo1090.distance;   // estimated from RSSI
         cip->bearing  = 0;                 // non-directional
@@ -741,19 +1003,30 @@ void update_mode_s_traffic(int i)
     cip->mode_s_time = OurTime;
     cip->gnsstime_ms = millis();
     Traffic_Update(cip);
+
 if (settings->debug_flags & DEBUG_DEEPER) {
-Serial.print(cip->addr, HEX);
-Serial.print(" Mode S altitude (ft): ");
-Serial.print((int)(3.2808*cip->altitude));
-if (cip->tx_type <= TX_TYPE_S)
-Serial.print(" rough distance: ");
-else
-Serial.print(" ADS-B distance: ");
-Serial.print((int)cip->distance);  // may be filled in by a too-far ADS-B message
-Serial.print(" RSSI: ");
-Serial.print(mm.rssi);
-Serial.print(" tx_type: ");
-Serial.println(cip->tx_type);
+if (settings->nmea_d || settings->nmea2_d) {
+/* send data out as NMEA */
+  if (settings->nmea_d || settings->nmea2_d) {
+    snprintf_P(NMEABuffer, sizeof(NMEABuffer),
+      PSTR("$PSMDS,%06X,%d,%d,%d,%d\r\n"),
+      cip->addr, cip->tx_type, (int)cip->alt_diff, (int)cip->distance, mm.rssi);
+    NMEAOutD();
+  }
+} else {
+  Serial.print(cip->addr, HEX);
+  Serial.print(" Mode S altitude (ft): ");
+  Serial.print((int)(3.2808*cip->altitude));
+  if (cip->tx_type <= TX_TYPE_S)
+    Serial.print(" rough distance: ");
+  else
+    Serial.print(" ADS-B distance: ");
+  Serial.print((int)cip->distance);  // may be filled in by a too-far ADS-B message
+  Serial.print(" RSSI: ");
+  Serial.print(mm.rssi);
+  Serial.print(" tx_type: ");
+  Serial.println(cip->tx_type);
+}
 }
 }
 
@@ -810,7 +1083,8 @@ Serial.println(alt);
     }
     fo1090.altitude = 0.3048 * (float) alt;    // convert altitude from feet into meters
     if (fabs(fo1090.altitude-ThisAircraft.altitude) > 2000) {
-        if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+        //if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+        if ((! ((settings->debug_flags & (DEBUG_DEEPER|DEBUG_ALARM)) == DEBUG_DEEPER))
                && fo1090.addr != settings->follow_id)
             return false;
     }
@@ -829,7 +1103,7 @@ static bool parse_identity(int i)
     //if (i < 0)                      // already tracked via other means
     //    return false;
 
-    ufo_t *cip = &Container[i];
+    container_t *cip = &Container[i];
 
     //if (fo1090.tx_type > cip->tx_type)
     //    cip->tx_type = fo1090.tx_type;
@@ -892,14 +1166,6 @@ static bool parse_identity(int i)
 
 static bool parse_position(int index)
 {
-    if (index < MAX_TRACKING_OBJECTS) {       // found
-        // mark as transmitting ADS-B, even if rejected below (too far, etc)
-        if (fo1090.tx_type > Container[index].tx_type) {
-            if (fo1090.tx_type > Container[index].tx_type)
-                Container[index].tx_type = fo1090.tx_type;
-        }
-    }
-
     // Most receiveable signals are from farther away than we may be interested in.
     // An efficient way to filter them out at this early stage will save a lot of CPU cycles.
 
@@ -918,7 +1184,8 @@ static bool parse_position(int index)
     // filter by altitude, but always include "followed" aircraft
     // show all altitudes in debug-deeper mode for testing
     if (fabs(fo1090.altitude - ThisAircraft.altitude) > 2000) {
-        if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+        //if (((settings->debug_flags & DEBUG_DEEPER) == 0 || (settings->debug_flags & DEBUG_ALARM) != 0)
+        if ((! ((settings->debug_flags & (DEBUG_DEEPER|DEBUG_ALARM)) == DEBUG_DEEPER))
                && fo1090.addr != settings->follow_id)
             return false;
     }
@@ -1042,6 +1309,7 @@ static bool parse_position(int index)
     }
 
 if (settings->debug_flags & DEBUG_DEEPER) {
+if (! (settings->nmea_d || settings->nmea2_d)) {
 Serial.print(fo1090.addr, HEX);
 Serial.print(" ADS-B altitude (ft): ");
 Serial.print((int)(3.2808*fo1090.altitude));
@@ -1054,6 +1322,7 @@ Serial.print(" bearing: ");
 Serial.print((int)fo1090.bearing);
 Serial.print(" RSSI: ");
 Serial.println(mm.rssi);
+}
 }
     update_traffic_position(index);
     ++adsb_packets_counter;
@@ -1070,7 +1339,7 @@ static bool parse_velocity(int i)
     //if (i < 0)                      // already tracked via other means
     //    return false;
 
-    ufo_t *cip = &Container[i];
+    container_t *cip = &Container[i];
 
     // if the aircraft sends velocity too often, don't process more than once per second
     if (cip->velocitytime == OurTime)
@@ -1111,10 +1380,10 @@ static bool parse_velocity(int i)
           mm.nsv = ns_velocity;
 
       // Compute velocity and angle from the two speed components
-      cip->speed = (float) iapproxHypotenuse0(mm.nsv, mm.ewv);   // knots
+      cip->speed = (float) iapproxHypotenuse1((int32_t) mm.nsv, (int32_t) mm.ewv);   // knots
       if (cip->speed > 0) {
           cip->prevcourse = cip->course;
-          cip->course = iatan2_approx(mm.nsv, mm.ewv);
+          cip->course = iatan2_approx((int32_t) mm.nsv, (int32_t) mm.ewv);
           // We don't want negative values but a 0-360 scale.
           if (cip->course < 0)
               cip->course += 360;
@@ -1179,7 +1448,8 @@ static bool parse_velocity(int i)
 
 static bool parse(char *buf, int n)
 {
-    mm = EmptyMsg;      // start with a clean slate of all zeros
+    //mm = EmptyMsg;      // start with a clean slate of all zeros
+    EmptyMsg(&mm);        // start with a clean slate of all zeros
     //int k=0;
     int i;
     if (buf[0] == '*') {
@@ -1249,6 +1519,7 @@ Serial.println((int)(msg[0] & 7));
 
     int j=1;
     uint32_t addr;       // ICAO address
+    container_t *cip;
 
     if (mm.frame == 0 || mm.frame == 4) {    // Mode S altitude replies
 
@@ -1263,7 +1534,8 @@ Serial.println((int)(msg[0] & 7));
         static uint32_t lasttime = 0;
         uint32_t thistime = millis();
         if (thistime < lasttime + 300) {       // some aircraft send bursts of messages
-if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+//if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+if ((settings->debug_flags & (DEBUG_DEEPER|DEBUG_ALARM)) == DEBUG_DEEPER)
 Serial.println("throttling Mode S message burst");
             return false;
         }
@@ -1287,10 +1559,11 @@ Serial.println("throttling Mode S message burst");
         if (index < 0)                       // already tracked via other means
             return false;
         if (index < MAX_TRACKING_OBJECTS) {   // found
-            ufo_t *cip = &Container[index];
+            cip = &Container[index];
             // if the aircraft has recently sent ADS-B position, don't process Mode S
             if (cip->positiontime == OurTime) {
-if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+//if ((settings->debug_flags & DEBUG_DEEPER) != 0 && (settings->debug_flags & DEBUG_ALARM) == 0)
+if ((settings->debug_flags & (DEBUG_DEEPER|DEBUG_ALARM)) == DEBUG_DEEPER)
 Serial.println("ignoring S - have recent P");
                 return false;
             }
@@ -1299,7 +1572,8 @@ Serial.println("ignoring S - have recent P");
                 return false;
         }
 
-        fo1090 = EmptyFO1090;
+        //fo1090 = EmptyFO1090;
+        EmptyFO1090(&fo1090);
         fo1090.addr = addr;
         fo1090.tx_type = TX_TYPE_S;
         fo1090.distance = distance;
@@ -1329,6 +1603,8 @@ Serial.println("ignoring S - have recent P");
     int index = find_traffic_by_addr(addr);
     if (index < 0)                        // already tracked via other means
         return false;
+    if (index < MAX_TRACKING_OBJECTS)     // found
+        cip = &Container[index];
 
     // convert the rest of the message from hex to binary
     n -= 6;                               // skip the CRC
@@ -1341,7 +1617,8 @@ Serial.println("ignoring S - have recent P");
         return false;
 
     // start with a clean slate
-    fo1090 = EmptyFO1090;
+    //fo1090 = EmptyFO1090;
+    EmptyFO1090(&fo1090);
     fo1090.addr = addr;
 
     if (tisb)
@@ -1368,9 +1645,14 @@ Serial.println("ignoring S - have recent P");
     } else if (mm.type >= 9 && mm.type <= 22 && mm.type != 19) {
 
         if (index < MAX_TRACKING_OBJECTS) {   // found
+
             // if the aircraft sends positions too often, don't process more than once per second
-            if (Container[index].positiontime == OurTime)
+            if (cip->positiontime == OurTime)
                 return false;
+
+            // mark as transmitting ADS-B, even if rejected below (too far, etc)
+            if (fo1090.tx_type > cip->tx_type)
+                cip->tx_type = fo1090.tx_type;
         }
 
         return parse_position(index);
@@ -1379,7 +1661,7 @@ Serial.println("ignoring S - have recent P");
 
         if (index == MAX_TRACKING_OBJECTS)            // not found
             return false;
-        if (Container[index].tx_type < TX_TYPE_TISB)  // no position - ignore velocity
+        if (cip->tx_type < TX_TYPE_TISB)  // no position - ignore velocity
             return false;
 
         return parse_velocity(index);
@@ -1431,6 +1713,9 @@ void gns5892_setup()
 {
   if (has_serial2 == false)
     return;
+
+  if (load_zone_stats())
+      set_zone_thresholds(false);
 
   CPRRelative_setup();
 

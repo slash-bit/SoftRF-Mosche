@@ -170,8 +170,9 @@ void parsePING(JsonObject root)
           aircraft_array[i].lonDD != 0.0 &&
           aircraft_array[i].altitudeMM != 0) {
 
-        fo = EmptyFO;
-        memset(fo.raw, 0, sizeof(fo.raw));
+        //fo = EmptyFO;
+        EmptyFO(&fo);
+        //memset(fo.raw, 0, sizeof(fo.raw));
 
 #if 0
         std::tm t = {};
@@ -233,8 +234,8 @@ void parsePING(JsonObject root)
 
         /* Fill a free entry if able */
         for (j=0; j < MAX_TRACKING_OBJECTS; j++) {
-          if (Container[j].addr == 0 &&
-             memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
+          if (Container[j].addr == 0) {
+              // && memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
             Container[j] = fo;
             break;
           }
@@ -380,8 +381,9 @@ void parseD1090(JsonObject root)
           aircraft_array[i].lon != 0.0 &&
           aircraft_array[i].altitude != 0.0) {
 
-        fo = EmptyFO;
-        memset(fo.raw, 0, sizeof(fo.raw));
+        //fo = EmptyFO;
+        EmptyFO(&fo);
+        //memset(fo.raw, 0, sizeof(fo.raw));
 #if 0
         fo.timestamp = (time_t) (var_now - aircraft_array[i].seen_pos);
 #else
@@ -430,8 +432,8 @@ void parseD1090(JsonObject root)
 
         /* Fill a free entry if able */
         for (j=0; j < MAX_TRACKING_OBJECTS; j++) {
-          if (Container[j].addr == 0 &&
-             memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
+          if (Container[j].addr == 0) {
+              // && memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
             Container[j] = fo;
             break;
           }
@@ -489,7 +491,8 @@ void parseRAW(JsonObject root)
       size_t data_len = strlen(data);
       if (data_len > 0) {
 
-        fo = EmptyFO;
+        //fo = EmptyFO;
+        EmptyFO(&fo);
 
         if (data_len > 2 * MAX_PKT_SIZE) {
           data_len = 2 * MAX_PKT_SIZE;
@@ -511,8 +514,8 @@ void parseRAW(JsonObject root)
 
         /* Fill a free entry if able */
         for (j=0; j < MAX_TRACKING_OBJECTS; j++) {
-          if (Container[j].addr == 0 &&
-             memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
+          if (Container[j].addr == 0) {
+               // && memcmp(Container[j].raw, EmptyFO.raw, sizeof(EmptyFO.raw)) == 0) {
             Container[j] = fo;
             break;
           }

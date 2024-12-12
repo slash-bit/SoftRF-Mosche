@@ -179,7 +179,7 @@ typedef struct {
 extern const rf_proto_desc_t p3i_proto_desc;
 extern const uint8_t whitening_pattern[] PROGMEM;
 
-bool p3i_decode(void *, ufo_t *, ufo_t *);
-size_t p3i_encode(void *, ufo_t *);
+bool p3i_decode(void *, container_t *, ufo_t *);
+size_t p3i_encode(void *, container_t *);
 
 #endif /* PROTOCOL_P3I_H */

@@ -27,7 +27,7 @@
 
 void Voice_setup(void);
 void Voice_test(int);
-bool Voice_Notify(ufo_t *, bool);
+bool Voice_Notify(container_t *, bool);
 void Voice_loop(void);
 void Voice_fini(void);
 

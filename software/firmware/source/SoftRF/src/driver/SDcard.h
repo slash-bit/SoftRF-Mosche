@@ -1,6 +1,10 @@
 #ifndef SDCARD_H
 #define SDCARD_H
 
+#if defined(ESP32)
+
+char *getline(File file, char *buf, int limit);
+
 #if defined(USE_SD_CARD)
 
 // micro SD card SPI pins
@@ -34,5 +38,7 @@ extern bool SIMfileOpen;
 extern bool TARGETfileOpen;
 
 #endif // USE_SD_CARD
+
+#endif // ESP32
 
 #endif // SDCARD_H

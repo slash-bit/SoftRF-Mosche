@@ -46,15 +46,19 @@ bool do_alarm_demo = false;        // activated by middle button on T-Beam
 bool landed_out_mode = false;      // activated by button in status web page
 int8_t geoid_from_setting = 0;
 bool test_mode = false;            // activated by double-clicking middle button on T-Beam
+                                    // - or via web interface, or via $PSRFT
 
+// Upon receiving a $PSRFT NMEA command,
 // first the variable test_mode is toggled, then
 // this is called, whether test_mode is on or off
 // put custom code here for debugging, for example:
 #include "../protocol/data/GNS5892.h"
 void do_test_mode()
 {
+#if defined(ESP32)
     if (settings->rx1090)
         gns5892_test_mode();
+#endif
 }
 
 uint32_t baudrates[8] = 
@@ -332,11 +336,11 @@ void show_settings_serial()
     Serial.print(F(" Power save "));Serial.println(settings->power_save);
     Serial.print(F(" Power external "));Serial.println(settings->power_external);
     Serial.print(F(" Freq. correction "));Serial.println(settings->freq_corr);
-    Serial.print(F(" Geoid separation "));Serial.println(geoid_from_setting);
-    Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
     Serial.print(F(" GNSS pins "));Serial.println(settings->gnss_pins);
     Serial.print(F(" PPS wire "));Serial.println(settings->ppswire);
+    Serial.print(F(" Geoid separation "));Serial.println(geoid_from_setting);
     Serial.print(F(" SD card adapter "));Serial.println(settings->sd_card);
+    Serial.print(F(" Alarm Log "));Serial.println(settings->logalarms);
     Serial.print(F(" Log flight "));Serial.println(settings->logflight);
     Serial.print(F(" Log interval "));Serial.println(settings->loginterval);
     Serial.print(F(" debug_flags "));Serial.printf("%02X\r\n", settings->debug_flags);

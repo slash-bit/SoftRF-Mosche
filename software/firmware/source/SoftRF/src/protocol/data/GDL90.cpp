@@ -26,6 +26,7 @@
 #include "../../system/SoC.h"
 #include "GDL90.h"
 #include "GNS5892.h"
+#include "../../driver/RF.h"
 #include "../../driver/Baro.h"
 #include "../../driver/GNSS.h"
 #include "../../driver/EEPROM.h"
@@ -222,7 +223,7 @@ static void *msgHeartbeat()
   return (&HeartBeat);
 }
 
-static void *msgType10and20(ufo_t *aircraft)
+static void *msgType10and20(container_t *aircraft)
 {
   int altitude;
 
@@ -316,7 +317,7 @@ static void *msgType10and20(ufo_t *aircraft)
   return (&Traffic);
 }
 
-static void *msgOwnershipGeometricAltitude(ufo_t *aircraft)
+static void *msgOwnershipGeometricAltitude(container_t *aircraft)
 {
   uint16_t vfom = 0x000A;
 
@@ -365,7 +366,7 @@ static size_t makeHeartbeat(uint8_t *buf)
   return(ptr-buf);
 }
 
-static size_t makeType10and20(uint8_t *buf, uint8_t id, ufo_t *aircraft)
+static size_t makeType10and20(uint8_t *buf, uint8_t id, container_t *aircraft)
 {
 // >>>  generate output for testing - report ownship as traffic
   if (settings->debug_flags & DEBUG_SIMULATE)
@@ -389,7 +390,7 @@ static size_t makeType10and20(uint8_t *buf, uint8_t id, ufo_t *aircraft)
   return(ptr-buf);
 }
 
-static size_t makeGeometricAltitude(uint8_t *buf, ufo_t *aircraft)
+static size_t makeGeometricAltitude(uint8_t *buf, container_t *aircraft)
 {
   uint8_t *ptr = buf;
   uint8_t *msg = (uint8_t *) msgOwnershipGeometricAltitude(aircraft);
@@ -545,8 +546,6 @@ void process_traffic_message(char* buf)
   static ufo_t fo;
   GDL90_Msg_Traffic_t *tp = (GDL90_Msg_Traffic_t *) buf;
 
-  //memset(&fo, 0, sizeof(fo)-10);      // clear out old data in the static ufo_t buffer
-  //fo = EmptyFO;                       // clear out old data in the static ufo_t buffer
   // this is our private "fo" for GDL90 input only, same fields are overwritten each time
   fo.addr_type = ((tp->addr_type==0 || tp->addr_type==2)? ADDR_TYPE_ICAO : ADDR_TYPE_FLARM);
   uint32_t addr = pack24bit(tp->addr);
@@ -598,8 +597,6 @@ void process_traffic_message(char* buf)
   else
       fo.course = 0;  // not available
   fo.aircraft_type = GDL90_TO_AT(tp->emit_cat);
-  memcpy(fo.callsign, tp->callsign, 8);
-  fo.callsign[8] = '\0';
 
 #if 0
 Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
@@ -616,7 +613,8 @@ Serial.printf("GDL90>%x %s, %f, %f, %.0f\r\n",
   fo.circling = 0;
   ++adsb_packets_counter;
 
-  AddTraffic(&fo);
+  RF_last_rssi = 0;
+  AddTraffic(&fo, (char *) tp->callsign);
 }
 
 // Accummulate bytes in traffic data message - ignore all others

@@ -170,10 +170,10 @@ typedef struct latest_packet
     byte lastbyte;
 } __attribute__((packed)) latest_packet_t;
 
-bool legacy_decode(void *, ufo_t *, ufo_t *);
-bool latest_decode(void *, ufo_t *, ufo_t *);
-size_t legacy_encode(void *, ufo_t *);
-size_t latest_encode(void *, ufo_t *);
+bool legacy_decode(void *, container_t *, ufo_t *);
+bool latest_decode(void *, container_t *, ufo_t *);
+size_t legacy_encode(void *, container_t *);
+size_t latest_encode(void *, container_t *);
 
 unsigned int enscale( int value, unsigned int mbits, unsigned int ebits, unsigned int sbits);
 int descale( unsigned int value, unsigned int mbits, unsigned int ebits, unsigned int sbits);
