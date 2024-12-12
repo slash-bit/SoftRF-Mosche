@@ -1,13 +1,15 @@
-# SoftRF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+# SoftRF
 
 DIY, multifunctional, compatible, sub-1 GHz ISM band radio based proximity awareness system for general aviation.
 <br>
 [User Guide](https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/SoftRF_MB_user_guide.txt)
 <br>
 
+<p><img src="https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation/T-Beam_MB149_.jpg"></p>
+
 ### Latest additions:
 
-* vMB146: latest, revised handling of altitudes
+* vMB149: latest, handles Mode-S in addition to ADS-B
 * vMB140: supports SD card & flight logging, on the T-Beam
 * vMB138: supports using add-on GNSS modules, on the T-Beam
 * vMB130: supports the GNS5892R ADS-B receiver module, on the T-Beam
