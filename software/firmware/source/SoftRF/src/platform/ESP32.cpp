@@ -1610,7 +1610,7 @@ static uint32_t ESP32_getChipId()
   }
   return id;
 #else
-  return (SOFTRF_ADDRESS & 0xFFFFFFFFU );
+  return (SOFTRF_ADDRESS & 0x00FFFFFFU );
 #endif /* SOFTRF_ADDRESS */
 }
 

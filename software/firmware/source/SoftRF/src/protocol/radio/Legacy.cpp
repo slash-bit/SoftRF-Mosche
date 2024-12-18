@@ -929,12 +929,10 @@ size_t legacy_encode(void *pkt_buffer, container_t *aircraft)
     pkt->_unk3 = 0;
 //    pkt->_unk4 = 0;
 
-    if (relay
-    &&  (aircraft->protocol==RF_PROTOCOL_ADSB_1090 || aircraft->protocol==RF_PROTOCOL_GDL90)) {
-        //pkt->_unk1 = 1;
-        //pkt->addr_type = (ADDR_TYPE_ANONYMOUS | 4);
-        pkt->no_track = 1;   // so that OGN ground stations will not report it
-    }
+//    if (relay
+//    &&  (aircraft->protocol==RF_PROTOCOL_ADSB_1090 || aircraft->protocol==RF_PROTOCOL_GDL90)) {
+//        pkt->no_track = 1;   // so that OGN ground stations will not report it
+//    }
 
     pkt->parity = 0;
     for (ndx = 0; ndx < sizeof (legacy_packet_t); ndx++) {

@@ -271,6 +271,7 @@ static void OLED_radio()
 {
   char buf[16];
   uint32_t disp_value;
+  bool show_adsb = false;
 
   if (!OLED_display_titles) {
 
@@ -286,16 +287,20 @@ static void OLED_radio()
     if (settings->rx1090) {
         u8x8->drawString(8, 4, RX_text);
         u8x8->drawString(7, 6, "ADS");
+        show_adsb = true;
     } else if (settings->gdl90_in != DEST_NONE) {
         u8x8->drawString(8, 4, RX_text);
         u8x8->drawString(7, 6, "GDL");
+        show_adsb = true;
     } else {
-        u8x8->drawString(10, 4, RX_text);
+        //u8x8->drawString(10, 4, RX_text);
+        u8x8->drawString(8, 4, RX_text);
+        u8x8->drawString(7, 6, "RSS");
     }
 
     if (settings->power_save & POWER_SAVE_NORECEIVE &&
         (hw_info.rf == RF_IC_SX1276 || hw_info.rf == RF_IC_SX1262)) {
-      u8x8->draw2x2String(10, ((settings->rx1090 || (settings->gdl90_in != DEST_NONE))? 4 : 5), "OFF");
+      u8x8->draw2x2String(10, 4, "OFF");
       prev_rx_packets_counter = rx_packets_counter;
     } else {
       prev_rx_packets_counter = (uint32_t) -1;
@@ -358,20 +363,32 @@ static void OLED_radio()
         strcat_P(buf,PSTR(" "));
       };
     }
-    u8x8->draw2x2String(10, ((settings->rx1090 || (settings->gdl90_in != DEST_NONE))? 4 : 5), buf);
+    //u8x8->draw2x2String(10, ((settings->rx1090 || (settings->gdl90_in != DEST_NONE))? 4 : 5), buf);
+    u8x8->draw2x2String(10, 4, buf);
+    if (! show_adsb) {                     // then show max RSSI instead
+      if (maxrssi < 0) {
+        disp_value = maxrssi;
+        if (disp_value < -99)
+            disp_value = -99;
+        itoa(disp_value, buf, 10);
+        if (disp_value > -10)
+            strcat_P(buf,PSTR(" "));
+        u8x8->draw2x2String(10, 6, buf);
+      } else {
+        u8x8->draw2x2String(10, 6, "---");
+      }
+    }
     prev_rx_packets_counter = rx_packets_counter;
   }
 
-  if (settings->rx1090 || (settings->gdl90_in != DEST_NONE)) {
+  if (show_adsb) {
     if (adsb_packets_counter != prev_adsb_packets_counter) {
       disp_value = adsb_packets_counter % 1000;
       itoa(disp_value, buf, 10);
       if (disp_value < 10) {
-        strcat_P(buf,PSTR("  "));
-      } else {
-        if (disp_value < 100) {
+          strcat_P(buf,PSTR("  "));
+      } else if (disp_value < 100) {
           strcat_P(buf,PSTR(" "));
-        };
       }
       u8x8->draw2x2String(10, 6, buf);
       prev_adsb_packets_counter = adsb_packets_counter;
@@ -385,11 +402,9 @@ static void OLED_radio()
     disp_value = tx_packets_counter % 1000;
     itoa(disp_value, buf, 10);
     if (disp_value < 10) {
-      strcat_P(buf,PSTR("  "));
-    } else {
-      if (disp_value < 100) {
+        strcat_P(buf,PSTR("  "));
+    } else if (disp_value < 100) {
         strcat_P(buf,PSTR(" "));
-      };
     }
     u8x8->draw2x2String(0, 5, buf);
     prev_tx_packets_counter = tx_packets_counter;
@@ -830,7 +845,7 @@ void OLED_loop()
       return;
 
   if (u8x8) {
-    if (isTimeToOLED()) {
+    if (isTimeToOLED()) {              // every 500 ms
 #if !defined(EXCLUDE_OLED_049)
       if (hw_info.display == DISPLAY_OLED_0_49) {
         OLED_049_func();

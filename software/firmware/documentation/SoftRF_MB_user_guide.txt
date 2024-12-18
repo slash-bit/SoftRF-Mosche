@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated December 12, 2024 to fit software version MB149
+This version last updated December 17, 2024 to fit software version MB150
 The latest version of this document is always here:
   https://github.com/moshe-braner/SoftRF/blob/master/software/firmware/documentation
 Discussion group:
@@ -163,11 +163,11 @@ The T-Echo usually includes a "bootloader" which makes it easy to update the fir
 
 The Web Interface (T-Beam only)
 
-After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings.  If not found (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The password is 12345678.  Your phone or computer may complain that there is no internet access with this network (that is correct).  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the fourth (or fifth) page on the OLED for the IP address - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, see whether the user settings have been restored, change settings, or update the firmware via WiFi.  This feature is NOT available on the T-Echo since it does not support WiFi.
+After startup, SoftRF on a T-Beam tries to connect to the WiFi network specified in the settings (if both an SSID and a password were specified).  If a connection is not successful (in 10 seconds), it creates its own Wifi network.  Use a computer, tablet, or smartphone to connect to the network.  If using an ambient network, connect to it as normal.  Otherwise, the network SoftRF creates is named SoftRF-xxxxxx where xxxxxx is the device id.  The device ID may differ from the aircraft ID shown on the OLED - check the fourth (or fifth) page on the OLED for the SSID.  Alternatively, if an SSID is specified in the settings, but with a blank password, that SSID is used for the created network.  Either way, the password is 12345678.  Your phone or computer may complain that there is no internet access with this network, that is correct, allow it.  Then open a web browser and point it to the IP address 192.168.1.1 if using the network created by SoftRF.  If using an ambient network, check the fourth (or fifth) page on the OLED for the IP address assigned to the SoftRF device by the network - click the button to progress through the pages.  With the right IP address, the browser will connect to the mini web server built into SoftRF, allowing one to view SoftRF status info, see whether the user settings have been restored, change settings, or update the firmware via WiFi.  This feature is NOT available on the T-Echo since it does not support WiFi.
 
 After connecting to the web interface, the root page seen is the SoftRF Status page.  It shows some information, and offers buttons for launching several operations, such as viewing and changing settings, firmware update, downloading flight logs (if equipped with an SD card), etc.
 
-Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that any web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (on a T-Beam v1.0, v1.1 or v1.2) is to long-press the middle button - that turns Bluetooth off (until you reboot).  Wait until the T-Beam fully boots, then long-press the middle button (OLED will say "BT OFF"), and only then try and access the web page.  Note that after selecting landed-out mode (as mentioned above) BT will be turned off (due to the web access) - rebooting will restore BT but will exit landed-out mode.
+Note that when Bluetooth is active, the web interface cannot function (due to not enough memory).  The currently implemented workaround is that, if memory space is low, web access automatically turns Bluetooth off (until you reboot).  If you still cannot get to the status page, one way to recover is via a USB (or BT) terminal and Settings2.html (see the next section).  Another way (on a T-Beam v1.0, v1.1 or v1.2) is to long-press the middle button - that turns Bluetooth off (until you reboot).  Wait until the T-Beam fully boots, then long-press the middle button (OLED will say "BT OFF"), and only then try and access the web page.  Note that after selecting landed-out mode (as mentioned above) BT will be turned off (due to the web access) - rebooting will restore BT but will exit landed-out mode.
 
 
 Choosing the operational settings
@@ -230,7 +230,7 @@ Host IP (if TCP client): Enter IP address, e.g., 192.168.4.1 - only affects TCP 
 
 Host port (if TCP client): Choose the port to which the TCP client connects to, either 2000 (default) or 8880 (option for stock XCvario firmware).  The current version (MB09r or later) allows both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario (and XCsoar at the same time).
 
-External WiFi (optional): after booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  (If the external network name is left blank, it skips that 10-second delay.)  Either way, other devices can connect, to change settings or update the firmware.  In the case of an external network, the IP address can be seen in the third OLED page (press the pushbutton to change pages).
+WiFi (optional): after booting, SoftRF will try and connect to the external WiFi network, if specified.  If unsuccessful after 10 seconds, it will create its own WiFi network.  If the external network name (SSID) is left blank it will skip that 10-second delay and create the internal network immediately (with the default password - the entered one is ignored).  If the password is left blank, but the SSID is not blank, the entered SSID is used as a custom name for the network created by SoftRF.  In the case of an external network, the IP address for the web interface can be seen in the third OLED page (press the pushbutton to change pages).  For an internal network it is always 192.168.1.1.
 
 NMEA output: this selects the method by which the data is sent out: Off (no data sent out), Serial (via the on-board serial interface, which also appears on the USB port), the auxiliary serial interface (T-Beam only), UDP (WiFi), TCP (another WiFi method), or Bluetooth.
 
@@ -487,7 +487,7 @@ Here are step by step instructions for OTA firmware update:
   (If SoftRF is already set up to connect as a client to an external WiFi network, and if this network is in range, you can skip this step, and have the PC/Tablet/Cellphone connected to the same external network.) 
 
 * Open up a browser and proceed to the URL (IP address): 192.168.1.1
-  (If using an external network, press the button for the third OLED screen to see the needed IP address.)
+  (If using an external network, press the button repeatedly until you see the OLED screen showing the needed IP address.)
 
 * Inspect the firmware version listed in the Status web page that opens up.
 
