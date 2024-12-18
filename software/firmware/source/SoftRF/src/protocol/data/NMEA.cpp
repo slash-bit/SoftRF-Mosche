@@ -1617,15 +1617,39 @@ void NMEA_Process_SRF_SKV_Sentences()
   if (C_Version.isUpdated()) {
 
       if (strncmp(C_Version.value(), "RST", 3) == 0) {             // $PSRFC,RST*2D
+          Serial.println(F("PSRFC Reboot..."));
           nmea_cfg_restart(false);
           // just reboot, settings not saved
 
       } else if (strncmp(C_Version.value(), "SAV", 3) == 0) {      // $PSRFC,SAV*3C
+          Serial.println(F("PSRFC Save & Reboot..."));
           nmea_cfg_restart(true);
           // save settings to EEPROM and reboot
 
       } else if (strncmp(C_Version.value(), "OFF", 3) == 0) {      // $PSRFC,OFF*37
+          Serial.println(F("PSRFC Shutdown..."));
           shutdown(SOFTRF_SHUTDOWN_NMEA);
+
+#if defined(USE_OLED)
+      } else if (strncmp(C_Version.value(), "PAG", 3) == 0) {      // $PSRFC,PAG*2E
+          Serial.println(F("PSRFC Page Switch"));
+          OLED_Next_Page();
+#endif
+      } else if (strncmp(C_Version.value(), "DEM", 3) == 0) {      // $PSRFC,DEM*34
+          Serial.println(F("PSRFC Alarm Demo"));
+          SetupTimeMarker = millis();
+          do_alarm_demo = true;
+#if defined(USE_OLED)
+          OLED_msg("ALARM", " DEMO");
+#endif
+
+      } else if (strncmp(C_Version.value(), "TX0", 3) == 0) {      // $PSRFC,TX0*44
+          Serial.println(F("PSRFC TX Off"));
+          settings->txpower = RF_TX_POWER_OFF;
+
+      } else if (strncmp(C_Version.value(), "TX1", 3) == 0) {      // $PSRFC,TX1*45
+          Serial.println(F("PSRFC TX On"));
+          settings->txpower = RF_TX_POWER_FULL;
 
       } else if (strncmp(C_Version.value(), "?", 1) == 0) {        // $PSRFC,?*47
 

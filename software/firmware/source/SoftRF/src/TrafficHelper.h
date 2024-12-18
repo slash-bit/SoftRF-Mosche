@@ -105,6 +105,8 @@ extern int max_alarm_level;
 extern bool alarm_ahead;
 extern bool relay_waiting;
 extern float average_baro_alt_diff;
+extern uint8_t adsb_acfts;
+extern int8_t maxrssi;
 
 #if defined(ESP32)
 extern File AlarmLog;

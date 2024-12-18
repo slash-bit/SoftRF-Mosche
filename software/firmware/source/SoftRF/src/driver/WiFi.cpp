@@ -269,15 +269,22 @@ void WiFi_setup()
   if (WiFi.getMode() != WIFI_STA)
   {
     WiFi.mode(WIFI_STA);
-    delay(10);
+    delay(100);
   }
+
+  bool try_external = false;
+  bool use_chipid = true;
 
   if (settings->ssid[0] != '\0') {
 
-    // use SSID and PSK from settings
-
-    station_ssid = settings->ssid;
-    station_psk  = settings->psk;
+    if (settings->psk[0] != '\0') {
+        station_ssid = settings->ssid;    // SSID and PSK of external network from settings
+        station_psk  = settings->psk;
+        try_external = true;
+    } else {
+        // no password                   // flags as not an external network
+        use_chipid = false;              // use settings->ssid as a custom SSID for AP mode
+    }
 
     // ... Compare file config with sdk config.
     if (WiFi.SSID() != station_ssid || WiFi.psk() != station_psk)
@@ -300,18 +307,22 @@ void WiFi_setup()
   }
 
   // Set Hostname.
-  host_name += "-";
-  char chipID[8];
-  // if ICAO ID set then use it for WiFi host name too
-  snprintf(chipID, 8, "%06x",
-      (ThisAircraft.addr != 0)? ThisAircraft.addr : (SoC->getChipId() & 0xFFFFFF));
-  host_name += chipID;
+  if (use_chipid) {
+      host_name += "-";
+      char chipID[8];
+      snprintf(chipID, 8, "%06x", (SoC->getChipId() & 0xFFFFFF));
+      host_name += chipID;           // SoftRF-xxxxxx
+  } else {
+      //host_name += "-";
+      //host_name += settings->ssid;
+      host_name = settings->ssid;    // fully personalized
+  }
   SoC->WiFi_hostname(host_name);
 
   // Print hostname.
   Serial.println("Hostname: " + host_name);
 
-  if (settings->ssid[0] != '\0') {
+  if (try_external) {    // first try and connect to external network
 
       Serial.println(F("Wait for WiFi connection."));
 
@@ -340,7 +351,7 @@ void WiFi_setup()
   {
     Serial.println(F("Can not connect to WiFi station. Go into AP mode."));
     
-    // Go into software AP mode.
+    // Go into software AP mode.  Use default password even if custom SSID.
     WiFi.mode(WIFI_AP);
     SoC->WiFi_set_param(WIFI_PARAM_TX_POWER, WIFI_TX_POWER_MED); // 10 dBm
     SoC->WiFi_set_param(WIFI_PARAM_DHCP_LEASE_TIME, WIFI_DHCP_LEASE_HRS);

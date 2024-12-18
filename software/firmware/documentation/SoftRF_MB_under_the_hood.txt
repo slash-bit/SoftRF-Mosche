@@ -3,7 +3,7 @@ Preliminary Documentation for Moshe Braner's version of SoftRF
 
 By Moshe Braner
 
-This version last updated December 12, 2024 to fit software version MB149
+This version last updated December 17, 2024 to fit software version MB150
 
 
 PART 1: USER GUIDE - see separate document
@@ -186,9 +186,9 @@ Stealth Mode
 
 Masked additional data fields in stealth mode to fit FLARM specifications.
 
-WiFi Client Mode
+WiFi Client Mode and TCP Client Mode
 
-Revived the option of connecting to an external WiFi network.  Can enter the SSID & PSK via the settings page in the web UI.  After booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  The IP address can be seen in the third OLED screen.  Also added the ability to choose the IP address, and the port to which the TCP client connects to, either 2000 or 8880.  And allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose is to connect wirelessly to XCvario (and potentially other devices that, like XCvario, create their own WiFi network).
+Revived the option of connecting to an external WiFi network.  Can enter the SSID & PSK via the settings page in the web UI.  After booting, SoftRF will try and connect to the specified WiFi network.  If not found, then after 10 seconds it will create its own WiFi network.  The IP address can be seen in the third OLED screen.  Also added the ability of SoftRF to connect to a host as a TCP client, and to choose the host IP address, and the port (either 2000 or 8880), for that connection.  Also allowed both TCP and UDP to be used at the same time (as primary and secondary NMEA data destinations).  The purpose of these additional features is to be able to connect wirelessly to XCvario (or potentially to other devices that, like XCvario, create their own WiFi network).  Output to UDP may tunnel through such an external network and reach other devices.  For example, XCsoar connected to the XCvario via WiFi.
 
 Voice output
 

@@ -101,11 +101,11 @@ void Hex2Bin(String str, byte *buffer)
 static bool BTpaused = false;
 static bool reboot_pending = false;
 
-void stop_bluetooth()
+void stop_bluetooth(size_t needed_mem)
 {
-  uint32_t freemem = ESP.getFreeHeap();
+  size_t freemem = ESP.getFreeHeap();
   Serial.print(F("Free memory: "));  Serial.println(freemem);
-  if (!BTactive || BTpaused || freemem > 60000)
+  if (!BTactive || BTpaused || freemem > needed_mem)
       return;
   if (settings->bluetooth != BLUETOOTH_OFF) {
       if (SoC->Bluetooth_ops) {
@@ -390,13 +390,13 @@ void handleSettings() {
 
   Serial.println(F("handleSettings()..."));
 
-  stop_bluetooth();
+  stop_bluetooth((size_t)70000);
 
   bool is_prime_mk2 = false;
   if (hw_info.model == SOFTRF_MODEL_PRIME_MK2 /* && hw_info.revision >= 5 */)
     is_prime_mk2 = true;
 
-  size_t size = 14000;
+  size_t size = 15000;
   size_t totalsize = size;
   char *offset;
   size_t len = 0;
@@ -438,7 +438,8 @@ void handleSettings() {
 </tr>"),
   ((settings->debug_flags & DEBUG_SIMULATE)? "Warning: simulation mode" :
   (default_settings_used? "Warning: reverted to default settings" :
-    "Restored user settings on boot")),
+  (BTpaused ? "Bluetooth paused, reboot to resume" :
+    "Restored user settings on boot"))),
   (settings->mode == SOFTRF_MODE_NORMAL ? "selected" : "") , SOFTRF_MODE_NORMAL,
   (settings->mode == SOFTRF_MODE_MORENMEA ? "selected" : "") , SOFTRF_MODE_MORENMEA,
   (settings->mode == SOFTRF_MODE_GPSBRIDGE ? "selected" : ""), SOFTRF_MODE_GPSBRIDGE,
@@ -798,15 +799,15 @@ void handleSettings() {
   snprintf_P ( offset, size,
     PSTR("\
 <tr>\
-<th align=left>External WiFi (optional):</th>\
+<th align=left>WiFi (optional):</th>\
 </tr>\
 <tr>\
-<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;SSID:</th>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;SSID (external, or custom):</th>\
 <td align=right>\
 <INPUT type='text' name='ssid' maxlength='18' value='%s' size='16' ></td>\
 </tr>\
 <tr>\
-<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;PSK:</th>\
+<th align=left>&nbsp;&nbsp;&nbsp;&nbsp;PSK (blank for custom):</th>\
 <td align=right>\
 <INPUT type='password' name='psk' maxlength='16' value='%s' size='16' ></td>\
 </tr>\
@@ -1486,7 +1487,7 @@ void handleRoot() {
 
   Serial.println(F("handleRoot()..."));
 
-  stop_bluetooth();
+  stop_bluetooth((size_t)50000);
 
   int sec = millis() / 1000;
   int min = sec / 60;
@@ -1501,10 +1502,10 @@ void handleRoot() {
   unsigned int sats = gnss.satellites.value(); // Number of satellites in use (u32)
   char str_lat[16];
   char str_lon[16];
-  char str_alt[16];
+  //char str_alt[16];
   char str_Vcc[8];
 
-  size_t size = 3900;
+  size_t size = 4000;
   char *Root_temp = (char *) malloc(size);
   if (Root_temp == NULL) {
     Serial.println(F(">>> not enough RAM"));
@@ -1513,14 +1514,28 @@ void handleRoot() {
 
   dtostrf(ThisAircraft.latitude,  8, 4, str_lat);
   dtostrf(ThisAircraft.longitude, 8, 4, str_lon);
-  dtostrf(ThisAircraft.altitude-ThisAircraft.geoid_separation, 7, 1, str_alt);   // MSL
+  //dtostrf(ThisAircraft.altitude-ThisAircraft.geoid_separation, 5, 0, str_alt);   // MSL
+  unsigned int alt = (unsigned int)(ThisAircraft.altitude-ThisAircraft.geoid_separation);   // MSL
   dtostrf(vdd, 4, 2, str_Vcc);
 
-  char rx_counts[48];   // %u&nbsp;+&nbsp;%u
-  if (settings->rx1090 == ADSB_RX_NONE)
-    snprintf(rx_counts, 48, "&nbsp;&nbsp;%u", rx_packets_counter);
-  else
-    snprintf(rx_counts, 48, "%u&nbsp;+&nbsp;ADS-B&nbsp;%u", rx_packets_counter, adsb_packets_counter);
+  char adsb_packets[72];
+  if (settings->rx1090 == ADSB_RX_NONE && settings->gdl90_in == DEST_NONE) {
+    adsb_packets[0] = '\0';
+  } else {
+    snprintf(adsb_packets, 72, "<tr><th align=left>ADS-B Packets</th><td align=right>%d</td></tr>",
+         adsb_packets_counter);
+  }
+
+  char traffics[32];
+  int acrfts_counter = Traffic_Count();   // maxrssi and adsb_acfts are byproducts
+  if (acrfts_counter == 0) {
+    traffics[0] = '0';
+    traffics[1] = '\0';
+  } else if (adsb_acfts > 0) {
+    snprintf(traffics, 32, "%d&nbsp;&nbsp;(%d ADS-B)", acrfts_counter, adsb_acfts);
+  } else {
+    snprintf(traffics, 32, "%d&nbsp;&nbsp;(max RSSI %d)", acrfts_counter, maxrssi);
+  }
 
   snprintf_P ( Root_temp, size,
     PSTR("<html>\
@@ -1559,11 +1574,15 @@ void handleRoot() {
  <table width=100%%>\
   <tr><th align=left>Packets</th>\
    <td align=middle>Tx&nbsp;%u</td>\
-   <td align=right>Rx&nbsp;%s</td>\
+   <td align=right>Rx&nbsp;%u</td>\
+  </tr>\
+  %s\
+  <tr><th align=left>Current traffic</th>\
+   <td align=middle>&nbsp;</td>\
+   <td align=right>%s</td>\
   </tr>\
   <tr><td align=left>\
-   <input type=button onClick=\"location.href='/landed_out'\" value='Landed-Out Mode'></td>\
-   <td align=right>%s</td>\
+   <input type=button onClick=\"location.href='/landed_out'\" value='Landed-Out Mode'>&nbsp;&nbsp;%s</td>\
   </tr>\
  </table>\
  <hr>\
@@ -1573,8 +1592,10 @@ void handleRoot() {
   <tr><th align=left>Satellites</th><td align=right>%d</td></tr>\
   <tr><th align=left>Latitude</th><td align=right>%s</td></tr>\
   <tr><th align=left>Longitude</th><td align=right>%s</td></tr>\
-  <tr><td align=left><b>Altitude</b>&nbsp;&nbsp;(%s)</td><td align=right>%s</td></tr>\
-  %s\
+  <tr><td align=left><b>Altitude</b>&nbsp;(%s)&nbsp;&nbsp;(%s)</td>\
+   <td align=right>%d</td>\
+  </tr>\
+  <tr><td align=right>%s</td></tr>\
  </table>\
  <hr>&nbsp;<br>\
  <table width=100%%>\
@@ -1623,18 +1644,17 @@ void handleRoot() {
 #endif /* ENABLE_AHRS */
     hr, min % 60, sec % 60, ESP.getFreeHeap(),
     low_voltage ? "red" : "green", str_Vcc,
-    tx_packets_counter, rx_counts,
+    tx_packets_counter, rx_packets_counter, adsb_packets, traffics,
     (landed_out_mode? "reboot to cancel" : "tap to start"),
     hour, minute, sats, str_lat, str_lon,
     (isValidGNSSFix() ?
           (ThisAircraft.geoid_separation==0 ? "above ellipsoid - MSL n.a."
            : "above MSL")
            : "no valid fix"),
-    str_alt,
+    (ThisAircraft.airborne? "Airborne" : "Not Airborne"),
+    alt,
     ((hw_info.model == SOFTRF_MODEL_PRIME_MK2) ?
- "<tr><td align=middle>\
-  <input type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'>\
- </td></tr>"
+ "<input align=middle type=button onClick=\"location.href='/gps_reset'\" value='Reset GNSS'>"
           : ""),
     num_wav_files,
 #if defined(USE_EGM96)
@@ -2503,7 +2523,7 @@ void Web_setup()
 
   server.on("/firmware", HTTP_GET, [](){
     SoC->swSer_enableRx(false);
-    stop_bluetooth();
+    stop_bluetooth((size_t)999999);
     server.sendHeader(String(F("Connection")), String(F("close")));
     server.sendHeader(String(F("Access-Control-Allow-Origin")), String(F("*")));
     server.send_P(200,

@@ -118,6 +118,8 @@ char fo_callsign[10];
 uint8_t fo_raw[34];
 traffic_by_dist_t traffic_by_dist[MAX_TRACKING_OBJECTS];
 int max_alarm_level = ALARM_LEVEL_NONE;
+int8_t maxrssi;
+uint8_t adsb_acfts;
 bool alarm_ahead = false;                    /* global, used for visual displays */
 bool relay_waiting = false;
 
@@ -1500,13 +1502,24 @@ void ClearExpired()
 int Traffic_Count()
 {
   int count = 0;
-
+  adsb_acfts = 0;
+  int rssimax = -126;
   for (int i=0; i < MAX_TRACKING_OBJECTS; i++) {
     if (Container[i].addr) {
       count++;
+      int rssi = Container[i].rssi;
+      if (rssi < 0) {               // not an ADS-B RSSI
+          if (rssi > rssimax)
+              rssimax = rssi;
+      } else {
+          ++adsb_acfts;
+      }
     }
   }
-
+  if (rssimax > -126)
+      maxrssi = rssimax;
+  else
+      maxrssi = 0;
   return count;
 }
 
