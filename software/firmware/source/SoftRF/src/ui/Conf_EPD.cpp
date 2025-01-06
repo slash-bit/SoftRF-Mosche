@@ -38,7 +38,7 @@
 #include "../protocol/radio/Legacy.h"
 
 #include <gfxfont.h>
-#include <FreeMonoBold9pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold9pt7b.h>
 
 bool conf_initialized = false;
 

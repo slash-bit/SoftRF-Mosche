@@ -37,7 +37,7 @@
 #include "../protocol/radio/Legacy.h"
 
 #include <gfxfont.h>
-#include <FreeMonoBold12pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold12pt7b.h>
 
 static int EPD_current = 1;
 

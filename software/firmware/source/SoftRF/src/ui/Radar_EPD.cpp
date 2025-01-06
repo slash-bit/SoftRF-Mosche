@@ -34,10 +34,10 @@
 #include "../driver/RF.h"
 
 #include <gfxfont.h>
-#include <FreeMono9pt7b.h>
-#include <FreeMonoBold9pt7b.h>
-#include <FreeMonoBold12pt7b.h>
-#include <Picopixel.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMono9pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold9pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold12pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/Picopixel.h>
 
 static int EPD_zoom = ZOOM_MEDIUM;
 

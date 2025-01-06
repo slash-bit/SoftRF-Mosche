@@ -25,8 +25,8 @@
 #include "../driver/EPD.h"
 
 #include <gfxfont.h>
-#include <FreeMonoBold24pt7b.h>
-#include <FreeMonoBold12pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold24pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold12pt7b.h>
 
 float IMU_g = 0;
 

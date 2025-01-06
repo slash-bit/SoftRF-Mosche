@@ -33,9 +33,9 @@ extern RTC_Date fw_build_date_time;
 #endif /* ARDUINO_ARCH_NRF52 */
 
 #include <gfxfont.h>
-#include <FreeMonoBold24pt7b.h>
-#include <FreeMonoBold12pt7b.h>
-#include <FreeMono18pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold24pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMonoBold12pt7b.h>
+#include <../../../libraries/Adafruit-GFX-Library/Fonts/FreeMono18pt7b.h>
 #include "U8g2_for_Adafruit_GFX.h"
 
 static const char TZ_text[] = "UTC";
