@@ -1,6 +1,6 @@
 /*
  * Platform_nRF52.h
- * Copyright (C) 2020-2022 Linar Yusupov
+ * Copyright (C) 2020-2024 Linar Yusupov
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,9 @@
 #define PLATFORM_NRF52_H
 
 #include <avr/dtostrf.h>
+#if !defined(ARDUINO_ARCH_MBED)
 #include <pcf8563.h>
+#endif /* ARDUINO_ARCH_MBED */
 
 /* Maximum of tracked flying objects is now SoC-specific constant */
 #define MAX_TRACKING_OBJECTS    8
@@ -44,8 +46,12 @@
 #define snprintf_P              snprintf
 #define EEPROM_commit()         {}
 
-#if !defined(LED_STATE_ON)
-#define LED_STATE_ON            LOW  // State when LED is litted
+// State when LED is litted
+#if defined(LED_STATE_ON)
+#undef  LED_STATE_ON
+#define LED_STATE_ON            (hw_info.model == SOFTRF_MODEL_CARD ? HIGH : LOW)
+#else
+#define LED_STATE_ON            LOW
 #endif /* LED_STATE_ON */
 
 #define SerialOutput            Serial1
@@ -70,6 +76,7 @@ enum nRF52_board_id {
   NRF52_LILYGO_TECHO_REV_0,     /* 20-8-6 */
   NRF52_LILYGO_TECHO_REV_1,     /* 2020-12-12 */
   NRF52_LILYGO_TECHO_REV_2,     /* 2021-3-26 */
+  NRF52_SEEED_T1000E,
 };
 
 // #define TECHO_DISPLAY_MODEL   GxEPD2_154_D67
@@ -79,6 +86,8 @@ enum nRF52_display_id {
   EP_GDEH0154D67,
   EP_GDEP015OC1,
   EP_DEPG0150BN,
+  EP_GDEY037T03,
+  TFT_LH114TIF03,
 };
 
 typedef struct {
@@ -107,11 +116,30 @@ struct rst_info {
 #endif
 
 #define DFU_MAGIC_SKIP        (0x6d)
-#define BME280_ADDRESS        (0x77)
+
+#define BMM150_ADDRESS        (0x10)
+#define QMA6100P_ADDRESS      (0x12)
+#define XL9555_ADDRESS        (0x20) /* A0 = A1 = A2 = LOW */
+#define FT6X36_ADDRESS        (0x38)
+#define M10Q_ADDRESS          (0x42)
+#define BQ27220_ADDRESS       (0x55)
+#define DRV2605_ADDRESS       (0x5A)
 #define MPU9250_ADDRESS       (0x68)
+#define ICM20948_ADDRESS      (0x68)
+#define BME280_ADDRESS        (0x77)
+
+#if defined(ARDUINO_ARCH_MBED)
+#define PCF8563_SLAVE_ADDRESS (0x51)
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define ARDUINO_CORE_VERSION  STR(CORE_MAJOR) "." STR(CORE_MINOR) "." STR(CORE_PATCH)
+#endif /* ARDUINO_ARCH_MBED */
 
 #define MIDI_CHANNEL_TRAFFIC  1
 #define MIDI_CHANNEL_VARIO    2
+#include "iomap/LilyGO_TEcho.h"
+#include "iomap/Seeed_T1000E.h"
 
 /* Peripherals */
 #define SOC_GPIO_PIN_CONS_RX  _PINNUM(0, 8) // P0.08
@@ -141,7 +169,9 @@ struct rst_info {
 #define SOC_GPIO_LED_PCA10059_RED       _PINNUM(0,  8) // P0.08 (Red)
 #define SOC_GPIO_LED_PCA10059_BLUE      _PINNUM(0, 12) // P0.12 (Blue)
 
-#define SOC_GPIO_PIN_STATUS   (hw_info.revision == 0 ? SOC_GPIO_LED_TECHO_REV_0_GREEN : \
+#define SOC_GPIO_PIN_STATUS   (hw_info.model == SOFTRF_MODEL_CARD ? SOC_GPIO_LED_T1000_GREEN : \
+                               hw_info.model == SOFTRF_MODEL_COZY ? SOC_GPIO_LED_T114_GREEN  : \
+                               hw_info.revision == 0 ? SOC_GPIO_LED_TECHO_REV_0_GREEN : \
                                hw_info.revision == 1 ? SOC_GPIO_LED_TECHO_REV_1_GREEN : \
                                hw_info.revision == 2 ? SOC_GPIO_LED_TECHO_REV_2_GREEN : \
                                SOC_GPIO_LED_PCA10059_STATUS)
@@ -251,6 +281,23 @@ struct rst_info {
 #define SOC_GPIO_PIN_R_INT    _PINNUM(0, 16) // P0.16
 
 #define EXCLUDE_WIFI
+//#define EXCLUDE_OTA
+//#define USE_ARDUINO_WIFI
+//#define USE_WIFI_NINA         false
+//#define USE_WIFI_CUSTOM       true
+
+//#include <WiFiEspAT.h>
+
+//#define SPIWIFI               WiFiSPI
+//#define SPIWIFI_SS            _PINNUM(0, 6)
+//#define ESP32_RESETN          _PINNUM(1, 3)
+//#define SPIWIFI_ACK           _PINNUM(0,15)
+//#define ESP32_GPIO0           -1
+//#include <WiFiNINA.h>
+//#include <WiFiNINA_Generic.h>
+//#define Serial_setDebugOutput(x) ({})
+//#define WIFI_STA_TIMEOUT      20000
+
 #define EXCLUDE_CC13XX
 //#define EXCLUDE_TEST_MODE
 #define EXCLUDE_SOFTRF_HEARTBEAT
@@ -261,6 +308,8 @@ struct rst_info {
 #define EXCLUDE_GNSS_MTK
 //#define EXCLUDE_GNSS_GOKE     /* 'Air530' GK9501 GPS/GLO/BDS (GAL inop.) */
 //#define EXCLUDE_GNSS_AT65     /* Quectel L76K */
+#define EXCLUDE_GNSS_UC65
+//#define EXCLUDE_GNSS_AG33
 
 /* Component                         Cost */
 /* -------------------------------------- */
@@ -270,10 +319,13 @@ struct rst_info {
 //#define USE_EGM96
 //#define EXCLUDE_BMP180           //  -    kb
 //#define EXCLUDE_BMP280           //  -    kb
+#define EXCLUDE_BME680             //  -    kb
+#define EXCLUDE_BME280AUX          //  -    kb
 //#define EXCLUDE_MPL3115A2        //  -    kb
 //#define EXCLUDE_NRF905           //  -    kb
 //#define EXCLUDE_MAVLINK          //  -    kb
 //#define EXCLUDE_UATM             //  -    kb
+//#define EXCLUDE_EGM96            //  -    kb
 //#define EXCLUDE_LED_RING         //  -    kb
 
 #define USE_BASICMAC
@@ -283,6 +335,7 @@ struct rst_info {
 //#define EXCLUDE_OLED_BARO_PAGE
 //#define EXCLUDE_OLED_049
 #define USE_EPAPER                 //  +    kb
+#define EPD_ASPECT_RATIO_1C1
 #define USE_EPD_TASK
 #define USE_TIME_SLOTS
 
@@ -297,13 +350,31 @@ struct rst_info {
 //#define EXCLUDE_NUS
 //#define EXCLUDE_IMU
 #define USE_OGN_ENCRYPTION
+#define ENABLE_ADSL
+#define ENABLE_PROL
+#if !defined(ARDUINO_ARCH_MBED)
+#define USE_BLE_MIDI
+#define ENABLE_REMOTE_ID
+#define USE_EXT_I2S_DAC
+#define USE_TFT
+#define USE_RADIOLIB
+//#define ENABLE_RECORDER
+#else
+#undef USE_EPAPER
+//#define EXCLUDE_BLUETOOTH
+#define USE_ARDUINOBLE
+#define EXCLUDE_IMU
+#define EXCLUDE_BME280AUX
+#endif /* ARDUINO_ARCH_MBED */
+//#define EXCLUDE_PMU
 
 /* FTD-012 data port protocol version 8 and 9 */
 #define PFLAA_EXT1_FMT  ",%d,%d,%d"
 #define PFLAA_EXT1_ARGS ,Container[i].no_track,data_source,Container[i].rssi
 
 #if defined(USE_PWM_SOUND)
-#define SOC_GPIO_PIN_BUZZER   (hw_info.rf != RF_IC_SX1262 ? SOC_UNUSED_PIN           : \
+#define SOC_GPIO_PIN_BUZZER   (nRF52_board == NRF52_SEEED_T1000E ? SOC_GPIO_PIN_T1000_BUZZER : \
+                               hw_info.rf != RF_IC_SX1262 ? SOC_UNUSED_PIN           : \
                                hw_info.revision == 1 ? SOC_GPIO_PIN_TECHO_REV_1_DIO0 : \
                                hw_info.revision == 2 ? SOC_GPIO_PIN_TECHO_REV_2_DIO0 : \
                                SOC_UNUSED_PIN)
@@ -323,12 +394,19 @@ extern Adafruit_NeoPixel strip;
 extern Uart Serial2;
 #endif
 
+#if !defined(ARDUINO_ARCH_MBED)
 extern PCF8563_Class *rtc;
+#endif /* ARDUINO_ARCH_MBED */
 extern const char *nRF52_Device_Manufacturer, *nRF52_Device_Model, *Hardware_Rev[];
 
 #if defined(USE_EPAPER)
 typedef void EPD_Task_t;
 #endif /* USE_EPAPER */
+
+#if defined(USE_TFT)
+#define LV_HOR_RES                      (135) // Horizontal
+#define LV_VER_RES                      (240) // Vertical
+#endif /* USE_TFT */
 
 #endif /* PLATFORM_NRF52_H */
 
