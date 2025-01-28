@@ -840,11 +840,11 @@ static void nRF52_setup()
   Wire.beginTransmission(PCF8563_SLAVE_ADDRESS);
   nRF52_has_rtc = (Wire.endTransmission() == 0);
   if (!nRF52_has_rtc) {
-    delay(200);
+    delay(5);
     Wire.beginTransmission(PCF8563_SLAVE_ADDRESS);
     nRF52_has_rtc = (Wire.endTransmission() == 0);
     if (!nRF52_has_rtc) {
-      delay(200);
+      delay(5);
       Wire.beginTransmission(PCF8563_SLAVE_ADDRESS);
       nRF52_has_rtc = (Wire.endTransmission() == 0);
     }
@@ -2415,10 +2415,18 @@ static void nRF52_swSer_begin(unsigned long baud)
 #if !defined(ARDUINO_ARCH_MBED)
   switch (nRF52_board)
   {
+    case NRF52_LILYGO_TULTIMA:
+      Serial_GNSS_In.setPins(SOC_GPIO_PIN_GNSS_TULTIMA_RX,
+                             SOC_GPIO_PIN_GNSS_TULTIMA_TX);
+      break;
     case NRF52_SEEED_T1000E:
       Serial_GNSS_In.setPins(SOC_GPIO_PIN_GNSS_T1000_RX,
                              SOC_GPIO_PIN_GNSS_T1000_TX);
       baud = 115200; /* Airoha AG3335 default value */
+      break;
+    case NRF52_HELTEC_T114:
+      Serial_GNSS_In.setPins(SOC_GPIO_PIN_GNSS_T114_RX,
+                             SOC_GPIO_PIN_GNSS_T114_TX);
       break;
     case NRF52_LILYGO_TECHO_REV_0:
     case NRF52_LILYGO_TECHO_REV_1:
